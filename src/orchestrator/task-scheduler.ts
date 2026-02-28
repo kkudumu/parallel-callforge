@@ -22,14 +22,16 @@ export interface TaskScheduler {
   markRunning(taskId: string): Promise<void>;
   markCompleted(taskId: string): Promise<void>;
   markFailed(taskId: string, error: string): Promise<void>;
+  markPending(taskId: string): Promise<void>;
 }
 
 export function createTaskScheduler(db: DbClient, dlq: DlqManager): TaskScheduler {
   return {
     async createTask(taskType, agentName, payload, dependencies = []) {
       if (await dlq.isInDLQ(taskType, agentName, payload)) {
-        console.warn(`Task in DLQ, skipping: ${taskType}/${agentName}`);
-        throw new Error(`Task poisoned (in DLQ): ${taskType}/${agentName}`);
+        // Previous run left a DLQ entry — resolve it since this is a new intentional run
+        console.warn(`[scheduler] Clearing previous DLQ entry for ${taskType}/${agentName}`);
+        await dlq.resolveByTask(taskType, agentName, payload);
       }
 
       const result = await db.query(
@@ -70,6 +72,13 @@ export function createTaskScheduler(db: DbClient, dlq: DlqManager): TaskSchedule
       await db.query(
         "UPDATE agent_tasks SET status = 'failed', completed_at = now(), error_message = $1 WHERE id = $2",
         [error, taskId]
+      );
+    },
+
+    async markPending(taskId) {
+      await db.query(
+        "UPDATE agent_tasks SET status = 'pending', started_at = NULL WHERE id = $1",
+        [taskId]
       );
     },
   };

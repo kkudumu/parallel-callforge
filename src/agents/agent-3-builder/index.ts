@@ -5,6 +5,7 @@ import type { DbClient } from "../../shared/db/client.js";
 import { createHugoManager } from "./hugo-manager.js";
 import { runQualityGate } from "./quality-gate.js";
 import { slugify } from "../agent-1-keywords/index.js";
+import { eventBus } from "../../shared/events/event-bus.js";
 import { CITY_HUB_PROMPT, SERVICE_SUBPAGE_PROMPT } from "./prompts.js";
 
 const ContentResponseSchema = z.object({
@@ -27,7 +28,7 @@ export interface Agent3Config {
 }
 
 const DEFAULT_CONFIG: Partial<Agent3Config> = {
-  phone: "(555) 123-4567",
+  phone: process.env.BUSINESS_PHONE ?? "(555) 123-4567",
   minWordCountHub: 800,
   minWordCountSubpage: 1200,
 };
@@ -42,6 +43,7 @@ export async function runAgent3(
   hugo.ensureProject();
 
   console.log(`[Agent 3] Starting site build for ${cfg.niche}`);
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Starting", detail: cfg.niche, timestamp: Date.now() });
 
   // Get cities from city_keyword_map
   const citiesResult = await db.query(
@@ -58,6 +60,7 @@ export async function runAgent3(
     const { city, state } = cityRow;
     const citySlug = slugify(city);
     console.log(`[Agent 3] Building pages for ${city}, ${state}`);
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Building city", detail: `${city}, ${state}`, timestamp: Date.now() });
 
     // Get keyword clusters for this city
     const clustersResult = await db.query(
@@ -71,6 +74,7 @@ export async function runAgent3(
     )?.primary_keyword ?? `${city} ${cfg.niche}`;
 
     console.log(`[Agent 3] Generating hub page for ${city}...`);
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hub page", detail: city, timestamp: Date.now() });
     const hubPrompt = CITY_HUB_PROMPT
       .replace(/\{city\}/g, city)
       .replace(/\{state\}/g, state)
@@ -126,6 +130,7 @@ export async function runAgent3(
       const pestType = cluster.cluster_name;
       const pestSlug = slugify(pestType);
       console.log(`[Agent 3] Generating subpage: ${city}/${pestType}...`);
+      eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Subpage", detail: `${city}/${pestType}`, timestamp: Date.now() });
 
       const subPrompt = SERVICE_SUBPAGE_PROMPT
         .replace(/\{city\}/g, city)
@@ -185,11 +190,47 @@ export async function runAgent3(
 
   // Build Hugo site
   console.log("[Agent 3] Building Hugo site...");
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hugo build", detail: "Compiling site", timestamp: Date.now() });
   const buildResult = await hugo.buildSite();
   if (buildResult.success) {
     console.log("[Agent 3] Hugo build successful");
   } else {
     console.warn(`[Agent 3] Hugo build failed: ${buildResult.output}`);
+  }
+
+  // Deploy to Netlify if site ID is configured
+  const netlifySiteId = process.env.NETLIFY_SITE_ID;
+  if (netlifySiteId && buildResult.success) {
+    console.log("[Agent 3] Deploying to Netlify...");
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Deploying", detail: "Pushing to Netlify", timestamp: Date.now() });
+
+    const deployResult = await hugo.deploySite(netlifySiteId);
+    if (deployResult.success && deployResult.url) {
+      console.log(`[Agent 3] Deployed to: ${deployResult.url}`);
+      eventBus.emitEvent({
+        type: "site_deployed",
+        url: deployResult.url,
+        siteId: netlifySiteId,
+        city: "all",
+        agent: "agent-3",
+        timestamp: Date.now(),
+      });
+
+      // Update page URLs in DB with actual deploy URL
+      const baseUrl = deployResult.url.replace(/\/$/, "");
+      for (const cityRow of citiesResult.rows) {
+        const citySlug = slugify(cityRow.city);
+        await db.query(
+          "UPDATE pages SET url = $1 WHERE slug = $2 AND niche = $3",
+          [`${baseUrl}/${citySlug}/`, citySlug, cfg.niche]
+        );
+      }
+    } else {
+      console.warn(`[Agent 3] Netlify deploy failed: ${deployResult.output}`);
+      eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Deploy failed", detail: deployResult.output.slice(0, 100), timestamp: Date.now() });
+    }
+  } else if (!netlifySiteId) {
+    console.log("[Agent 3] NETLIFY_SITE_ID not set, skipping deploy");
   }
 
   console.log("[Agent 3] Site build complete");

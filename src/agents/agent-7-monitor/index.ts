@@ -2,6 +2,7 @@ import type { DbClient } from "../../shared/db/client.js";
 import { evaluateThresholds, type MetricsInput, type Severity } from "./thresholds.js";
 import { calculateHealthScore, interpretScore, type HealthScoreInput } from "./health-score.js";
 import { generateMockMetrics, type MockPageMetrics } from "./mock-data.js";
+import { eventBus } from "../../shared/events/event-bus.js";
 
 export interface DataProvider {
   getMetrics(pageId: string, url: string, city: string, daysSincePublish: number): MockPageMetrics;
@@ -73,6 +74,7 @@ export async function runAgent7(
   dataProvider: DataProvider = new MockDataProvider()
 ): Promise<void> {
   console.log(`[Agent 7] Starting performance monitor for ${config.niche}`);
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-7", step: "Starting", detail: config.niche, timestamp: Date.now() });
 
   // Fetch all active pages
   const pagesResult = await db.query(
@@ -220,4 +222,15 @@ export async function runAgent7(
   console.log(`[Agent 7] Pages: ${pages.length} total, ${totalIndexed} indexed, ${totalRanking} ranking top-20`);
   console.log(`[Agent 7] Critical alerts: ${criticalAlerts}`);
   console.log("[Agent 7] Performance monitoring complete");
+
+  eventBus.emitEvent({
+    type: "health_score",
+    score: healthScore,
+    interpretation,
+    indexedPages: totalIndexed,
+    totalPages: pages.length,
+    criticalAlerts,
+    timestamp: Date.now(),
+  });
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-7", step: "Complete", detail: `Score: ${healthScore}/100`, timestamp: Date.now() });
 }

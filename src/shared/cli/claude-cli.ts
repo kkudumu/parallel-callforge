@@ -11,6 +11,7 @@ export function createClaudeCli(cliPath: string): CliProvider {
 
     async invoke(options: CliInvokeOptions): Promise<CliResult> {
       const args = [
+        "--dangerously-skip-permissions",
         "-p", options.prompt,
         "--output-format", "json",
       ];
@@ -27,6 +28,7 @@ export function createClaudeCli(cliPath: string): CliProvider {
         const { stdout, stderr } = await execFileAsync(cliPath, args, {
           timeout: options.timeoutMs ?? 120_000,
           maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env, IS_SANDBOX: "1", CLAUDECODE: "" },
         });
 
         const envelope = extractJson(stdout) as Record<string, unknown>;

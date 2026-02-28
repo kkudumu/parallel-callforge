@@ -10,6 +10,7 @@ const EnvSchema = z.object({
   GOOGLE_ADS_REFRESH_TOKEN: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
   NETLIFY_SITE_ID: z.string().optional(),
+  BUSINESS_PHONE: z.string().default("(555) 123-4567"),
   WEATHER_API_KEY: z.string().optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });

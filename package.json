@@ -16,21 +16,31 @@
     "agent:2": "tsx src/agents/agent-2-design/index.ts",
     "agent:3": "tsx src/agents/agent-3-builder/index.ts",
     "agent:7": "tsx src/agents/agent-7-monitor/index.ts",
-    "pipeline": "tsx src/orchestrator/index.ts"
+    "pipeline": "tsx src/orchestrator/index.ts",
+    "dashboard": "tsx src/dashboard-server.ts",
+    "dashboard:ui": "cd dashboard && npm run dev",
+    "dashboard:build": "cd dashboard && npm run build"
   },
   "dependencies": {
     "bottleneck": "^2.19.5",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "google-ads-api": "^23.0.0",
+    "google-trends-api": "^4.9.2",
     "node-cron": "^3.0.3",
     "opossum": "^8.1.4",
     "pg": "^8.13.1",
+    "ws": "^8.19.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.5",
     "@types/node-cron": "^3.0.11",
     "@types/opossum": "^8.1.9",
     "@types/pg": "^8.11.10",
+    "@types/ws": "^8.18.1",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.5",
     "tsx": "^4.19.2",

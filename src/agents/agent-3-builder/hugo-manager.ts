@@ -5,11 +5,18 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
+export interface DeployResult {
+  success: boolean;
+  url: string;
+  output: string;
+}
+
 export interface HugoManager {
   ensureProject(): void;
   writeContentFile(filePath: string, frontmatter: Record<string, unknown>, content: string): void;
   writeTemplate(filePath: string, html: string): void;
   buildSite(): Promise<{ success: boolean; output: string }>;
+  deploySite(siteId: string): Promise<DeployResult>;
 }
 
 export function createHugoManager(hugoSitePath: string): HugoManager {
@@ -72,6 +79,32 @@ theme = ""
         return { success: true, output: stdout + stderr };
       } catch (err: any) {
         return { success: false, output: err.stderr ?? err.message };
+      }
+    },
+
+    async deploySite(siteId: string): Promise<DeployResult> {
+      const publicDir = path.join(hugoSitePath, "public");
+      try {
+        const { stdout, stderr } = await execFileAsync(
+          "netlify",
+          ["deploy", "--prod", "--dir", publicDir, "--site", siteId, "--json"],
+          { cwd: hugoSitePath, timeout: 120_000 }
+        );
+
+        // --json flag outputs JSON with deploy_url and url fields
+        try {
+          const result = JSON.parse(stdout);
+          const url = result.url || result.deploy_url || "";
+          return { success: true, url, output: stdout + stderr };
+        } catch {
+          // Fallback: parse URL from text output
+          const urlMatch = stdout.match(/Website URL:\s+(https?:\/\/\S+)/i)
+            || stdout.match(/(https:\/\/[^\s]+\.netlify\.app\S*)/);
+          const url = urlMatch?.[1] || "";
+          return { success: true, url, output: stdout + stderr };
+        }
+      } catch (err: any) {
+        return { success: false, url: "", output: err.stderr ?? err.message };
       }
     },
   };

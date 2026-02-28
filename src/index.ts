@@ -77,7 +77,7 @@ async function runSingleAgent(agentName: string) {
         await runAgent3({
           niche: NICHE,
           hugoSitePath: HUGO_SITE_PATH,
-          phone: "(555) 123-4567",
+          phone: env.BUSINESS_PHONE,
           minWordCountHub: 800,
           minWordCountSubpage: 1200,
         }, llm, db);
@@ -116,7 +116,7 @@ async function runPipeline() {
     await runAgent3({
       niche: NICHE,
       hugoSitePath: HUGO_SITE_PATH,
-      phone: "(555) 123-4567",
+      phone: env.BUSINESS_PHONE,
       minWordCountHub: 800,
       minWordCountSubpage: 1200,
     }, llm, db);
@@ -161,7 +161,7 @@ async function runOrchestrated() {
       await runAgent3({
         niche: NICHE,
         hugoSitePath: HUGO_SITE_PATH,
-        phone: "(555) 123-4567",
+        phone: env.BUSINESS_PHONE,
         minWordCountHub: 800,
         minWordCountSubpage: 1200,
       }, llm, db);

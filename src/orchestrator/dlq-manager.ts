@@ -41,6 +41,10 @@ export function classifyError(error: Error): ErrorClass {
   return "unknown";
 }
 
+// Cooldown before transient DLQ entries auto-expire and allow retry
+export const TRANSIENT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+export const UNKNOWN_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
 export interface DlqManager {
   isInDLQ(taskType: string, agentName: string, payload: Record<string, unknown>): Promise<boolean>;
   addToDLQ(params: {
@@ -60,6 +64,7 @@ export interface DlqManager {
     last_failed_at: Date;
   }>>;
   resolve(id: string, resolution: "retried" | "skipped" | "manual" | "expired"): Promise<void>;
+  resolveByTask(taskType: string, agentName: string, payload: Record<string, unknown>): Promise<void>;
 }
 
 export function createDlqManager(db: DbClient): DlqManager {
@@ -67,10 +72,34 @@ export function createDlqManager(db: DbClient): DlqManager {
     async isInDLQ(taskType, agentName, payload) {
       const fp = computeFingerprint(taskType, agentName, payload);
       const result = await db.query(
-        "SELECT id FROM dead_letter_queue WHERE fingerprint = $1 AND resolved_at IS NULL LIMIT 1",
+        `SELECT id, error_class, retry_count, max_retries, last_failed_at
+         FROM dead_letter_queue
+         WHERE fingerprint = $1 AND resolved_at IS NULL
+         LIMIT 1`,
         [fp]
       );
-      return result.rows.length > 0;
+      if (result.rows.length === 0) return false;
+
+      const entry = result.rows[0];
+
+      // Permanent errors always block — needs manual resolution
+      if (entry.error_class === "permanent") return true;
+
+      // Transient/unknown errors: auto-resolve after cooldown so task can be retried
+      const cooldownMs = entry.error_class === "transient"
+        ? TRANSIENT_COOLDOWN_MS
+        : UNKNOWN_COOLDOWN_MS;
+      const elapsed = Date.now() - new Date(entry.last_failed_at).getTime();
+
+      if (elapsed >= cooldownMs) {
+        await db.query(
+          "UPDATE dead_letter_queue SET resolved_at = now(), resolution = 'expired' WHERE id = $1",
+          [entry.id]
+        );
+        return false;
+      }
+
+      return true;
     },
 
     async addToDLQ({ originalTaskId, taskType, agentName, payload, error, retryCount }) {
@@ -123,6 +152,14 @@ export function createDlqManager(db: DbClient): DlqManager {
       await db.query(
         "UPDATE dead_letter_queue SET resolved_at = now(), resolution = $1 WHERE id = $2",
         [resolution, id]
+      );
+    },
+
+    async resolveByTask(taskType, agentName, payload) {
+      const fp = computeFingerprint(taskType, agentName, payload);
+      await db.query(
+        "UPDATE dead_letter_queue SET resolved_at = now(), resolution = 'retried' WHERE fingerprint = $1 AND resolved_at IS NULL",
+        [fp]
       );
     },
   };

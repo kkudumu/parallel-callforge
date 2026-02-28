@@ -1,0 +1,33 @@
+export const palette = {
+  pink: "#FFB5C2",
+  pinkLight: "#FFD4DC",
+  pinkDark: "#FF8FA3",
+  sky: "#B5D8FF",
+  skyLight: "#D4E8FF",
+  skyDark: "#8FC4FF",
+  mint: "#B5FFCF",
+  mintLight: "#D4FFE2",
+  mintDark: "#8FFFB5",
+  peach: "#FFD4B5",
+  peachLight: "#FFE4D4",
+  peachDark: "#FFC08F",
+  lavender: "#E8D4FF",
+  lavenderLight: "#F0E4FF",
+  lavenderDark: "#D4B5FF",
+  bg: "#FDF4FF",
+  bgAlt: "#F8EDFF",
+  surface: "#FFFFFF",
+  surfaceAlt: "#FFF8FC",
+  text: "#4A3560",
+  textMuted: "#8B7AA0",
+  success: "#7DCEA0",
+  warning: "#F9E79F",
+  error: "#F1948A",
+} as const;
+
+export const statusColors = {
+  idle: palette.lavender,
+  running: palette.sky,
+  completed: palette.success,
+  error: palette.error,
+} as const;

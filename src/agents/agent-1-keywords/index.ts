@@ -3,6 +3,7 @@ import type { LlmClient } from "../../shared/cli/llm-client.js";
 import type { DbClient } from "../../shared/db/client.js";
 import { KeywordClusterSchema } from "../../shared/schemas/keyword-clusters.js";
 import { createGoogleKpClient } from "./google-kp.js";
+import { eventBus } from "../../shared/events/event-bus.js";
 import {
   KEYWORD_TEMPLATE_PROMPT,
   CITY_SCORING_PROMPT,
@@ -69,27 +70,31 @@ export async function runAgent1(
   db: DbClient
 ): Promise<void> {
   console.log(`[Agent 1] Starting keyword research for ${config.niche}`);
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Starting", detail: config.niche, timestamp: Date.now() });
 
   // Step 1: Generate keyword templates via LLM
   console.log("[Agent 1] Step 1: Generating keyword templates...");
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Generating templates", detail: "LLM keyword templates", timestamp: Date.now() });
   const templatePrompt = KEYWORD_TEMPLATE_PROMPT.replace("{niche}", config.niche);
   const { templates } = await llm.call({
     prompt: templatePrompt,
     schema: KeywordTemplatesResponseSchema,
   });
   console.log(`[Agent 1] Generated ${templates.length} keyword templates`);
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Templates ready", detail: `${templates.length} templates`, timestamp: Date.now() });
 
   // Step 2: Expand templates per city
   const cityNames = config.candidateCities.map((c) => c.city);
   const expandedKeywords = expandKeywordTemplates(templates, cityNames);
   console.log(`[Agent 1] Expanded to ${expandedKeywords.length} keywords across ${cityNames.length} cities`);
 
-  // Step 3: Pull metrics from Google KP (stub for now)
+  // Step 3: Pull metrics from Google Autocomplete + Google Trends
   const kpClient = createGoogleKpClient();
   const metrics = await kpClient.getKeywordIdeas(expandedKeywords);
 
   // Step 4: Score cities via LLM
   console.log("[Agent 1] Step 4: Scoring cities...");
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Scoring cities", detail: `${config.candidateCities.length} candidates`, timestamp: Date.now() });
   const scoringPrompt = CITY_SCORING_PROMPT
     .replace("{city_data}", JSON.stringify(config.candidateCities, null, 2))
     .replace("{keyword_data}", JSON.stringify(metrics.slice(0, 100), null, 2));
@@ -106,10 +111,12 @@ export async function runAgent1(
     .slice(0, 5);
 
   console.log(`[Agent 1] Selected ${selectedCities.length} cities`);
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Cities selected", detail: `${selectedCities.length} cities`, timestamp: Date.now() });
 
   // Step 5: Cluster keywords per city
   for (const city of selectedCities) {
     console.log(`[Agent 1] Step 5: Clustering keywords for ${city.city}...`);
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Clustering", detail: city.city, timestamp: Date.now() });
     const cityKeywords = expandedKeywords.filter((kw) =>
       kw.toLowerCase().includes(city.city.toLowerCase())
     );
@@ -162,6 +169,7 @@ export async function runAgent1(
     );
 
     console.log(`[Agent 1] Saved ${clusters.length} clusters for ${city.city}`);
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Clusters saved", detail: `${clusters.length} for ${city.city}`, timestamp: Date.now() });
   }
 
   console.log("[Agent 1] Keyword research complete");
