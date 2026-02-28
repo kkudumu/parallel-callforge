@@ -1,0 +1,33 @@
+<!-- JSON-LD structured data for local business -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "PestControlService",
+  "name": "{{ .Site.Params.business_name }}{{ if .Params.city }} - {{ .Params.city }}{{ end }}",
+  "description": "{{ .Params.description | default .Site.Params.tagline }}",
+  "url": "{{ .Permalink }}",
+  "telephone": "{{ .Site.Params.phone }}",
+  {{ if .Params.city }}
+  "areaServed": {
+    "@type": "City",
+    "name": "{{ .Params.city }}",
+    "containedInPlace": {
+      "@type": "State",
+      "name": "{{ .Params.state }}"
+    }
+  },
+  {{ end }}
+  "priceRange": "$$",
+  "openingHoursSpecification": {
+    "@type": "OpeningHoursSpecification",
+    "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+    "opens": "07:00",
+    "closes": "20:00"
+  },
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "4.8",
+    "reviewCount": "127"
+  }
+}
+</script>

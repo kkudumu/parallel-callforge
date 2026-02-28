@@ -1,0 +1,50 @@
+{{ define "main" }}
+<article class="city-hub">
+  <section class="hero">
+    <div class="container">
+      <h1>{{ .Title }}</h1>
+      {{ if .Params.city }}
+      <p class="hero-subtitle">Trusted Pest Control in {{ .Params.city }}, {{ .Params.state }}</p>
+      {{ end }}
+      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">
+        Call Now: {{ .Site.Params.phone }}
+      </a>
+      {{ partial "cta-badge.html" . }}
+    </div>
+  </section>
+
+  <section class="content-body">
+    <div class="container">
+      {{ .Content }}
+    </div>
+  </section>
+
+  {{ if .Pages }}
+  <section class="services-grid">
+    <div class="container">
+      <h2>Our Services{{ if .Params.city }} in {{ .Params.city }}{{ end }}</h2>
+      <div class="grid">
+        {{ range .Pages }}
+        <a href="{{ .Permalink }}" class="service-card">
+          <h3>{{ .Title }}</h3>
+          <p>{{ .Params.description }}</p>
+          <span class="card-cta">Learn More &rarr;</span>
+        </a>
+        {{ end }}
+      </div>
+    </div>
+  </section>
+  {{ end }}
+
+  <section class="cta-section">
+    <div class="container">
+      <h2>Get a Free Pest Inspection</h2>
+      <p>Same-day service available. Licensed and insured professionals.</p>
+      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">
+        Call {{ .Site.Params.phone }}
+      </a>
+      {{ partial "cta-badge.html" . }}
+    </div>
+  </section>
+</article>
+{{ end }}

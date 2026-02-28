@@ -1,0 +1,73 @@
+{
+  "pests": {
+    "termites": {
+      "name": "Termites",
+      "scientific_name": "Isoptera",
+      "prevalence_regions": ["CA", "TX", "FL", "GA", "SC"],
+      "peak_season_months": [3, 4, 5, 6, 7, 8, 9],
+      "trigger_temp_f": 70,
+      "damage_type": "structural",
+      "avg_treatment_cost_range": "$500-$2500",
+      "inspection_urgency": "high"
+    },
+    "ants": {
+      "name": "Ants",
+      "scientific_name": "Formicidae",
+      "prevalence_regions": ["CA", "TX", "FL", "NY", "IL"],
+      "peak_season_months": [3, 4, 5, 6, 7, 8, 9, 10],
+      "trigger_temp_f": 60,
+      "damage_type": "nuisance",
+      "avg_treatment_cost_range": "$150-$500",
+      "inspection_urgency": "medium"
+    },
+    "rodents": {
+      "name": "Rodents",
+      "scientific_name": "Rodentia",
+      "prevalence_regions": ["CA", "NY", "IL", "TX", "WA"],
+      "peak_season_months": [10, 11, 12, 1, 2],
+      "trigger_temp_f": 45,
+      "damage_type": "structural_and_health",
+      "avg_treatment_cost_range": "$200-$1000",
+      "inspection_urgency": "high"
+    },
+    "spiders": {
+      "name": "Spiders",
+      "scientific_name": "Araneae",
+      "prevalence_regions": ["CA", "AZ", "TX", "FL", "GA"],
+      "peak_season_months": [4, 5, 6, 7, 8, 9, 10],
+      "trigger_temp_f": 65,
+      "damage_type": "health_risk",
+      "avg_treatment_cost_range": "$100-$400",
+      "inspection_urgency": "medium"
+    },
+    "cockroaches": {
+      "name": "Cockroaches",
+      "scientific_name": "Blattodea",
+      "prevalence_regions": ["TX", "FL", "GA", "CA", "LA"],
+      "peak_season_months": [5, 6, 7, 8, 9, 10],
+      "trigger_temp_f": 70,
+      "damage_type": "health_risk",
+      "avg_treatment_cost_range": "$150-$600",
+      "inspection_urgency": "high"
+    },
+    "bed_bugs": {
+      "name": "Bed Bugs",
+      "scientific_name": "Cimex lectularius",
+      "prevalence_regions": ["NY", "CA", "OH", "FL", "IL"],
+      "peak_season_months": [6, 7, 8, 9],
+      "trigger_temp_f": 70,
+      "damage_type": "health_risk",
+      "avg_treatment_cost_range": "$300-$1500",
+      "inspection_urgency": "high"
+    }
+  },
+  "california_specific": {
+    "common_pests": ["termites", "ants", "rodents", "spiders", "cockroaches"],
+    "seasonal_notes": {
+      "spring": "Termite swarming season begins. Ant colonies expand.",
+      "summer": "Peak activity for most pests. Spider populations increase.",
+      "fall": "Rodents seek indoor shelter. Pest activity remains moderate.",
+      "winter": "Rodent intrusions peak. Most insects dormant but still present in structures."
+    }
+  }
+}

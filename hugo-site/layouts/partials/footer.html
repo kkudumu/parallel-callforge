@@ -1,0 +1,25 @@
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h4>{{ .Site.Params.business_name }}</h4>
+        <p>Professional pest control services. Licensed, bonded, and insured.</p>
+        <p>License #{{ .Site.Params.license_number }}</p>
+      </div>
+      <div class="footer-col">
+        <h4>Contact</h4>
+        <p><a href="tel:{{ .Site.Params.phone_raw }}">{{ .Site.Params.phone }}</a></p>
+        <p>Available 7 days a week</p>
+        <p>Same-day service available</p>
+      </div>
+      <div class="footer-col">
+        <h4>Service Areas</h4>
+        <p>Santa Cruz, Watsonville, Capitola, and surrounding communities in Santa Cruz County</p>
+      </div>
+    </div>
+    <div class="footer-legal">
+      <p>&copy; {{ now.Year }} {{ .Site.Params.business_name }}. All rights reserved.</p>
+      <p class="legal-disclaimer">Results may vary. Pest control outcomes depend on infestation severity, species, environmental factors, and adherence to recommended treatment plans. Guarantees subject to terms of service agreement. All calls may be recorded for quality assurance. By calling, you consent to call recording. {{ .Site.Params.business_name }} is a licensed pest control operator under California law.</p>
+    </div>
+  </div>
+</footer>

@@ -1,0 +1,52 @@
+{{ define "main" }}
+<article class="service-page">
+  <section class="hero">
+    <div class="container">
+      <h1>{{ .Title }}</h1>
+      {{ if .Params.city }}
+      <p class="hero-subtitle">{{ .Params.pest_type | default "Pest" }} Control in {{ .Params.city }}, {{ .Params.state }}</p>
+      {{ end }}
+      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">
+        Call Now: {{ .Site.Params.phone }}
+      </a>
+      {{ partial "cta-badge.html" . }}
+    </div>
+  </section>
+
+  <section class="content-body">
+    <div class="container">
+      {{ .Content }}
+    </div>
+  </section>
+
+  {{ if .Params.faq }}
+  <section class="faq-section">
+    <div class="container">
+      <h2>Frequently Asked Questions</h2>
+      {{ partial "faq.html" . }}
+    </div>
+  </section>
+  {{ end }}
+
+  <section class="cta-section">
+    <div class="container">
+      <h2>Ready to Solve Your {{ .Params.pest_type | default "Pest" }} Problem?</h2>
+      <p>Call now for a free inspection and same-day service.</p>
+      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">
+        Call {{ .Site.Params.phone }}
+      </a>
+      {{ partial "cta-badge.html" . }}
+    </div>
+  </section>
+
+  <nav class="breadcrumb">
+    <div class="container">
+      <a href="/">Home</a> &rsaquo;
+      {{ if .Parent }}
+      <a href="{{ .Parent.Permalink }}">{{ .Parent.Title }}</a> &rsaquo;
+      {{ end }}
+      <span>{{ .Title }}</span>
+    </div>
+  </nav>
+</article>
+{{ end }}

@@ -1,0 +1,20 @@
+baseURL = "https://extermanation.com/"
+languageCode = "en-us"
+title = "Extermanation - Professional Pest Control"
+
+[params]
+  phone = "(555) 123-4567"
+  phone_raw = "5551234567"
+  business_name = "Extermanation"
+  tagline = "Local Pest Control Experts"
+  license_number = "CA-PCO-12345"
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+[outputs]
+  home = ["HTML"]
+  section = ["HTML"]
+  page = ["HTML"]

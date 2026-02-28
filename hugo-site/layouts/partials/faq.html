@@ -1,0 +1,33 @@
+<!-- FAQ accordion with JSON-LD structured data -->
+{{ if .Params.faq }}
+<div class="faq-list">
+  {{ range .Params.faq }}
+  <details class="faq-item">
+    <summary class="faq-question">{{ .question }}</summary>
+    <div class="faq-answer">
+      <p>{{ .answer }}</p>
+    </div>
+  </details>
+  {{ end }}
+</div>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {{ range $i, $faq := .Params.faq }}
+    {{ if $i }},{{ end }}
+    {
+      "@type": "Question",
+      "name": "{{ $faq.question }}",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "{{ $faq.answer }}"
+      }
+    }
+    {{ end }}
+  ]
+}
+</script>
+{{ end }}
