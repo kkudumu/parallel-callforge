@@ -5,7 +5,7 @@ export function createCircuitBreaker<T extends (...args: any[]) => Promise<any>>
   fn: T,
   name: string,
   overrides?: Partial<typeof CIRCUIT_BREAKER_OPTIONS>
-): CircuitBreaker<Parameters<T>, Awaited<ReturnType<T>>> {
+): CircuitBreaker {
   const options = { ...CIRCUIT_BREAKER_OPTIONS, ...overrides, name };
   const breaker = new CircuitBreaker(fn, options);
 
