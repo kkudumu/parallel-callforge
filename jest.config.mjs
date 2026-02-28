@@ -1,6 +1,5 @@
 /** @type {import('jest').Config} */
 const config = {
-  preset: "ts-jest/presets/default-esm",
   testEnvironment: "node",
   roots: ["<rootDir>/src"],
   testMatch: ["**/*.test.ts"],
@@ -8,9 +7,15 @@ const config = {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   transform: {
-    "^.+\\.tsx?$": ["ts-jest", { useESM: true }],
+    "^.+\\.tsx?$": ["ts-jest", {
+      useESM: false,
+      tsconfig: {
+        module: "CommonJS",
+        moduleResolution: "Node",
+        verbatimModuleSyntax: false,
+      },
+    }],
   },
-  extensionsToTreatAsEsm: [".ts"],
 };
 
 export default config;
