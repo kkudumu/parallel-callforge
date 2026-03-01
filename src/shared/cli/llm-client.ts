@@ -14,6 +14,22 @@ export interface LlmClient {
   call<T extends z.ZodType>(options: LlmCallOptions<T>): Promise<z.infer<T>>;
 }
 
+function summarizeError(err: unknown): string {
+  if (err instanceof Error && err.message) {
+    return err.message.split("\n")[0];
+  }
+
+  return String(err);
+}
+
+function formatErrorDetails(err: unknown): string {
+  if (err instanceof Error) {
+    return err.stack ?? err.message;
+  }
+
+  return String(err);
+}
+
 async function invokeWithValidation<T extends z.ZodType>(
   provider: CliProvider,
   prompt: string,
@@ -96,12 +112,19 @@ export function createLlmClient(
             )
           );
         } catch (err: any) {
-          failures.push(`${current.role} (${current.provider.name}): ${err.message}`);
+          const errorSummary = summarizeError(err);
+          const errorDetails = formatErrorDetails(err);
+          failures.push(`${current.role} (${current.provider.name}): ${errorSummary}`);
           const next = providers[i + 1];
           if (next) {
             console.warn(
-              `[${current.provider.name}] Failed, falling back to ${next.provider.name}: ${err.message}`
+              `[${current.provider.name}] Failed, falling back to ${next.provider.name}: ${errorSummary}`
             );
+            if (errorDetails !== errorSummary) {
+              console.warn(
+                `[${current.provider.name}] Failure details before fallback:\n${errorDetails}`
+              );
+            }
             continue;
           }
         }

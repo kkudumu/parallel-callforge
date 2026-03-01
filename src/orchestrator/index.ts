@@ -38,6 +38,22 @@ export async function createOrchestrator(deps: OrchestratorDeps) {
   const retryCounts = new Map<string, number>();
   const retryAfter = new Map<string, number>();
 
+  function formatError(err: unknown): string {
+    if (err instanceof Error) {
+      return err.stack ? `${err.message}\n${err.stack}` : err.message;
+    }
+
+    if (typeof err === "string") {
+      return err;
+    }
+
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+
   async function processTask(task: TaskRecord) {
     const handler = agentHandlers.get(task.agent_name);
     if (!handler) {
@@ -88,6 +104,8 @@ export async function createOrchestrator(deps: OrchestratorDeps) {
         timestamp: Date.now(),
       });
     } catch (err: any) {
+      const errorSummary = err?.message ?? formatError(err);
+      const errorDetails = formatError(err);
       const errorClass = classifyError(err);
       const retryCount = (retryCounts.get(task.id) ?? 0) + 1;
       retryCounts.set(task.id, retryCount);
@@ -96,15 +114,18 @@ export async function createOrchestrator(deps: OrchestratorDeps) {
         // Transient/unknown: re-queue with exponential backoff
         const backoffMs = RETRY_BACKOFF_BASE_MS * Math.pow(2, retryCount - 1);
         console.warn(
-          `[orchestrator] Task ${task.id} transient failure (${errorClass}), retry ${retryCount}/${MAX_TASK_RETRIES} after ${backoffMs}ms: ${err.message}`
+          `[orchestrator] Task ${task.id} transient failure (${errorClass}), retry ${retryCount}/${MAX_TASK_RETRIES} after ${backoffMs}ms: ${errorSummary}`
         );
+        if (errorDetails !== errorSummary) {
+          console.warn(`[orchestrator] Task ${task.id} details:\n${errorDetails}`);
+        }
         await scheduler.markPending(task.id);
         retryAfter.set(task.id, Date.now() + backoffMs);
         eventBus.emitEvent({
           type: "agent_step",
           agent: agentName,
           step: "Retry scheduled",
-          detail: `${err.message} (retry ${retryCount}/${MAX_TASK_RETRIES} in ${Math.ceil(backoffMs / 1000)}s)`,
+          detail: `${errorSummary} (retry ${retryCount}/${MAX_TASK_RETRIES} in ${Math.ceil(backoffMs / 1000)}s)`,
           timestamp: Date.now(),
         });
         eventBus.emitEvent({
@@ -118,16 +139,19 @@ export async function createOrchestrator(deps: OrchestratorDeps) {
       } else {
         // Permanent error or retries exhausted: send to DLQ
         console.error(
-          `[orchestrator] Task ${task.id} failed permanently (${errorClass}, retries: ${retryCount}): ${err.message}`
+          `[orchestrator] Task ${task.id} failed permanently (${errorClass}, retries: ${retryCount}): ${errorSummary}`
         );
-        await scheduler.markFailed(task.id, err.message);
+        if (errorDetails !== errorSummary) {
+          console.error(`[orchestrator] Task ${task.id} details:\n${errorDetails}`);
+        }
+        await scheduler.markFailed(task.id, errorSummary);
         retryCounts.delete(task.id);
         retryAfter.delete(task.id);
         eventBus.emitEvent({
           type: "agent_error",
           agent: agentName,
           taskId: task.id,
-          error: err.message,
+          error: errorSummary,
           timestamp: Date.now(),
         });
         eventBus.emitEvent({

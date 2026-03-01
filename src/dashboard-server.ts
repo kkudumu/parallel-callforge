@@ -376,6 +376,9 @@ export function createDashboardServer(db?: DbClient) {
         timestamp: event.timestamp,
       };
     } else if (event.type === "agent_error") {
+      console.error(
+        `[dashboard] ${event.agent} failed${event.taskId ? ` (${event.taskId})` : ""}: ${event.error}`
+      );
       agentStates[event.agent] = {
         ...agentStates[event.agent],
         status: "error",

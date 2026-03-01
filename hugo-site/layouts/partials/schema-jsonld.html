@@ -1,5 +1,8 @@
 <!-- JSON-LD structured data for local business -->
 <script type="application/ld+json">
+{{ if .Params.schema_template }}
+{{ .Params.schema_template | jsonify | safeJS }}
+{{ else }}
 {
   "@context": "https://schema.org",
   "@type": "PestControlService",
@@ -30,4 +33,5 @@
     "reviewCount": "127"
   }
 }
+{{ end }}
 </script>

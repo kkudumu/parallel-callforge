@@ -53,15 +53,7 @@ export async function runAgent2(
   console.log(`[Agent 2] Starting design research for ${config.niche}`);
   eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Starting", detail: config.niche, timestamp: Date.now() });
 
-  // Check if design spec already exists for this niche
-  const existing = await db.query(
-    "SELECT id FROM design_specs WHERE niche = $1",
-    [config.niche]
-  );
-  if (existing.rows.length > 0) {
-    console.log(`[Agent 2] Design spec already exists for ${config.niche}, skipping`);
-    return;
-  }
+  console.log(`[Agent 2] Refreshing design research for ${config.niche}`);
 
   // Step 1: Competitor analysis
   console.log("[Agent 2] Step 1: Running competitor analysis...");
@@ -97,7 +89,15 @@ export async function runAgent2(
 
   await db.query(
     `INSERT INTO design_specs (niche, archetype, layout, components, colors, typography, responsive_breakpoints)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (niche) DO UPDATE SET
+       archetype = EXCLUDED.archetype,
+       layout = EXCLUDED.layout,
+       components = EXCLUDED.components,
+       colors = EXCLUDED.colors,
+       typography = EXCLUDED.typography,
+       responsive_breakpoints = EXCLUDED.responsive_breakpoints,
+       updated_at = now()`,
     [
       designSpec.niche,
       designSpec.archetype,
@@ -126,7 +126,14 @@ export async function runAgent2(
 
   await db.query(
     `INSERT INTO copy_frameworks (niche, headlines, ctas, trust_signals, faq_templates, pas_scripts)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (niche) DO UPDATE SET
+       headlines = EXCLUDED.headlines,
+       ctas = EXCLUDED.ctas,
+       trust_signals = EXCLUDED.trust_signals,
+       faq_templates = EXCLUDED.faq_templates,
+       pas_scripts = EXCLUDED.pas_scripts,
+       updated_at = now()`,
     [
       copyFramework.niche,
       JSON.stringify(copyFramework.headlines),
@@ -154,7 +161,10 @@ export async function runAgent2(
   );
 
   await db.query(
-    `INSERT INTO schema_templates (niche, jsonld_templates) VALUES ($1, $2)`,
+    `INSERT INTO schema_templates (niche, jsonld_templates)
+     VALUES ($1, $2)
+     ON CONFLICT (niche) DO UPDATE SET
+       jsonld_templates = EXCLUDED.jsonld_templates`,
     [schemaTemplates.niche, JSON.stringify(schemaTemplates.jsonld_templates)]
   );
   console.log("[Agent 2] Saved schema templates");
@@ -176,7 +186,10 @@ export async function runAgent2(
   );
 
   await db.query(
-    `INSERT INTO seasonal_calendars (niche, months) VALUES ($1, $2)`,
+    `INSERT INTO seasonal_calendars (niche, months)
+     VALUES ($1, $2)
+     ON CONFLICT (niche) DO UPDATE SET
+       months = EXCLUDED.months`,
     [seasonalCalendar.niche, JSON.stringify(seasonalCalendar.months)]
   );
   console.log("[Agent 2] Saved seasonal calendar");
