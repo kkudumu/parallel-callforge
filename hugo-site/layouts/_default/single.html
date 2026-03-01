@@ -1,21 +1,54 @@
 {{ define "main" }}
-<article class="service-page">
-  <section class="hero">
-    <div class="container">
-      <h1>{{ .Title }}</h1>
-      {{ if .Params.city }}
-      <p class="hero-subtitle">{{ .Params.pest_type | default "Pest" }} Control in {{ .Params.city }}, {{ .Params.state }}</p>
-      {{ end }}
-      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">
-        Call Now: {{ .Site.Params.phone }}
-      </a>
-      {{ partial "cta-badge.html" . }}
+<article class="service-page service-page-premium">
+  <section class="hero hero-split service-hero">
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">{{ .Params.city }} {{ .Params.state }} Service</p>
+        <h1>{{ .Title }}</h1>
+        {{ if .Params.city }}
+        <p class="hero-subtitle">{{ .Params.pest_type | default "Pest" }} control built around the keyword target <strong>{{ .Params.target_keyword }}</strong> and the same conversion pattern defined in design research.</p>
+        {{ end }}
+        <div class="hero-actions">
+          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call Now - Free Inspection</a>
+          <a href="#service-content" class="cta-button cta-secondary">See Treatment Details</a>
+        </div>
+        {{ partial "cta-badge.html" . }}
+      </div>
+      <div class="hero-visual">
+        <img src="{{ .Params.feature_image }}" alt="{{ .Title }}">
+      </div>
     </div>
   </section>
 
-  <section class="content-body">
+  <section class="trust-ribbon">
     <div class="container">
-      {{ .Content }}
+      <ul class="trust-points">
+        <li>Licensed &amp; Insured Since [Year]</li>
+<li>4.9★ Rating on Google ([Count]+ Reviews)</li>
+<li>Locally Owned &amp; Operated in {city}</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="service-content" class="content-body">
+    <div class="container content-grid">
+      <div class="content-main">
+        {{ .Content }}
+      </div>
+      <aside class="content-side">
+        <div class="side-card">
+          <h2>Keyword-Driven Page Focus</h2>
+          <p>This service page exists because Agent 1 identified <strong>{{ .Params.target_keyword }}</strong> as a standalone search theme with its own treatment intent and URL path.</p>
+        </div>
+        <div class="side-card">
+          <h2>Design System Components</h2>
+          <ul class="mini-list">
+            <li>navigation</li>
+            <li>hero section</li>
+            <li>trust strip</li>
+          </ul>
+        </div>
+      </aside>
     </div>
   </section>
 
@@ -28,13 +61,12 @@
   </section>
   {{ end }}
 
-  <section class="cta-section">
+  <section class="cta-section cta-section-premium">
     <div class="container">
-      <h2>Ready to Solve Your {{ .Params.pest_type | default "Pest" }} Problem?</h2>
-      <p>Call now for a free inspection and same-day service.</p>
-      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">
-        Call {{ .Site.Params.phone }}
-      </a>
+      <p class="eyebrow">Same-Day Scheduling</p>
+      <h2>Get ahead of the infestation before it spreads.</h2>
+      <p>Call now for a fast inspection, practical treatment options, and a plan that fits your home or commercial property.</p>
+      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call {{ .Site.Params.phone }}</a>
       {{ partial "cta-badge.html" . }}
     </div>
   </section>

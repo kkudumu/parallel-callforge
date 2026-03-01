@@ -1,34 +1,65 @@
 {{ define "main" }}
-<article class="city-hub">
-  <section class="hero">
+<article class="city-hub city-hub-premium">
+  <section class="hero hero-split">
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">{{ .Params.city }} {{ .Params.state }} Pest Coverage</p>
+        <h1>{{ .Title }}</h1>
+        <p class="hero-subtitle">{{ .Params.description | default "{city}&#39;s #1 {service} - Fast Relief From {pest}" }}</p>
+        <p class="hero-support">Same-Day {service} in {city} - Call Now</p>
+        <div class="hero-actions">
+          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call Now - Free Inspection</a>
+          <a href="#service-grid" class="cta-button cta-secondary">Get Your Free Quote: {phone}</a>
+        </div>
+        {{ partial "cta-badge.html" . }}
+      </div>
+      <div class="hero-visual">
+        <img src="{{ .Params.hero_image }}" alt="{{ .Title }}">
+      </div>
+    </div>
+  </section>
+
+  <section class="trust-ribbon">
     <div class="container">
-      <h1>{{ .Title }}</h1>
-      {{ if .Params.city }}
-      <p class="hero-subtitle">Trusted Pest Control in {{ .Params.city }}, {{ .Params.state }}</p>
-      {{ end }}
-      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">
-        Call Now: {{ .Site.Params.phone }}
-      </a>
-      {{ partial "cta-badge.html" . }}
+      <ul class="trust-points">
+        <li>Licensed &amp; Insured Since [Year]</li>
+<li>4.9★ Rating on Google ([Count]+ Reviews)</li>
+<li>Locally Owned &amp; Operated in {city}</li>
+      </ul>
     </div>
   </section>
 
   <section class="content-body">
-    <div class="container">
-      {{ .Content }}
+    <div class="container content-grid">
+      <div class="content-main">
+        {{ .Content }}
+      </div>
+      <aside class="content-side">
+        <div class="side-card">
+          <h2>{{ .Params.city }} Search Intent Snapshot</h2>
+          <p>The city hub is assembled around the primary keyword <strong>{{ .Params.target_keyword }}</strong> and uses the researched layout order to move visitors from local problem awareness into the strongest conversion action.</p>
+        </div>
+        <div class="side-card side-image">
+          <img src="{{ .Params.feature_image }}" alt="{{ .Title }}">
+        </div>
+      </aside>
     </div>
   </section>
 
   {{ if .Pages }}
-  <section class="services-grid">
+  <section id="service-grid" class="services-grid services-grid-premium">
     <div class="container">
-      <h2>Our Services{{ if .Params.city }} in {{ .Params.city }}{{ end }}</h2>
+      <div class="section-intro">
+        <p class="eyebrow">Popular Treatments</p>
+        <h2>Targeted Services{{ if .Params.city }} in {{ .Params.city }}{{ end }}</h2>
+      </div>
       <div class="grid">
         {{ range .Pages }}
-        <a href="{{ .Permalink }}" class="service-card">
+        <a href="{{ .Permalink }}" class="service-card premium-card">
+          <p class="service-label">Fast Response</p>
           <h3>{{ .Title }}</h3>
           <p>{{ .Params.description }}</p>
-          <span class="card-cta">Learn More &rarr;</span>
+          <span class="card-cta">View Service Plan &rarr;</span>
         </a>
         {{ end }}
       </div>
@@ -36,13 +67,22 @@
   </section>
   {{ end }}
 
-  <section class="cta-section">
+  <section class="faq-section spotlight-faq">
     <div class="container">
-      <h2>Get a Free Pest Inspection</h2>
-      <p>Same-day service available. Licensed and insured professionals.</p>
-      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">
-        Call {{ .Site.Params.phone }}
-      </a>
+      <div class="faq-highlight">
+        <p class="eyebrow">Common Question</p>
+        <h2>How quickly can you provide {service} in {city}?</h2>
+        <p>We offer prompt scheduling for {service} in {city}, including same-day availability when openings permit. Call {phone} and we can confirm the earliest appointment for your {pest} issue.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-section cta-section-premium">
+    <div class="container">
+      <p class="eyebrow">Need Help Today?</p>
+      <h2>Talk to a local team that moves fast.</h2>
+      <p>Call for same-day scheduling, property-specific recommendations, and clear next steps before we start treatment.</p>
+      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call {{ .Site.Params.phone }}</a>
       {{ partial "cta-badge.html" . }}
     </div>
   </section>

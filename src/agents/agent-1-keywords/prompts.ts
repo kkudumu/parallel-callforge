@@ -40,17 +40,14 @@ Output ONLY valid JSON matching the provided schema.`;
 
 export const KEYWORD_CLUSTERING_PROMPT = `You are an SEO architect specializing in URL structure optimization.
 
-Given these keywords and their metrics for {city}, {state}, group them into clusters
-and map each cluster to a URL path.
+Given these keywords and their metrics for {city}, {state}, group them into clusters.
 
 Rules:
-- City hub page ("/[city-slug]/") targets broad "[city] pest control" type keywords
-- Service subpages ("/[city-slug]/[service]/") target specific pest types
+- City hub page targets broad "[city] pest control" type keywords
+- Service subpages target specific pest types
 - Each cluster should have 1 primary keyword and 2-5 secondary keywords
 - Classify intent: informational, transactional, navigational, commercial
-- For every cluster, use these exact keys: "cluster_name", "primary_keyword", "secondary_keywords", "search_volume", "difficulty", "intent"
 - "search_volume" and "difficulty" must always be numbers (use 0 if unknown)
-- "url_mapping" must be a flat object where each key is a URL path and each value is a string
 
 Keywords:
 {keywords}

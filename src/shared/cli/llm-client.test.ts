@@ -19,6 +19,18 @@ function mockProvider(name: string, result: unknown, fail = false): CliProvider 
   };
 }
 
+function mockRawProvider(name: string, rawResult: string): CliProvider {
+  return {
+    name,
+    invoke: async () => ({
+      result: rawResult,
+      is_error: false,
+      raw_stdout: JSON.stringify({ result: rawResult }),
+      raw_stderr: "",
+    }),
+  };
+}
+
 describe("LlmClient", () => {
   const TestSchema = z.object({
     answer: z.string(),
@@ -67,6 +79,24 @@ describe("LlmClient", () => {
     });
 
     expect(result.answer).toBe("tertiary");
+  });
+
+  it("accepts fenced JSON returned by a provider", async () => {
+    const primary = mockRawProvider(
+      "claude",
+      '```json\n{"answer":"hello","confidence":0.9}\n```'
+    );
+    const fallback = mockProvider("codex", { answer: "fallback", confidence: 0.5 });
+    const limiters = createRateLimiters();
+    const client = createLlmClient(primary, fallback, limiters);
+
+    const result = await client.call({
+      prompt: "test prompt",
+      schema: TestSchema,
+    });
+
+    expect(result.answer).toBe("hello");
+    expect(result.confidence).toBe(0.9);
   });
 
   it("throws when both providers fail", async () => {

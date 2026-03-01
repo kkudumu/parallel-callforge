@@ -7,18 +7,16 @@
   <meta name="description" content="{{ .Params.description | default .Site.Params.tagline }}">
   <link rel="canonical" href="{{ .Permalink }}">
   <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/generated-theme.css">
   {{ block "head" . }}{{ end }}
 </head>
-<body>
+<body class="brand-shell">
   {{ partial "header.html" . }}
-
   <main>
     {{ block "main" . }}{{ end }}
   </main>
-
   {{ partial "footer.html" . }}
   {{ partial "cta-sticky.html" . }}
-
   {{ block "schema" . }}
     {{ partial "schema-jsonld.html" . }}
   {{ end }}

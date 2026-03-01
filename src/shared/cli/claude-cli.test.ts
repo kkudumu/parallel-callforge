@@ -1,6 +1,7 @@
 import { describe, it, expect } from "@jest/globals";
 import { detectRateLimit, parseRetryAfter, extractJson } from "./types.js";
 import { isCodexSchemaCompatible } from "./codex-cli.js";
+import { isClaudeSchemaCompatible } from "./claude-cli.js";
 
 describe("CLI utilities", () => {
   describe("detectRateLimit", () => {
@@ -86,6 +87,60 @@ describe("CLI utilities", () => {
           additionalProperties: false,
         })
       ).toBe(false);
+    });
+  });
+
+  describe("isClaudeSchemaCompatible", () => {
+    it("accepts simple object schemas", () => {
+      expect(
+        isClaudeSchemaCompatible({
+          type: "object",
+          properties: { name: { type: "string" } },
+          required: ["name"],
+          additionalProperties: false,
+        })
+      ).toBe(true);
+    });
+
+    it("rejects schemas with anyOf", () => {
+      expect(
+        isClaudeSchemaCompatible({
+          type: "object",
+          properties: {
+            value: { anyOf: [{ type: "string" }, { type: "number" }] },
+          },
+          additionalProperties: false,
+        })
+      ).toBe(false);
+    });
+
+    it("rejects schemas with propertyNames", () => {
+      expect(
+        isClaudeSchemaCompatible({
+          type: "object",
+          propertyNames: { type: "string" },
+          additionalProperties: {},
+        })
+      ).toBe(false);
+    });
+
+    it("rejects open additionalProperties", () => {
+      expect(
+        isClaudeSchemaCompatible({
+          type: "object",
+          additionalProperties: { type: "string" },
+        })
+      ).toBe(false);
+    });
+
+    it("accepts additionalProperties: false", () => {
+      expect(
+        isClaudeSchemaCompatible({
+          type: "object",
+          properties: { id: { type: "number" } },
+          additionalProperties: false,
+        })
+      ).toBe(true);
     });
   });
 });
