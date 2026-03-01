@@ -36,7 +36,12 @@ export function AgentNode({ agent, onClick }: AgentNodeProps) {
   const animation = getAnimation(agent.status);
 
   return (
-    <div className="relative flex flex-col sm:flex-col items-center" onClick={onClick}>
+    <div
+      className="relative flex flex-col sm:flex-col items-center cursor-pointer"
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
       {/* Mobile: horizontal card layout */}
       <div className="sm:hidden flex items-center gap-3 px-4 py-2 rounded-kawaii-lg w-full max-w-xs" style={{ backgroundColor: `${meta.color}18` }}>
         {/* Pulse ring for active agents */}
@@ -67,7 +72,9 @@ export function AgentNode({ agent, onClick }: AgentNodeProps) {
             {agent.currentStep || (agent.status === "idle" ? "Waiting..." : agent.status)}
           </motion.div>
           {agent.currentDetail && (
-            <div className="text-[10px] text-kawaii-text-muted dark:text-[#9a8ab0] truncate">{agent.currentDetail}</div>
+            <div className="text-[10px] text-kawaii-text-muted dark:text-[#9a8ab0] leading-tight break-words">
+              {agent.currentDetail}
+            </div>
           )}
         </div>
 
@@ -138,7 +145,7 @@ export function AgentNode({ agent, onClick }: AgentNodeProps) {
             key={agent.currentDetail}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-[10px] text-kawaii-text-muted dark:text-[#9a8ab0] mt-0.5 max-w-[140px] truncate"
+            className="text-[10px] text-kawaii-text-muted dark:text-[#9a8ab0] mt-0.5 max-w-[180px] text-center leading-tight break-words"
           >
             {agent.currentDetail}
           </motion.div>

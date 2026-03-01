@@ -72,6 +72,12 @@ export async function runAgent2(
     schema: CompetitorAnalysisSchema,
   });
   console.log(`[Agent 2] Found ${competitorAnalysis.patterns.length} CRO patterns`);
+  console.log(
+    `[Agent 2] Pattern categories: ${competitorAnalysis.patterns
+      .slice(0, 5)
+      .map((pattern) => pattern.category)
+      .join(" | ")}`
+  );
   eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Patterns found", detail: `${competitorAnalysis.patterns.length} CRO patterns`, timestamp: Date.now() });
 
   // Step 2: Design specification
@@ -84,6 +90,10 @@ export async function runAgent2(
     prompt: designPrompt,
     schema: DesignSpecSchema,
   });
+  console.log(`[Agent 2] Design archetype: ${designSpec.archetype}`);
+  console.log(
+    `[Agent 2] Layout sections: ${Object.keys(designSpec.layout).slice(0, 6).join(" | ")}`
+  );
 
   await db.query(
     `INSERT INTO design_specs (niche, archetype, layout, components, colors, typography, responsive_breakpoints)
@@ -109,6 +119,10 @@ export async function runAgent2(
     prompt: copyPrompt,
     schema: CopyFrameworkSchema,
   });
+  console.log(
+    `[Agent 2] Headline directions: ${copyFramework.headlines.slice(0, 4).join(" | ")}`
+  );
+  console.log(`[Agent 2] CTA variants: ${copyFramework.ctas.slice(0, 4).join(" | ")}`);
 
   await db.query(
     `INSERT INTO copy_frameworks (niche, headlines, ctas, trust_signals, faq_templates, pas_scripts)
@@ -133,6 +147,11 @@ export async function runAgent2(
     prompt: schemaPrompt,
     schema: SchemaTemplateSchema,
   });
+  console.log(
+    `[Agent 2] Schema template types: ${Object.keys(schemaTemplates.jsonld_templates)
+      .slice(0, 6)
+      .join(" | ")}`
+  );
 
   await db.query(
     `INSERT INTO schema_templates (niche, jsonld_templates) VALUES ($1, $2)`,
@@ -149,6 +168,12 @@ export async function runAgent2(
     prompt: seasonalPrompt,
     schema: SeasonalCalendarSchema,
   });
+  console.log(
+    `[Agent 2] Seasonal focus: ${seasonalCalendar.months
+      .slice(0, 4)
+      .map((month) => `${month.name}:${month.primary_pests.slice(0, 2).join("/")}`)
+      .join(" | ")}`
+  );
 
   await db.query(
     `INSERT INTO seasonal_calendars (niche, months) VALUES ($1, $2)`,

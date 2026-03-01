@@ -67,6 +67,7 @@ export async function runAgent3(
       "SELECT * FROM keyword_clusters WHERE city = $1 AND niche = $2",
       [city, cfg.niche]
     );
+    console.log(`[Agent 3] Loaded ${clustersResult.rows.length} keyword clusters for ${city}`);
 
     // Generate city hub page
     const hubKeyword = clustersResult.rows.find(
@@ -85,6 +86,10 @@ export async function runAgent3(
       prompt: hubPrompt,
       schema: ContentResponseSchema,
     });
+    console.log(`[Agent 3] Hub page title: ${hubContent.title}`);
+    console.log(
+      `[Agent 3] Hub headings: ${(hubContent.headings ?? []).slice(0, 4).join(" | ") || "none"}`
+    );
 
     // Quality gate
     const hubQuality = runQualityGate(hubContent.content, city, cfg.minWordCountHub!);
@@ -143,6 +148,7 @@ export async function runAgent3(
         prompt: subPrompt,
         schema: ContentResponseSchema,
       });
+      console.log(`[Agent 3] Subpage title for ${city}/${pestType}: ${subContent.title}`);
 
       const subQuality = runQualityGate(subContent.content, city, cfg.minWordCountSubpage!);
       if (!subQuality.passed) {
@@ -176,6 +182,7 @@ export async function runAgent3(
           JSON.stringify(subQuality.metrics),
         ]
       );
+      console.log(`[Agent 3] Saved page ${citySlug}/${pestSlug} (${subQuality.metrics.wordCount} words)`);
     }
 
     // Register pages
@@ -186,6 +193,7 @@ export async function runAgent3(
        ON CONFLICT (slug) DO NOTHING`,
       [pageUrl, citySlug, city, state, cfg.niche, hubKeyword]
     );
+    console.log(`[Agent 3] Registered page ${pageUrl}`);
   }
 
   // Build Hugo site

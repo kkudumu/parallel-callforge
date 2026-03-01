@@ -70,5 +70,22 @@ describe("CLI utilities", () => {
         })
       ).toBe(false);
     });
+
+    it("rejects object schemas with optional properties", () => {
+      expect(
+        isCodexSchemaCompatible({
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            headings: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+          required: ["title"],
+          additionalProperties: false,
+        })
+      ).toBe(false);
+    });
   });
 });

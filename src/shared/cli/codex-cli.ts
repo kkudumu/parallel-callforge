@@ -20,6 +20,30 @@ export function isCodexSchemaCompatible(schema: unknown): boolean {
     return false;
   }
 
+  if (node.type === "object" && node.properties && typeof node.properties === "object") {
+    const propertyKeys = Object.keys(node.properties as Record<string, unknown>);
+    const required = Array.isArray(node.required) ? node.required : null;
+
+    if (!required) {
+      return false;
+    }
+
+    if (required.length !== propertyKeys.length) {
+      return false;
+    }
+
+    const requiredSet = new Set(required.filter((value): value is string => typeof value === "string"));
+    if (requiredSet.size !== propertyKeys.length) {
+      return false;
+    }
+
+    for (const key of propertyKeys) {
+      if (!requiredSet.has(key)) {
+        return false;
+      }
+    }
+  }
+
   for (const value of Object.values(node)) {
     if (Array.isArray(value)) {
       for (const item of value) {
@@ -45,10 +69,11 @@ export function createCodexCli(cliPath: string): CliProvider {
     async invoke(options: CliInvokeOptions): Promise<CliResult> {
       const args = [
         "exec",
-        "--dangerously-bypass-approvals-and-sandbox",
+        "--full-auto",
         "--json",
       ];
       let schemaPath: string | null = null;
+      let prompt = options.prompt;
 
       if (options.jsonSchema) {
         const parsedSchema = JSON.parse(options.jsonSchema) as unknown;
@@ -61,10 +86,12 @@ export function createCodexCli(cliPath: string): CliProvider {
           schemaPath = path.join(os.tmpdir(), `codex-schema-${Date.now()}.json`);
           fs.writeFileSync(schemaPath, options.jsonSchema);
           args.push("--output-schema", schemaPath);
+        } else {
+          prompt = `${options.prompt}\n\nJSON Schema:\n${options.jsonSchema}\n\nOutput ONLY valid JSON matching this schema.`;
         }
       }
 
-      args.push(options.prompt);
+      args.push(prompt);
 
       try {
         const { stdout, stderr } = await execFileAsync(cliPath, args, {

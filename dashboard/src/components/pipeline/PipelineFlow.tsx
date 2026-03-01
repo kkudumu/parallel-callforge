@@ -5,9 +5,10 @@ import type { PipelineState } from "../../lib/types";
 
 interface PipelineFlowProps {
   state: PipelineState;
+  onAgentClick?: (agentName: keyof PipelineState["agents"]) => void;
 }
 
-export function PipelineFlow({ state }: PipelineFlowProps) {
+export function PipelineFlow({ state, onAgentClick }: PipelineFlowProps) {
   const agent1 = state.agents["agent-1"];
   const agent2 = state.agents["agent-2"];
   const agent3 = state.agents["agent-3"];
@@ -37,9 +38,9 @@ export function PipelineFlow({ state }: PipelineFlowProps) {
 
         {/* Top row: Agent 1 -> Agent 2 -> Agent 3 */}
         <div className="flex items-start justify-center gap-10 lg:gap-16 w-full relative z-10">
-          <AgentNode agent={agent1} />
-          <AgentNode agent={agent2} />
-          <AgentNode agent={agent3} />
+          <AgentNode agent={agent1} onClick={() => onAgentClick?.("agent-1")} />
+          <AgentNode agent={agent2} onClick={() => onAgentClick?.("agent-2")} />
+          <AgentNode agent={agent3} onClick={() => onAgentClick?.("agent-3")} />
         </div>
 
         {/* Bottom row: Agent 7 */}
@@ -47,28 +48,28 @@ export function PipelineFlow({ state }: PipelineFlowProps) {
           <svg width="40" height="30" className="text-kawaii-peach dark:text-kawaii-peach-dark opacity-40">
             <path d="M20 0 L20 30" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
           </svg>
-          <AgentNode agent={agent7} />
+          <AgentNode agent={agent7} onClick={() => onAgentClick?.("agent-7")} />
         </div>
       </div>
 
       {/* Mobile layout: vertical flow */}
       <div className="sm:hidden flex flex-col items-center gap-2 w-full">
-        <AgentNode agent={agent1} />
+        <AgentNode agent={agent1} onClick={() => onAgentClick?.("agent-1")} />
         <MobileConnector
           status={agent1.status === "completed" ? agent2.status : "idle"}
           color={AGENTS["agent-2"].color}
         />
-        <AgentNode agent={agent2} />
+        <AgentNode agent={agent2} onClick={() => onAgentClick?.("agent-2")} />
         <MobileConnector
           status={agent2.status === "completed" ? agent3.status : "idle"}
           color={AGENTS["agent-3"].color}
         />
-        <AgentNode agent={agent3} />
+        <AgentNode agent={agent3} onClick={() => onAgentClick?.("agent-3")} />
         <MobileConnector
           status={agent3.status === "completed" ? agent7.status : "idle"}
           color={AGENTS["agent-7"].color}
         />
-        <AgentNode agent={agent7} />
+        <AgentNode agent={agent7} onClick={() => onAgentClick?.("agent-7")} />
       </div>
     </div>
   );

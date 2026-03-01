@@ -103,6 +103,9 @@ export async function runAgent7(
     );
 
     const metrics = dataProvider.getMetrics(page.id, page.url, page.city, daysSincePublish);
+    console.log(
+      `[Agent 7] ${page.city}: indexed=${metrics.isIndexed} pos=${metrics.position.toFixed(1)} ctr=${(metrics.clickToCallRate * 100).toFixed(1)}% quality=${(metrics.callQualificationRate * 100).toFixed(1)}%`
+    );
 
     // Store performance snapshot
     await db.query(
@@ -181,6 +184,9 @@ export async function runAgent7(
       // Generate optimization action
       const action = determineOptimizationAction(check.severity, metricName, daysSincePublish);
       if (action) {
+        console.log(
+          `[Agent 7] Action queued for ${page.city}: ${action.action_type} -> ${action.target_agent} (${metricName})`
+        );
         await db.query(
           `INSERT INTO optimization_actions (page_id, alert_id, action_type, target_agent, trigger_reason)
            VALUES ($1, $2, $3, $4, $5)`,

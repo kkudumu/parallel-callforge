@@ -190,6 +190,8 @@ function reducer(state: PipelineState, action: Action): PipelineState {
               ...state.agents[event.agent],
               status: "completed",
               currentStep: "Done!",
+              currentDetail: "",
+              lastError: "",
               completedAt: event.timestamp,
               duration: event.duration,
             },
@@ -203,7 +205,9 @@ function reducer(state: PipelineState, action: Action): PipelineState {
               ...state.agents[event.agent],
               status: "error",
               currentStep: "Error",
+              currentDetail: "",
               lastError: event.error,
+              completedAt: event.timestamp,
             },
           };
           break;
@@ -232,6 +236,10 @@ function reducer(state: PipelineState, action: Action): PipelineState {
                 ...state.agents[event.agent],
                 status: "idle",
                 currentStep: "Queued",
+                currentDetail: "",
+                lastError: "",
+                completedAt: null,
+                duration: null,
               },
             };
           } else if (event.to === "running") {

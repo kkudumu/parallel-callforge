@@ -32,6 +32,19 @@ export interface AgentErrorEvent {
   timestamp: number;
 }
 
+export interface AgentStatusEvent {
+  type: "agent_status";
+  agent: AgentName;
+  status: AgentStatus;
+  currentStep: string;
+  currentDetail: string;
+  lastError: string;
+  completedAt: number | null;
+  startedAt: number | null;
+  duration: number | null;
+  timestamp: number;
+}
+
 export interface TaskStatusChangeEvent {
   type: "task_status_change";
   taskId: string;
@@ -96,6 +109,7 @@ export type DashboardEvent =
   | AgentStepEvent
   | AgentCompleteEvent
   | AgentErrorEvent
+  | AgentStatusEvent
   | TaskStatusChangeEvent
   | PipelineStatsEvent
   | HealthScoreEvent

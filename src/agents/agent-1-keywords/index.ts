@@ -28,10 +28,110 @@ const CityScoringResponseSchema = z.object({
   ),
 });
 
+const IntentSchema = z.enum([
+  "informational",
+  "transactional",
+  "navigational",
+  "commercial",
+]);
+
+const FlexibleKeywordClusterSchema = z.object({
+  cluster_name: z.string().optional(),
+  name: z.string().optional(),
+  cluster: z.string().optional(),
+  title: z.string().optional(),
+  primary_keyword: z.string().optional(),
+  keyword: z.string().optional(),
+  secondary_keywords: z.union([z.array(z.string()), z.string()]).optional(),
+  search_volume: z.number().optional(),
+  volume: z.number().optional(),
+  difficulty: z.number().optional(),
+  keyword_difficulty: z.number().optional(),
+  intent: z.string().optional(),
+}).transform((cluster) => {
+  const clusterName =
+    cluster.cluster_name ??
+    cluster.name ??
+    cluster.cluster ??
+    cluster.title ??
+    cluster.primary_keyword ??
+    cluster.keyword;
+
+  const primaryKeyword =
+    cluster.primary_keyword ??
+    cluster.keyword ??
+    clusterName;
+
+  const secondaryKeywords = Array.isArray(cluster.secondary_keywords)
+    ? cluster.secondary_keywords
+    : typeof cluster.secondary_keywords === "string"
+      ? [cluster.secondary_keywords]
+      : [];
+
+  const normalizedIntent = typeof cluster.intent === "string"
+    ? cluster.intent.toLowerCase()
+    : "transactional";
+
+  return KeywordClusterSchema.parse({
+    cluster_name: clusterName ?? "general",
+    primary_keyword: primaryKeyword ?? clusterName ?? "general",
+    secondary_keywords: secondaryKeywords,
+    search_volume: cluster.search_volume ?? cluster.volume ?? 0,
+    difficulty: cluster.difficulty ?? cluster.keyword_difficulty ?? 0,
+    intent: IntentSchema.safeParse(normalizedIntent).success
+      ? normalizedIntent
+      : "transactional",
+  });
+});
+
+function normalizeUrlMappingValue(key: string, value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value && typeof value === "object") {
+    const node = value as Record<string, unknown>;
+    const candidates = [
+      node.url,
+      node.path,
+      node.slug,
+      node.href,
+      node.target,
+      node.primary_keyword,
+      node.keyword,
+      node.cluster_name,
+      node.name,
+      node.title,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.length > 0) {
+        return candidate;
+      }
+    }
+  }
+
+  return key;
+}
+
+export function normalizeUrlMapping(input: unknown): Record<string, string> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {};
+  }
+
+  const mapping: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    mapping[key] = normalizeUrlMappingValue(key, value);
+  }
+
+  return mapping;
+}
+
 // Schema for LLM keyword clustering
 const KeywordClusteringResponseSchema = z.object({
-  clusters: z.array(KeywordClusterSchema),
-  url_mapping: z.record(z.string(), z.string()),
+  clusters: z.array(FlexibleKeywordClusterSchema),
+  url_mapping: z.unknown().optional().transform((value) => normalizeUrlMapping(value)),
 });
 
 export function slugify(text: string): string {
@@ -64,6 +164,50 @@ export interface Agent1Config {
   candidateCities: Array<{ city: string; state: string; population: number }>;
 }
 
+function getTemplateCacheKey(niche: string): string {
+  return niche.trim().toLowerCase();
+}
+
+export async function getKeywordTemplates(
+  niche: string,
+  llm: LlmClient,
+  db: DbClient
+): Promise<string[]> {
+  const cacheKey = getTemplateCacheKey(niche);
+  const cached = await db.query<{ templates: string[] }>(
+    `SELECT templates
+     FROM keyword_templates
+     WHERE niche = $1
+     LIMIT 1`,
+    [cacheKey]
+  );
+
+  const cachedTemplates = cached.rows[0]?.templates;
+  if (Array.isArray(cachedTemplates) && cachedTemplates.length > 0) {
+    console.log(`[Agent 1] Reusing ${cachedTemplates.length} cached keyword templates`);
+    return cachedTemplates;
+  }
+
+  console.log("[Agent 1] No cached keyword templates found, generating...");
+  const templatePrompt = KEYWORD_TEMPLATE_PROMPT.replace("{niche}", niche);
+  const { templates } = await llm.call({
+    prompt: templatePrompt,
+    schema: KeywordTemplatesResponseSchema,
+  });
+
+  await db.query(
+    `INSERT INTO keyword_templates (niche, templates, updated_at)
+     VALUES ($1, $2, now())
+     ON CONFLICT (niche)
+     DO UPDATE SET
+       templates = EXCLUDED.templates,
+       updated_at = now()`,
+    [cacheKey, templates]
+  );
+
+  return templates;
+}
+
 export async function runAgent1(
   config: Agent1Config,
   llm: LlmClient,
@@ -72,15 +216,14 @@ export async function runAgent1(
   console.log(`[Agent 1] Starting keyword research for ${config.niche}`);
   eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Starting", detail: config.niche, timestamp: Date.now() });
 
-  // Step 1: Generate keyword templates via LLM
-  console.log("[Agent 1] Step 1: Generating keyword templates...");
-  eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Generating templates", detail: "LLM keyword templates", timestamp: Date.now() });
-  const templatePrompt = KEYWORD_TEMPLATE_PROMPT.replace("{niche}", config.niche);
-  const { templates } = await llm.call({
-    prompt: templatePrompt,
-    schema: KeywordTemplatesResponseSchema,
-  });
-  console.log(`[Agent 1] Generated ${templates.length} keyword templates`);
+  // Step 1: Load cached templates or generate them once per niche
+  console.log("[Agent 1] Step 1: Loading keyword templates...");
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Loading templates", detail: "Cache lookup", timestamp: Date.now() });
+  const templates = await getKeywordTemplates(config.niche, llm, db);
+  console.log(`[Agent 1] Using ${templates.length} keyword templates`);
+  for (const [index, template] of templates.slice(0, 8).entries()) {
+    console.log(`[Agent 1] Template ${index + 1}/${templates.length}: ${template}`);
+  }
   eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Templates ready", detail: `${templates.length} templates`, timestamp: Date.now() });
 
   // Step 2: Expand templates per city
@@ -111,6 +254,11 @@ export async function runAgent1(
     .slice(0, 5);
 
   console.log(`[Agent 1] Selected ${selectedCities.length} cities`);
+  for (const [index, city] of selectedCities.entries()) {
+    console.log(
+      `[Agent 1] Selected city ${index + 1}/${selectedCities.length}: ${city.city}, ${city.state} (${city.priority_score})`
+    );
+  }
   eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Cities selected", detail: `${selectedCities.length} cities`, timestamp: Date.now() });
 
   // Step 5: Cluster keywords per city
@@ -130,6 +278,12 @@ export async function runAgent1(
       prompt: clusterPrompt,
       schema: KeywordClusteringResponseSchema,
     });
+    console.log(
+      `[Agent 1] Cluster plan for ${city.city}: ${clusters
+        .slice(0, 5)
+        .map((cluster) => cluster.cluster_name)
+        .join(" | ")}`
+    );
 
     // Step 6: Write to DB
     const clusterIds: string[] = [];

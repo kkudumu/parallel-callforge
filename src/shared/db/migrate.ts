@@ -1,3 +1,4 @@
+import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import { createDbClient } from "./client.js";
@@ -11,8 +12,11 @@ const MIGRATIONS_DIR = path.join(
 async function migrate() {
   const env = getEnv();
   const db = createDbClient(env.DATABASE_URL);
+  const lockKey = 4_247_001;
 
   try {
+    await db.query("SELECT pg_advisory_lock($1)", [lockKey]);
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS _migrations (
         id SERIAL PRIMARY KEY,
@@ -53,6 +57,11 @@ async function migrate() {
 
     console.log("Migrations complete.");
   } finally {
+    try {
+      await db.query("SELECT pg_advisory_unlock($1)", [lockKey]);
+    } catch {
+      // Ignore unlock errors during shutdown.
+    }
     await db.end();
   }
 }

@@ -5,16 +5,18 @@ import { extractJson, detectRateLimit } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
+function shouldRetryWithoutDangerousPermissions(output: string): boolean {
+  return /--dangerously-skip-permissions cannot be used with root\/sudo privileges/i.test(output);
+}
+
 export function createClaudeCli(cliPath: string): CliProvider {
   return {
     name: "claude",
 
     async invoke(options: CliInvokeOptions): Promise<CliResult> {
-      const args = [
-        "--dangerously-skip-permissions",
-        "-p",
-        "--output-format", "json",
-      ];
+      const baseArgs = ["-p", "--output-format", "json"];
+      const bypassPermissionArgs = ["--permission-mode", "bypassPermissions", ...baseArgs];
+      const args = ["--dangerously-skip-permissions", ...baseArgs];
 
       if (options.jsonSchema) {
         args.push("--json-schema", options.jsonSchema);
@@ -31,12 +33,34 @@ export function createClaudeCli(cliPath: string): CliProvider {
         // Remove CLAUDECODE to avoid "cannot launch inside another session" error
         const childEnv: Record<string, string | undefined> = { ...process.env, IS_SANDBOX: "1" };
         delete childEnv.CLAUDECODE;
+        let stdout = "";
+        let stderr = "";
 
-        const { stdout, stderr } = await execFileAsync(cliPath, args, {
-          timeout: options.timeoutMs ?? 120_000,
-          maxBuffer: 10 * 1024 * 1024,
-          env: childEnv,
-        });
+        try {
+          const result = await execFileAsync(cliPath, args, {
+            timeout: options.timeoutMs ?? 120_000,
+            maxBuffer: 10 * 1024 * 1024,
+            env: childEnv,
+          });
+          stdout = result.stdout;
+          stderr = result.stderr;
+        } catch (err: any) {
+          const firstStdout = err.stdout ?? "";
+          const firstStderr = err.stderr ?? "";
+          const firstOutput = [firstStderr, firstStdout].filter(Boolean).join("\n");
+
+          if (!shouldRetryWithoutDangerousPermissions(firstOutput)) {
+            throw err;
+          }
+
+          const retryResult = await execFileAsync(cliPath, [...bypassPermissionArgs, ...args.slice(4)], {
+            timeout: options.timeoutMs ?? 120_000,
+            maxBuffer: 10 * 1024 * 1024,
+            env: childEnv,
+          });
+          stdout = retryResult.stdout;
+          stderr = retryResult.stderr;
+        }
 
         const envelope = extractJson(stdout) as Record<string, unknown>;
         const isError = Boolean(envelope.is_error);

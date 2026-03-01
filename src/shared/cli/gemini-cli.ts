@@ -25,9 +25,17 @@ export function createGeminiCli(cliPath: string): CliProvider {
         });
 
         const envelope = extractJson(stdout) as Record<string, unknown>;
-        const payload = typeof envelope.response === "string"
+        let payload: unknown = typeof envelope.response === "string"
           ? envelope.response
           : envelope;
+
+        if (typeof payload === "string") {
+          try {
+            payload = extractJson(payload);
+          } catch {
+            // Leave plain-text payload as-is and let higher-level validation decide.
+          }
+        }
 
         return {
           result: typeof payload === "string" ? payload : JSON.stringify(payload),

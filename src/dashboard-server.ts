@@ -36,6 +36,19 @@ const MAX_LOG_BUFFER = 300;
 
 const NICHE = "pest-control";
 const HUGO_SITE_PATH = path.resolve("hugo-site");
+
+function getAgentFromSource(source?: string): AgentName | null {
+  const normalized = source?.toLowerCase() ?? "";
+  if (normalized.includes("agent 1") || normalized === "googlekp") return "agent-1";
+  if (normalized.includes("agent 2")) return "agent-2";
+  if (normalized.includes("agent 3")) return "agent-3";
+  if (normalized.includes("agent 7")) return "agent-7";
+  return null;
+}
+
+function stripSourcePrefix(message: string, source?: string): string {
+  return source ? message.replace(`[${source}] `, "") : message;
+}
 const CANDIDATE_CITIES = [
   { city: "Santa Cruz", state: "CA", population: 65000 },
   { city: "Watsonville", state: "CA", population: 54000 },
@@ -75,6 +88,13 @@ export function createDashboardServer(db?: DbClient) {
   let lastPipelineRun: PipelineRunEvent | null = null;
   const logBuffer: DashboardEvent[] = [];
 
+  function resetAgentStates() {
+    for (const agent of Object.keys(agentStates) as AgentName[]) {
+      agentStates[agent] = createAgentStatus(agent);
+      try { broadcast(agentStates[agent]); } catch { /* server not ready yet */ }
+    }
+  }
+
   // Intercept console output and broadcast as pipeline_log events
   function emitLog(level: "info" | "warn" | "error", args: unknown[]) {
     const message = args.map((a) =>
@@ -92,6 +112,18 @@ export function createDashboardServer(db?: DbClient) {
     logBuffer.push(event);
     if (logBuffer.length > MAX_LOG_BUFFER) {
       logBuffer.splice(0, logBuffer.length - MAX_LOG_BUFFER);
+    }
+    const agent = getAgentFromSource(event.source);
+    if (agent && agentStates[agent].status === "running") {
+      const detail = stripSourcePrefix(event.message, event.source);
+      if (detail && detail !== agentStates[agent].currentDetail) {
+        agentStates[agent] = {
+          ...agentStates[agent],
+          currentDetail: detail,
+          timestamp: event.timestamp,
+        };
+        try { broadcast(agentStates[agent]); } catch { /* server not ready yet */ }
+      }
     }
     // broadcast is defined later — use lazy reference via closure
     try { broadcast(event); } catch { /* server not ready yet */ }
@@ -170,6 +202,7 @@ export function createDashboardServer(db?: DbClient) {
 
     // Respond immediately — pipeline runs in background
     res.json({ status: "started" });
+    resetAgentStates();
 
     // Run migrations first
     try {
@@ -242,13 +275,18 @@ export function createDashboardServer(db?: DbClient) {
       const t1 = await orchestrator.scheduler.createTask("keyword_research", "agent-1", { niche: NICHE });
       const t2 = await orchestrator.scheduler.createTask("design_research", "agent-2", { niche: NICHE }, [t1]);
       const t3 = await orchestrator.scheduler.createTask("site_build", "agent-3", { niche: NICHE }, [t2]);
-      await orchestrator.scheduler.createTask("performance_monitor", "agent-7", { niche: NICHE }, [t3]);
+      const t4 = await orchestrator.scheduler.createTask("performance_monitor", "agent-7", { niche: NICHE }, [t3]);
+      const currentRunTaskIds = new Set([t1, t2, t3, t4]);
 
       emitPipelineRun("running", "Pipeline started — processing tasks...");
 
       // Run orchestrator in background with a completion check
       const checkCompletion = async () => {
-        const tasks = await orchestrator.scheduler.getAllTasks();
+        const tasks = (await orchestrator.scheduler.getAllTasks())
+          .filter((t) => currentRunTaskIds.has(t.id));
+        if (tasks.length !== currentRunTaskIds.size) {
+          return;
+        }
         const allDone = tasks.every((t) => t.status === "completed" || t.status === "failed");
         if (allDone && tasks.length > 0) {
           orchestrator.stop();
@@ -353,6 +391,9 @@ export function createDashboardServer(db?: DbClient) {
           ...agentStates[event.agent],
           status: "idle",
           currentStep: "Queued",
+          currentDetail: "",
+          lastError: "",
+          duration: null,
           completedAt: null,
           timestamp: event.timestamp,
         };
@@ -361,6 +402,7 @@ export function createDashboardServer(db?: DbClient) {
           ...agentStates[event.agent],
           status: "running",
           currentStep: agentStates[event.agent].currentStep || "Starting...",
+          currentDetail: agentStates[event.agent].currentDetail,
           lastError: "",
           completedAt: null,
           timestamp: event.timestamp,

@@ -48,6 +48,9 @@ Rules:
 - Service subpages ("/[city-slug]/[service]/") target specific pest types
 - Each cluster should have 1 primary keyword and 2-5 secondary keywords
 - Classify intent: informational, transactional, navigational, commercial
+- For every cluster, use these exact keys: "cluster_name", "primary_keyword", "secondary_keywords", "search_volume", "difficulty", "intent"
+- "search_volume" and "difficulty" must always be numbers (use 0 if unknown)
+- "url_mapping" must be a flat object where each key is a URL path and each value is a string
 
 Keywords:
 {keywords}
