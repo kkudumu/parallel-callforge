@@ -5,49 +5,33 @@ import { extractJson, detectRateLimit } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
-export function createClaudeCli(cliPath: string): CliProvider {
+export function createGeminiCli(cliPath: string): CliProvider {
   return {
-    name: "claude",
+    name: "gemini",
 
     async invoke(options: CliInvokeOptions): Promise<CliResult> {
-      const args = [
-        "--dangerously-skip-permissions",
-        "-p",
-        "--output-format", "json",
-      ];
+      const args = ["--yolo", "-o", "json"];
 
-      if (options.jsonSchema) {
-        args.push("--json-schema", options.jsonSchema);
-      }
+      const prompt = options.jsonSchema
+        ? `${options.prompt}\n\nJSON Schema:\n${options.jsonSchema}\n\nOutput ONLY valid JSON matching this schema.`
+        : options.prompt;
 
-      if (options.maxTurns) {
-        args.push("--max-turns", String(options.maxTurns));
-      }
-
-      // Prompt must be the last positional argument
-      args.push(options.prompt);
+      args.push(prompt);
 
       try {
-        // Remove CLAUDECODE to avoid "cannot launch inside another session" error
-        const childEnv: Record<string, string | undefined> = { ...process.env, IS_SANDBOX: "1" };
-        delete childEnv.CLAUDECODE;
-
         const { stdout, stderr } = await execFileAsync(cliPath, args, {
           timeout: options.timeoutMs ?? 120_000,
           maxBuffer: 10 * 1024 * 1024,
-          env: childEnv,
         });
 
         const envelope = extractJson(stdout) as Record<string, unknown>;
-        const isError = Boolean(envelope.is_error);
-        const payload = envelope.structured_output ?? envelope.result;
-        const result = typeof payload === "string"
-          ? payload
-          : JSON.stringify(payload);
+        const payload = typeof envelope.response === "string"
+          ? envelope.response
+          : envelope;
 
         return {
-          result,
-          is_error: isError,
+          result: typeof payload === "string" ? payload : JSON.stringify(payload),
+          is_error: false,
           raw_stdout: stdout,
           raw_stderr: stderr,
         };

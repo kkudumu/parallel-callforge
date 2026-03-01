@@ -4,6 +4,7 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1).describe("PostgreSQL connection string"),
   CLAUDE_CLI_PATH: z.string().default("claude"),
   CODEX_CLI_PATH: z.string().default("codex"),
+  GEMINI_CLI_PATH: z.string().default("gemini"),
   GOOGLE_ADS_DEVELOPER_TOKEN: z.string().optional(),
   GOOGLE_ADS_CLIENT_ID: z.string().optional(),
   GOOGLE_ADS_CLIENT_SECRET: z.string().optional(),

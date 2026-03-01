@@ -4,6 +4,7 @@ import { createTaskScheduler } from "./task-scheduler.js";
 import { createRateLimiters } from "../shared/cli/rate-limiter.js";
 import { createClaudeCli } from "../shared/cli/claude-cli.js";
 import { createCodexCli } from "../shared/cli/codex-cli.js";
+import { createGeminiCli } from "../shared/cli/gemini-cli.js";
 import { createLlmClient } from "../shared/cli/llm-client.js";
 import { getEnv } from "../config/env.js";
 import { eventBus } from "../shared/events/event-bus.js";
@@ -24,7 +25,8 @@ export async function createOrchestrator(deps: OrchestratorDeps) {
   const limiters = createRateLimiters();
   const claudeCli = createClaudeCli(env.CLAUDE_CLI_PATH);
   const codexCli = createCodexCli(env.CODEX_CLI_PATH);
-  const llm = createLlmClient(claudeCli, codexCli, limiters);
+  const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
+  const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
 
   const { agentHandlers, pollIntervalMs = 5000, maxConcurrent = 1 } = deps;
   const MAX_TASK_RETRIES = 3;

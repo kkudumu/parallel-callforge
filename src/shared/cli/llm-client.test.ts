@@ -54,6 +54,21 @@ describe("LlmClient", () => {
     expect(result.answer).toBe("fallback");
   });
 
+  it("falls back to tertiary on primary and secondary failure", async () => {
+    const primary = mockProvider("claude", null, true);
+    const fallback = mockProvider("codex", null, true);
+    const tertiary = mockProvider("gemini", { answer: "tertiary", confidence: 0.6 });
+    const limiters = createRateLimiters();
+    const client = createLlmClient(primary, fallback, limiters, tertiary);
+
+    const result = await client.call({
+      prompt: "test prompt",
+      schema: TestSchema,
+    });
+
+    expect(result.answer).toBe("tertiary");
+  });
+
   it("throws when both providers fail", async () => {
     const primary = mockProvider("claude", null, true);
     const fallback = mockProvider("codex", null, true);
@@ -63,5 +78,17 @@ describe("LlmClient", () => {
     await expect(
       client.call({ prompt: "test", schema: TestSchema })
     ).rejects.toThrow();
+  });
+
+  it("throws when all three providers fail", async () => {
+    const primary = mockProvider("claude", null, true);
+    const fallback = mockProvider("codex", null, true);
+    const tertiary = mockProvider("gemini", null, true);
+    const limiters = createRateLimiters();
+    const client = createLlmClient(primary, fallback, limiters, tertiary);
+
+    await expect(
+      client.call({ prompt: "test", schema: TestSchema })
+    ).rejects.toThrow(/All providers failed/);
   });
 });

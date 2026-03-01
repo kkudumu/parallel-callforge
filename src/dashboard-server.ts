@@ -10,6 +10,7 @@ import { createDbClient, type DbClient } from "./shared/db/client.js";
 import { createRateLimiters } from "./shared/cli/rate-limiter.js";
 import { createClaudeCli } from "./shared/cli/claude-cli.js";
 import { createCodexCli } from "./shared/cli/codex-cli.js";
+import { createGeminiCli } from "./shared/cli/gemini-cli.js";
 import { createLlmClient } from "./shared/cli/llm-client.js";
 import { runAgent1 } from "./agents/agent-1-keywords/index.js";
 import { runAgent2 } from "./agents/agent-2-design/index.js";
@@ -185,7 +186,8 @@ export function createDashboardServer(db?: DbClient) {
     const limiters = createRateLimiters();
     const claudeCli = createClaudeCli(env.CLAUDE_CLI_PATH);
     const codexCli = createCodexCli(env.CODEX_CLI_PATH);
-    const llm = createLlmClient(claudeCli, codexCli, limiters);
+    const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
+    const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
 
     const agentHandlers = new Map<string, AgentHandler>();
 

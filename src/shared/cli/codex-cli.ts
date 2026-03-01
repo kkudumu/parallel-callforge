@@ -48,6 +48,7 @@ export function createCodexCli(cliPath: string): CliProvider {
         "--dangerously-bypass-approvals-and-sandbox",
         "--json",
       ];
+      let schemaPath: string | null = null;
 
       if (options.jsonSchema) {
         const parsedSchema = JSON.parse(options.jsonSchema) as unknown;
@@ -57,7 +58,7 @@ export function createCodexCli(cliPath: string): CliProvider {
           const fs = await import("node:fs");
           const os = await import("node:os");
           const path = await import("node:path");
-          const schemaPath = path.join(os.tmpdir(), `codex-schema-${Date.now()}.json`);
+          schemaPath = path.join(os.tmpdir(), `codex-schema-${Date.now()}.json`);
           fs.writeFileSync(schemaPath, options.jsonSchema);
           args.push("--output-schema", schemaPath);
         }
@@ -110,16 +111,24 @@ export function createCodexCli(cliPath: string): CliProvider {
         };
       } catch (err: any) {
         const stderr = err.stderr ?? "";
-        if (detectRateLimit(err.code ?? 1, stderr)) {
+        const stdout = err.stdout ?? "";
+        const output = [stderr, stdout].filter(Boolean).join("\n");
+
+        if (detectRateLimit(err.code ?? 1, output)) {
           const error = new Error("Rate limit hit") as any;
           error.isRateLimit = true;
-          error.stderr = stderr;
+          error.stderr = output;
           throw error;
         }
-        if (stderr) {
-          throw new Error(`${err.message}\n${stderr}`);
+        if (output) {
+          throw new Error(`${err.message}\n${output}`);
         }
         throw err;
+      } finally {
+        if (schemaPath) {
+          const fs = await import("node:fs");
+          fs.rmSync(schemaPath, { force: true });
+        }
       }
     },
   };

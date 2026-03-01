@@ -7,10 +7,12 @@ describe("parseEnv", () => {
       DATABASE_URL: "postgres://user:pass@localhost:5432/db",
       CLAUDE_CLI_PATH: "/usr/local/bin/claude",
       CODEX_CLI_PATH: "/usr/local/bin/codex",
+      GEMINI_CLI_PATH: "/usr/local/bin/gemini",
       NODE_ENV: "development",
     });
     expect(env.DATABASE_URL).toBe("postgres://user:pass@localhost:5432/db");
     expect(env.CLAUDE_CLI_PATH).toBe("/usr/local/bin/claude");
+    expect(env.GEMINI_CLI_PATH).toBe("/usr/local/bin/gemini");
     expect(env.NODE_ENV).toBe("development");
   });
 
@@ -20,6 +22,7 @@ describe("parseEnv", () => {
     });
     expect(env.CLAUDE_CLI_PATH).toBe("claude");
     expect(env.CODEX_CLI_PATH).toBe("codex");
+    expect(env.GEMINI_CLI_PATH).toBe("gemini");
     expect(env.NODE_ENV).toBe("development");
   });
 

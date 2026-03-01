@@ -66,27 +66,28 @@ async function invokeWithValidation<T extends z.ZodType>(
 export function createLlmClient(
   primary: CliProvider,
   fallback: CliProvider,
-  limiters: RateLimiters
+  limiters: RateLimiters,
+  tertiary?: CliProvider
 ): LlmClient {
   return {
     async call<T extends z.ZodType>(options: LlmCallOptions<T>): Promise<z.infer<T>> {
       const { prompt, schema, maxRetries = 3, maxTurns, timeoutMs } = options;
+      const providers = [
+        { role: "Primary", provider: primary, limiter: limiters.claude },
+        { role: "Fallback", provider: fallback, limiter: limiters.codex },
+        ...(tertiary
+          ? [{ role: "Tertiary", provider: tertiary, limiter: limiters.gemini }]
+          : []),
+      ];
+      const failures: string[] = [];
 
-      // Try primary provider through rate limiter
-      try {
-        return await limiters.claude.schedule(() =>
-          invokeWithValidation(primary, prompt, schema, maxRetries, maxTurns, timeoutMs)
-        );
-      } catch (primaryErr: any) {
-        console.warn(
-          `[${primary.name}] Failed, falling back to ${fallback.name}: ${primaryErr.message}`
-        );
+      for (let i = 0; i < providers.length; i++) {
+        const current = providers[i];
 
-        // Try fallback provider
         try {
-          return await limiters.codex.schedule(() =>
+          return await current.limiter.schedule(() =>
             invokeWithValidation(
-              fallback,
+              current.provider,
               prompt,
               schema,
               maxRetries,
@@ -94,13 +95,19 @@ export function createLlmClient(
               timeoutMs
             )
           );
-        } catch (fallbackErr: any) {
-          const error = new Error(
-            `All providers failed. Primary (${primary.name}): ${primaryErr.message}. Fallback (${fallback.name}): ${fallbackErr.message}`
-          );
-          throw error;
+        } catch (err: any) {
+          failures.push(`${current.role} (${current.provider.name}): ${err.message}`);
+          const next = providers[i + 1];
+          if (next) {
+            console.warn(
+              `[${current.provider.name}] Failed, falling back to ${next.provider.name}: ${err.message}`
+            );
+            continue;
+          }
         }
       }
+
+      throw new Error(`All providers failed. ${failures.join(". ")}`);
     },
   };
 }

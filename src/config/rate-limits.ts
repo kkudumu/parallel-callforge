@@ -21,6 +21,13 @@ export const RATE_LIMITS: Record<string, ProviderRateLimitConfig> = {
     reservoirRefreshAmount: 40,
     reservoirRefreshInterval: 24 * 60 * 60 * 1000,
   },
+  gemini: {
+    maxConcurrent: 1,
+    minTime: 15_000,
+    reservoir: 40,
+    reservoirRefreshAmount: 40,
+    reservoirRefreshInterval: 24 * 60 * 60 * 1000,
+  },
   contentDeploy: {
     maxConcurrent: 1,
     minTime: 60_000,
