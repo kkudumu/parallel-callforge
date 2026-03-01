@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
-import type { CliProvider } from "./types.js";
+import type { CliProvider, ModelTier } from "./types.js";
 import type { RateLimiters } from "./rate-limiter.js";
+import { extractJson } from "./types.js";
 
 export interface LlmCallOptions<T extends z.ZodType> {
   prompt: string;
@@ -8,6 +9,7 @@ export interface LlmCallOptions<T extends z.ZodType> {
   maxRetries?: number;
   maxTurns?: number;
   timeoutMs?: number;
+  model?: ModelTier;
 }
 
 export interface LlmClient {
@@ -30,13 +32,26 @@ function formatErrorDetails(err: unknown): string {
   return String(err);
 }
 
+function parseStructuredResult(result: string | unknown): unknown {
+  if (typeof result !== "string") {
+    return result;
+  }
+
+  try {
+    return JSON.parse(result);
+  } catch {
+    return extractJson(result);
+  }
+}
+
 async function invokeWithValidation<T extends z.ZodType>(
   provider: CliProvider,
   prompt: string,
   schema: T,
   maxRetries: number,
   maxTurns?: number,
-  timeoutMs?: number
+  timeoutMs?: number,
+  model?: ModelTier
 ): Promise<z.infer<T>> {
   const jsonSchema = JSON.stringify(z.toJSONSchema(schema));
   let currentPrompt = prompt;
@@ -47,6 +62,7 @@ async function invokeWithValidation<T extends z.ZodType>(
       jsonSchema,
       maxTurns: maxTurns ?? 10,
       timeoutMs,
+      model,
     });
 
     if (result.is_error) {
@@ -54,9 +70,7 @@ async function invokeWithValidation<T extends z.ZodType>(
     }
 
     try {
-      const parsed = typeof result.result === "string"
-        ? JSON.parse(result.result)
-        : result.result;
+      const parsed = parseStructuredResult(result.result);
       return schema.parse(parsed);
     } catch (err) {
       if (attempt >= maxRetries) throw err;
@@ -87,7 +101,7 @@ export function createLlmClient(
 ): LlmClient {
   return {
     async call<T extends z.ZodType>(options: LlmCallOptions<T>): Promise<z.infer<T>> {
-      const { prompt, schema, maxRetries = 3, maxTurns, timeoutMs } = options;
+      const { prompt, schema, maxRetries = 3, maxTurns, timeoutMs, model } = options;
       const providers = [
         { role: "Primary", provider: primary, limiter: limiters.claude },
         { role: "Fallback", provider: fallback, limiter: limiters.codex },
@@ -108,7 +122,8 @@ export function createLlmClient(
               schema,
               maxRetries,
               maxTurns,
-              timeoutMs
+              timeoutMs,
+              model
             )
           );
         } catch (err: any) {

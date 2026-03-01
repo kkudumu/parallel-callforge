@@ -35,54 +35,36 @@ const IntentSchema = z.enum([
   "commercial",
 ]);
 
-const FlexibleKeywordClusterSchema = z.object({
-  cluster_name: z.string().optional(),
-  name: z.string().optional(),
-  cluster: z.string().optional(),
-  title: z.string().optional(),
-  primary_keyword: z.string().optional(),
-  keyword: z.string().optional(),
-  secondary_keywords: z.union([z.array(z.string()), z.string()]).optional(),
-  search_volume: z.number().optional(),
-  volume: z.number().optional(),
-  difficulty: z.number().optional(),
-  keyword_difficulty: z.number().optional(),
-  intent: z.string().optional(),
-}).transform((cluster) => {
-  const clusterName =
-    cluster.cluster_name ??
-    cluster.name ??
-    cluster.cluster ??
-    cluster.title ??
-    cluster.primary_keyword ??
-    cluster.keyword;
-
-  const primaryKeyword =
-    cluster.primary_keyword ??
-    cluster.keyword ??
-    clusterName;
-
-  const secondaryKeywords = Array.isArray(cluster.secondary_keywords)
-    ? cluster.secondary_keywords
-    : typeof cluster.secondary_keywords === "string"
-      ? [cluster.secondary_keywords]
-      : [];
-
-  const normalizedIntent = typeof cluster.intent === "string"
-    ? cluster.intent.toLowerCase()
-    : "transactional";
-
-  return KeywordClusterSchema.parse({
-    cluster_name: clusterName ?? "general",
-    primary_keyword: primaryKeyword ?? clusterName ?? "general",
-    secondary_keywords: secondaryKeywords,
-    search_volume: cluster.search_volume ?? cluster.volume ?? 0,
-    difficulty: cluster.difficulty ?? cluster.keyword_difficulty ?? 0,
-    intent: IntentSchema.safeParse(normalizedIntent).success
-      ? normalizedIntent
-      : "transactional",
-  });
+// Strict schema compatible with Claude structured output (no anyOf, no
+// propertyNames, no open additionalProperties).
+const KeywordClusteringResponseSchema = z.object({
+  clusters: z.array(
+    z.object({
+      cluster_name: z.string(),
+      primary_keyword: z.string(),
+      secondary_keywords: z.array(z.string()),
+      search_volume: z.number(),
+      difficulty: z.number(),
+      intent: z.string(),
+    })
+  ),
 });
+
+/** Build url_mapping deterministically from cluster data. */
+function buildUrlMapping(
+  clusters: Array<{ cluster_name: string; primary_keyword: string }>,
+  citySlug: string,
+): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  mapping[`/${citySlug}/`] = clusters[0]?.primary_keyword ?? citySlug;
+  for (const cluster of clusters) {
+    const serviceSlug = slugify(cluster.cluster_name);
+    if (serviceSlug && serviceSlug !== citySlug) {
+      mapping[`/${citySlug}/${serviceSlug}/`] = cluster.primary_keyword;
+    }
+  }
+  return mapping;
+}
 
 function normalizeUrlMappingValue(key: string, value: unknown): string {
   if (typeof value === "string") {
@@ -92,18 +74,9 @@ function normalizeUrlMappingValue(key: string, value: unknown): string {
   if (value && typeof value === "object") {
     const node = value as Record<string, unknown>;
     const candidates = [
-      node.url,
-      node.path,
-      node.slug,
-      node.href,
-      node.target,
-      node.primary_keyword,
-      node.keyword,
-      node.cluster_name,
-      node.name,
-      node.title,
+      node.url, node.path, node.slug, node.href, node.target,
+      node.primary_keyword, node.keyword, node.cluster_name, node.name, node.title,
     ];
-
     for (const candidate of candidates) {
       if (typeof candidate === "string" && candidate.length > 0) {
         return candidate;
@@ -127,12 +100,6 @@ export function normalizeUrlMapping(input: unknown): Record<string, string> {
 
   return mapping;
 }
-
-// Schema for LLM keyword clustering
-const KeywordClusteringResponseSchema = z.object({
-  clusters: z.array(FlexibleKeywordClusterSchema),
-  url_mapping: z.unknown().optional().transform((value) => normalizeUrlMapping(value)),
-});
 
 export function slugify(text: string): string {
   return text
@@ -193,6 +160,7 @@ export async function getKeywordTemplates(
   const { templates } = await llm.call({
     prompt: templatePrompt,
     schema: KeywordTemplatesResponseSchema,
+    model: "haiku",
   });
 
   await db.query(
@@ -245,6 +213,7 @@ export async function runAgent1(
   const { scored_cities } = await llm.call({
     prompt: scoringPrompt,
     schema: CityScoringResponseSchema,
+    model: "haiku",
   });
 
   // Filter to top cities (score > 50)
@@ -274,10 +243,25 @@ export async function runAgent1(
       .replace("{state}", city.state)
       .replace("{keywords}", JSON.stringify(cityKeywords));
 
-    const { clusters, url_mapping } = await llm.call({
+    const clusterResponse = await llm.call({
       prompt: clusterPrompt,
       schema: KeywordClusteringResponseSchema,
+      model: "haiku",
     });
+    const clusters = clusterResponse.clusters.map((c) =>
+      KeywordClusterSchema.parse({
+        cluster_name: c.cluster_name,
+        primary_keyword: c.primary_keyword,
+        secondary_keywords: c.secondary_keywords,
+        search_volume: c.search_volume,
+        difficulty: c.difficulty,
+        intent: IntentSchema.safeParse(c.intent.toLowerCase()).success
+          ? c.intent.toLowerCase()
+          : "transactional",
+      })
+    );
+    const citySlug = slugify(city.city);
+    const url_mapping = buildUrlMapping(clusters, citySlug);
     console.log(
       `[Agent 1] Cluster plan for ${city.city}: ${clusters
         .slice(0, 5)

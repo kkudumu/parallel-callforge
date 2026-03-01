@@ -62,6 +62,7 @@ export async function runAgent2(
   const competitorAnalysis = await llm.call({
     prompt: competitorPrompt,
     schema: CompetitorAnalysisSchema,
+    model: "sonnet",
   });
   console.log(`[Agent 2] Found ${competitorAnalysis.patterns.length} CRO patterns`);
   console.log(
@@ -81,6 +82,7 @@ export async function runAgent2(
   const designSpec = await llm.call({
     prompt: designPrompt,
     schema: DesignSpecSchema,
+    model: "sonnet",
   });
   console.log(`[Agent 2] Design archetype: ${designSpec.archetype}`);
   console.log(
@@ -118,6 +120,7 @@ export async function runAgent2(
   const copyFramework = await llm.call({
     prompt: copyPrompt,
     schema: CopyFrameworkSchema,
+    model: "sonnet",
   });
   console.log(
     `[Agent 2] Headline directions: ${copyFramework.headlines.slice(0, 4).join(" | ")}`
@@ -153,6 +156,7 @@ export async function runAgent2(
   const schemaTemplates = await llm.call({
     prompt: schemaPrompt,
     schema: SchemaTemplateSchema,
+    model: "haiku",
   });
   console.log(
     `[Agent 2] Schema template types: ${Object.keys(schemaTemplates.jsonld_templates)
@@ -177,6 +181,7 @@ export async function runAgent2(
   const seasonalCalendar = await llm.call({
     prompt: seasonalPrompt,
     schema: SeasonalCalendarSchema,
+    model: "sonnet",
   });
   console.log(
     `[Agent 2] Seasonal focus: ${seasonalCalendar.months

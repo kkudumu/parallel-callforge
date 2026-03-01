@@ -1,10 +1,13 @@
 import type { z } from "zod/v4";
 
+export type ModelTier = "haiku" | "sonnet" | "opus";
+
 export interface CliInvokeOptions {
   prompt: string;
   jsonSchema?: string;
   maxTurns?: number;
   timeoutMs?: number;
+  model?: ModelTier;
 }
 
 export interface CliResult {

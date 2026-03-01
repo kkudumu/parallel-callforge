@@ -1,12 +1,84 @@
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import type { CliProvider, CliInvokeOptions, CliResult } from "./types.js";
+import type { CliProvider, CliInvokeOptions, CliResult, ModelTier } from "./types.js";
 import { extractJson, detectRateLimit } from "./types.js";
 
-const execFileAsync = promisify(execFile);
+const MODEL_IDS: Record<ModelTier, string> = {
+  haiku: "claude-haiku-4-5-20251001",
+  sonnet: "claude-sonnet-4-6",
+  opus: "claude-opus-4-6",
+};
 
 function shouldRetryWithoutDangerousPermissions(output: string): boolean {
   return /--dangerously-skip-permissions cannot be used with root\/sudo privileges/i.test(output);
+}
+
+function isRunningAsRoot(): boolean {
+  return typeof process.getuid === "function" && process.getuid() === 0;
+}
+
+/**
+ * Check whether a JSON Schema is compatible with Claude's structured output.
+ * Unsupported features: anyOf/oneOf at non-root level, propertyNames,
+ * additionalProperties that isn't false (i.e. open records).
+ * When incompatible, the schema should be inlined into the prompt instead.
+ */
+export function isClaudeSchemaCompatible(schema: unknown): boolean {
+  if (!schema || typeof schema !== "object") return true;
+
+  const node = schema as Record<string, unknown>;
+
+  if ("propertyNames" in node) return false;
+  if ("anyOf" in node || "oneOf" in node) return false;
+  if (node.type === "object" && "additionalProperties" in node && node.additionalProperties !== false) {
+    return false;
+  }
+
+  for (const value of Object.values(node)) {
+    if (value && typeof value === "object") {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (!isClaudeSchemaCompatible(item)) return false;
+        }
+      } else {
+        if (!isClaudeSchemaCompatible(value)) return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function execFileWithClosedStdin(
+  file: string,
+  args: string[],
+  options: {
+    timeout: number;
+    maxBuffer: number;
+    env: Record<string, string | undefined>;
+  }
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      file,
+      args,
+      {
+        ...options,
+        encoding: "utf8",
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          (error as any).stdout = stdout;
+          (error as any).stderr = stderr;
+          reject(error);
+          return;
+        }
+
+        resolve({ stdout, stderr });
+      }
+    );
+
+    child.stdin?.end();
+  });
 }
 
 export function createClaudeCli(cliPath: string): CliProvider {
@@ -14,20 +86,40 @@ export function createClaudeCli(cliPath: string): CliProvider {
     name: "claude",
 
     async invoke(options: CliInvokeOptions): Promise<CliResult> {
-      const baseArgs = ["-p", "--output-format", "json"];
-      const bypassPermissionArgs = ["--permission-mode", "bypassPermissions", ...baseArgs];
-      const args = ["--dangerously-skip-permissions", ...baseArgs];
+      const promptArgs = ["-p", "--output-format", "json"];
+
+      if (options.model) {
+        promptArgs.push("--model", MODEL_IDS[options.model]);
+      }
+
+      const defaultArgs = [...promptArgs];
 
       if (options.jsonSchema) {
-        args.push("--json-schema", options.jsonSchema);
+        const parsedSchema = JSON.parse(options.jsonSchema) as unknown;
+
+        if (isClaudeSchemaCompatible(parsedSchema)) {
+          defaultArgs.push("--json-schema", options.jsonSchema);
+        } else {
+          // Schema uses features Claude structured output doesn't support.
+          // Inline it into the prompt so the LLM still sees the schema.
+          options = {
+            ...options,
+            prompt: `${options.prompt}\n\nJSON Schema:\n${options.jsonSchema}\n\nOutput ONLY valid JSON matching this schema.`,
+            jsonSchema: undefined,
+          };
+        }
       }
 
       if (options.maxTurns) {
-        args.push("--max-turns", String(options.maxTurns));
+        defaultArgs.push("--max-turns", String(options.maxTurns));
       }
 
       // Prompt must be the last positional argument
-      args.push(options.prompt);
+      defaultArgs.push(options.prompt);
+      const privilegedArgs = isRunningAsRoot()
+        ? defaultArgs
+        : ["--dangerously-skip-permissions", ...defaultArgs];
+      const bypassPermissionArgs = ["--permission-mode", "bypassPermissions", ...defaultArgs];
 
       try {
         // Remove CLAUDECODE to avoid "cannot launch inside another session" error
@@ -37,7 +129,7 @@ export function createClaudeCli(cliPath: string): CliProvider {
         let stderr = "";
 
         try {
-          const result = await execFileAsync(cliPath, args, {
+          const result = await execFileWithClosedStdin(cliPath, privilegedArgs, {
             timeout: options.timeoutMs ?? 120_000,
             maxBuffer: 10 * 1024 * 1024,
             env: childEnv,
@@ -53,7 +145,7 @@ export function createClaudeCli(cliPath: string): CliProvider {
             throw err;
           }
 
-          const retryResult = await execFileAsync(cliPath, [...bypassPermissionArgs, ...args.slice(4)], {
+          const retryResult = await execFileWithClosedStdin(cliPath, bypassPermissionArgs, {
             timeout: options.timeoutMs ?? 120_000,
             maxBuffer: 10 * 1024 * 1024,
             env: childEnv,

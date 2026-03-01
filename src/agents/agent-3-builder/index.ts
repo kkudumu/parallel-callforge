@@ -1094,6 +1094,7 @@ Agent 2 design research (authoritative):
     const hubContent = await llm.call({
       prompt: hubPrompt,
       schema: ContentResponseSchema,
+      model: "sonnet",
     });
     console.log(`[Agent 3] Hub page title: ${hubContent.title}`);
     console.log(
@@ -1197,6 +1198,7 @@ Agent 2 design research (authoritative):
       const subContent = await llm.call({
         prompt: subPrompt,
         schema: ContentResponseSchema,
+        model: "sonnet",
       });
       console.log(`[Agent 3] Subpage title for ${city}/${pestType}: ${subContent.title}`);
 
