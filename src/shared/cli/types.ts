@@ -11,7 +11,7 @@ export interface CliInvokeOptions {
 }
 
 export interface CliResult {
-  result: string;
+  result: string | unknown;
   is_error: boolean;
   raw_stdout: string;
   raw_stderr: string;

@@ -151,12 +151,9 @@ export function createClaudeCli(cliPath: string): CliProvider {
         const envelope = extractJson(stdout) as Record<string, unknown>;
         const isError = Boolean(envelope.is_error);
         const payload = envelope.structured_output ?? envelope.result;
-        const result = typeof payload === "string"
-          ? payload
-          : JSON.stringify(payload);
 
         return {
-          result,
+          result: payload,
           is_error: isError,
           raw_stdout: stdout,
           raw_stderr: stderr,
