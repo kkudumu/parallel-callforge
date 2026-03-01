@@ -54,6 +54,24 @@ const initialState: PipelineState = {
 
 let feedCounter = 0;
 
+function isDuplicateLog(state: PipelineState, event: Extract<DashboardEvent, { type: "pipeline_log" }>): boolean {
+  return state.logs.some((log) =>
+    log.timestamp === event.timestamp &&
+    log.level === event.level &&
+    log.source === event.source &&
+    log.message === event.message
+  );
+}
+
+function isDuplicateFeedEvent(state: PipelineState, event: DashboardEvent, message: string): boolean {
+  return state.feed.some((entry) =>
+    entry.type === event.type &&
+    entry.timestamp === event.timestamp &&
+    entry.agent === ("agent" in event ? event.agent : undefined) &&
+    entry.message === message
+  );
+}
+
 function eventToFeedMessage(event: DashboardEvent): string {
   switch (event.type) {
     case "agent_start": {
@@ -85,6 +103,8 @@ function eventToFeedMessage(event: DashboardEvent): string {
       return `Site deployed: ${event.url}`;
     case "pipeline_log":
       return event.message;
+    case "agent_status":
+      return `${AGENTS[event.agent].label} status refreshed`;
   }
 }
 
@@ -103,29 +123,35 @@ function reducer(state: PipelineState, action: Action): PipelineState {
 
       // Accumulate log entries
       if (event.type === "pipeline_log") {
-        const logEntry: LogEntry = {
-          id: `log-${++feedCounter}`,
-          level: event.level,
-          message: event.message,
-          source: event.source,
-          timestamp: event.timestamp,
-        };
-        newState.logs = [...state.logs, logEntry].slice(-500);
+        if (!isDuplicateLog(state, event)) {
+          const logEntry: LogEntry = {
+            id: `log-${++feedCounter}`,
+            level: event.level,
+            message: event.message,
+            source: event.source,
+            timestamp: event.timestamp,
+          };
+          newState.logs = [...state.logs, logEntry].slice(-500);
+        }
       }
 
       // Create feed entry (skip pipeline_stats, logs, and idle pipeline_run to avoid spam)
       const skipFeed = event.type === "pipeline_stats" ||
         event.type === "pipeline_log" ||
+        event.type === "agent_status" ||
         (event.type === "pipeline_run" && event.status === "idle" && !event.message);
       if (!skipFeed) {
-        const feedEntry: FeedEntry = {
-          id: `feed-${++feedCounter}`,
-          type: event.type,
-          agent: "agent" in event ? (event as any).agent : undefined,
-          message: eventToFeedMessage(event),
-          timestamp: event.timestamp,
-        };
-        newState.feed = [feedEntry, ...state.feed].slice(0, MAX_FEED_ENTRIES);
+        const message = eventToFeedMessage(event);
+        if (!isDuplicateFeedEvent(state, event, message)) {
+          const feedEntry: FeedEntry = {
+            id: `feed-${++feedCounter}`,
+            type: event.type,
+            agent: "agent" in event ? (event as any).agent : undefined,
+            message,
+            timestamp: event.timestamp,
+          };
+          newState.feed = [feedEntry, ...state.feed].slice(0, MAX_FEED_ENTRIES);
+        }
       }
 
       switch (event.type) {
@@ -178,6 +204,22 @@ function reducer(state: PipelineState, action: Action): PipelineState {
               status: "error",
               currentStep: "Error",
               lastError: event.error,
+            },
+          };
+          break;
+
+        case "agent_status":
+          newState.agents = {
+            ...state.agents,
+            [event.agent]: {
+              ...state.agents[event.agent],
+              status: event.status,
+              currentStep: event.currentStep,
+              currentDetail: event.currentDetail,
+              lastError: event.lastError,
+              completedAt: event.completedAt,
+              startedAt: event.startedAt,
+              duration: event.duration,
             },
           };
           break;

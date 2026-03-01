@@ -19,7 +19,10 @@ import { createOrchestrator } from "./orchestrator/index.js";
 import { getEnv } from "./config/env.js";
 import type { AgentHandler } from "./orchestrator/types.js";
 import type {
+  AgentName,
+  AgentStatusEvent,
   DashboardEvent,
+  PipelineRunEvent,
   PipelineStatsEvent,
   HealthScoreEvent,
   PipelineRunStatus,
@@ -28,6 +31,7 @@ import type {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.DASHBOARD_PORT ?? 3847);
 const STATS_POLL_MS = 3000;
+const MAX_LOG_BUFFER = 300;
 
 const NICHE = "pest-control";
 const HUGO_SITE_PATH = path.resolve("hugo-site");
@@ -44,6 +48,32 @@ export function createDashboardServer(db?: DbClient) {
   // WebSocket on /ws path so it works through tunnels on same origin
   const wss = new WebSocketServer({ server, path: "/ws" });
 
+  function createAgentStatus(agent: AgentName): AgentStatusEvent {
+    return {
+      type: "agent_status",
+      agent,
+      status: "idle",
+      currentStep: "",
+      currentDetail: "",
+      lastError: "",
+      completedAt: null,
+      startedAt: null,
+      duration: null,
+      timestamp: Date.now(),
+    };
+  }
+
+  const agentStates: Record<AgentName, AgentStatusEvent> = {
+    "agent-1": createAgentStatus("agent-1"),
+    "agent-2": createAgentStatus("agent-2"),
+    "agent-3": createAgentStatus("agent-3"),
+    "agent-7": createAgentStatus("agent-7"),
+  };
+  let lastPipelineStats: PipelineStatsEvent | null = null;
+  let lastHealthScore: HealthScoreEvent | null = null;
+  let lastPipelineRun: PipelineRunEvent | null = null;
+  const logBuffer: DashboardEvent[] = [];
+
   // Intercept console output and broadcast as pipeline_log events
   function emitLog(level: "info" | "warn" | "error", args: unknown[]) {
     const message = args.map((a) =>
@@ -58,6 +88,10 @@ export function createDashboardServer(db?: DbClient) {
       source: srcMatch?.[1],
       timestamp: Date.now(),
     };
+    logBuffer.push(event);
+    if (logBuffer.length > MAX_LOG_BUFFER) {
+      logBuffer.splice(0, logBuffer.length - MAX_LOG_BUFFER);
+    }
     // broadcast is defined later — use lazy reference via closure
     try { broadcast(event); } catch { /* server not ready yet */ }
   }
@@ -88,15 +122,18 @@ export function createDashboardServer(db?: DbClient) {
 
   // --- Pipeline control ---
   let pipelineStatus: PipelineRunStatus = "idle";
+  let pipelineRunMessage = "";
 
   function emitPipelineRun(status: PipelineRunStatus, message: string) {
     pipelineStatus = status;
+    pipelineRunMessage = message;
     const event: DashboardEvent = {
       type: "pipeline_run",
       status,
       message,
       timestamp: Date.now(),
     };
+    lastPipelineRun = event;
     broadcast(event);
   }
 
@@ -265,6 +302,50 @@ export function createDashboardServer(db?: DbClient) {
 
   // Forward all pipeline events to WebSocket clients
   eventBus.onEvent("dashboard_event", (event) => {
+    if (event.type === "agent_start") {
+      agentStates[event.agent] = {
+        ...agentStates[event.agent],
+        status: "running",
+        currentStep: "Starting...",
+        currentDetail: "",
+        lastError: "",
+        startedAt: event.timestamp,
+        completedAt: null,
+        duration: null,
+        timestamp: event.timestamp,
+      };
+    } else if (event.type === "agent_step") {
+      const startedAt = agentStates[event.agent].startedAt ?? event.timestamp;
+      agentStates[event.agent] = {
+        ...agentStates[event.agent],
+        status: "running",
+        currentStep: event.step,
+        currentDetail: event.detail ?? "",
+        lastError: "",
+        startedAt,
+        timestamp: event.timestamp,
+      };
+    } else if (event.type === "agent_complete") {
+      agentStates[event.agent] = {
+        ...agentStates[event.agent],
+        status: "completed",
+        currentStep: "Done!",
+        currentDetail: "",
+        completedAt: event.timestamp,
+        duration: event.duration,
+        timestamp: event.timestamp,
+      };
+    } else if (event.type === "agent_error") {
+      agentStates[event.agent] = {
+        ...agentStates[event.agent],
+        status: "error",
+        currentStep: "Error",
+        currentDetail: "",
+        lastError: event.error,
+        completedAt: event.timestamp,
+        timestamp: event.timestamp,
+      };
+    }
     broadcast(event);
   });
 
@@ -302,6 +383,7 @@ export function createDashboardServer(db?: DbClient) {
         timestamp: Date.now(),
       };
 
+      lastPipelineStats = statsEvent;
       broadcast(statsEvent);
 
       // Also poll health score from latest performance data
@@ -329,6 +411,7 @@ export function createDashboardServer(db?: DbClient) {
           criticalAlerts: hr.critical_alerts,
           timestamp: Date.now(),
         };
+        lastHealthScore = healthEvent;
         broadcast(healthEvent);
       }
     } catch (err: any) {
@@ -340,12 +423,28 @@ export function createDashboardServer(db?: DbClient) {
     console.log(`[dashboard] Client connected (total: ${wss.clients.size})`);
 
     // Send current pipeline status on connect
-    ws.send(JSON.stringify({
+    ws.send(JSON.stringify(lastPipelineRun ?? {
       type: "pipeline_run",
       status: pipelineStatus,
-      message: pipelineStatus === "running" ? "Pipeline is running..." : "",
+      message: pipelineRunMessage || (pipelineStatus === "running" ? "Pipeline is running..." : ""),
       timestamp: Date.now(),
     }));
+
+    for (const agent of Object.values(agentStates)) {
+      ws.send(JSON.stringify({ ...agent, timestamp: Date.now() }));
+    }
+
+    if (lastPipelineStats) {
+      ws.send(JSON.stringify(lastPipelineStats));
+    }
+
+    if (lastHealthScore) {
+      ws.send(JSON.stringify(lastHealthScore));
+    }
+
+    for (const event of logBuffer) {
+      ws.send(JSON.stringify(event));
+    }
 
     ws.on("close", () => {
       console.log(`[dashboard] Client disconnected (total: ${wss.clients.size})`);
