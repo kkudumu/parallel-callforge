@@ -224,6 +224,29 @@ function reducer(state: PipelineState, action: Action): PipelineState {
           };
           break;
 
+        case "task_status_change":
+          if (event.to === "pending") {
+            newState.agents = {
+              ...state.agents,
+              [event.agent]: {
+                ...state.agents[event.agent],
+                status: "idle",
+                currentStep: "Queued",
+              },
+            };
+          } else if (event.to === "running") {
+            newState.agents = {
+              ...state.agents,
+              [event.agent]: {
+                ...state.agents[event.agent],
+                status: "running",
+                lastError: "",
+                completedAt: null,
+              },
+            };
+          }
+          break;
+
         case "pipeline_stats":
           newState.stats = {
             totalTasks: event.totalTasks,

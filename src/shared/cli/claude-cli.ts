@@ -12,7 +12,7 @@ export function createClaudeCli(cliPath: string): CliProvider {
     async invoke(options: CliInvokeOptions): Promise<CliResult> {
       const args = [
         "--dangerously-skip-permissions",
-        "-p", options.prompt,
+        "-p",
         "--output-format", "json",
       ];
 
@@ -24,18 +24,26 @@ export function createClaudeCli(cliPath: string): CliProvider {
         args.push("--max-turns", String(options.maxTurns));
       }
 
+      // Prompt must be the last positional argument
+      args.push(options.prompt);
+
       try {
+        // Remove CLAUDECODE to avoid "cannot launch inside another session" error
+        const childEnv: Record<string, string | undefined> = { ...process.env, IS_SANDBOX: "1" };
+        delete childEnv.CLAUDECODE;
+
         const { stdout, stderr } = await execFileAsync(cliPath, args, {
           timeout: options.timeoutMs ?? 120_000,
           maxBuffer: 10 * 1024 * 1024,
-          env: { ...process.env, IS_SANDBOX: "1", CLAUDECODE: "" },
+          env: childEnv,
         });
 
         const envelope = extractJson(stdout) as Record<string, unknown>;
         const isError = Boolean(envelope.is_error);
-        const result = typeof envelope.result === "string"
-          ? envelope.result
-          : JSON.stringify(envelope.result);
+        const payload = envelope.structured_output ?? envelope.result;
+        const result = typeof payload === "string"
+          ? payload
+          : JSON.stringify(payload);
 
         return {
           result,
@@ -50,6 +58,9 @@ export function createClaudeCli(cliPath: string): CliProvider {
           error.isRateLimit = true;
           error.stderr = stderr;
           throw error;
+        }
+        if (stderr) {
+          throw new Error(`${err.message}\n${stderr}`);
         }
         throw err;
       }

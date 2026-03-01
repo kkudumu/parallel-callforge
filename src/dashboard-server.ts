@@ -345,6 +345,25 @@ export function createDashboardServer(db?: DbClient) {
         completedAt: event.timestamp,
         timestamp: event.timestamp,
       };
+    } else if (event.type === "task_status_change") {
+      if (event.to === "pending") {
+        agentStates[event.agent] = {
+          ...agentStates[event.agent],
+          status: "idle",
+          currentStep: "Queued",
+          completedAt: null,
+          timestamp: event.timestamp,
+        };
+      } else if (event.to === "running") {
+        agentStates[event.agent] = {
+          ...agentStates[event.agent],
+          status: "running",
+          currentStep: agentStates[event.agent].currentStep || "Starting...",
+          lastError: "",
+          completedAt: null,
+          timestamp: event.timestamp,
+        };
+      }
     }
     broadcast(event);
   });

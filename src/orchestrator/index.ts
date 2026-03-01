@@ -99,10 +99,10 @@ export async function createOrchestrator(deps: OrchestratorDeps) {
         await scheduler.markPending(task.id);
         retryAfter.set(task.id, Date.now() + backoffMs);
         eventBus.emitEvent({
-          type: "agent_error",
+          type: "agent_step",
           agent: agentName,
-          taskId: task.id,
-          error: `${err.message} (retry ${retryCount}/${MAX_TASK_RETRIES})`,
+          step: "Retry scheduled",
+          detail: `${err.message} (retry ${retryCount}/${MAX_TASK_RETRIES} in ${Math.ceil(backoffMs / 1000)}s)`,
           timestamp: Date.now(),
         });
         eventBus.emitEvent({

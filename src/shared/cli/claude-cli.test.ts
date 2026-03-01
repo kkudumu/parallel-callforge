@@ -1,5 +1,6 @@
 import { describe, it, expect } from "@jest/globals";
 import { detectRateLimit, parseRetryAfter, extractJson } from "./types.js";
+import { isCodexSchemaCompatible } from "./codex-cli.js";
 
 describe("CLI utilities", () => {
   describe("detectRateLimit", () => {
@@ -43,6 +44,31 @@ describe("CLI utilities", () => {
 
     it("throws when no JSON found", () => {
       expect(() => extractJson("no json here")).toThrow("No valid JSON");
+    });
+  });
+
+  describe("isCodexSchemaCompatible", () => {
+    it("accepts closed object schemas", () => {
+      expect(
+        isCodexSchemaCompatible({
+          type: "object",
+          properties: {
+            value: { type: "string" },
+          },
+          required: ["value"],
+          additionalProperties: false,
+        })
+      ).toBe(true);
+    });
+
+    it("rejects record-like schemas", () => {
+      expect(
+        isCodexSchemaCompatible({
+          type: "object",
+          propertyNames: { type: "string" },
+          additionalProperties: { type: "string" },
+        })
+      ).toBe(false);
     });
   });
 });
