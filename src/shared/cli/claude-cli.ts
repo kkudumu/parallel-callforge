@@ -1,12 +1,6 @@
 import { execFile } from "node:child_process";
-import type { CliProvider, CliInvokeOptions, CliResult, ModelTier } from "./types.js";
+import type { CliProvider, CliInvokeOptions, CliResult } from "./types.js";
 import { extractJson, detectRateLimit } from "./types.js";
-
-const MODEL_IDS: Record<ModelTier, string> = {
-  haiku: "claude-haiku-4-5-20251001",
-  sonnet: "claude-sonnet-4-6",
-  opus: "claude-opus-4-6",
-};
 
 function shouldRetryWithoutDangerousPermissions(output: string): boolean {
   return /--dangerously-skip-permissions cannot be used with root\/sudo privileges/i.test(output);
@@ -89,7 +83,7 @@ export function createClaudeCli(cliPath: string): CliProvider {
       const promptArgs = ["-p", "--output-format", "json"];
 
       if (options.model) {
-        promptArgs.push("--model", MODEL_IDS[options.model]);
+        promptArgs.push("--model", options.model);
       }
 
       const defaultArgs = [...promptArgs];
