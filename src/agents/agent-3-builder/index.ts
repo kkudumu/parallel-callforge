@@ -6,7 +6,7 @@ import { createHugoManager } from "./hugo-manager.js";
 import { runQualityGate } from "./quality-gate.js";
 import { slugify } from "../agent-1-keywords/index.js";
 import { eventBus } from "../../shared/events/event-bus.js";
-import { CITY_HUB_PROMPT, SERVICE_SUBPAGE_PROMPT } from "./prompts.js";
+import { CITY_HUB_PROMPT, SERVICE_SUBPAGE_PROMPT, HUGO_TEMPLATE_PROMPT } from "./prompts.js";
 import type { DesignSpec } from "../../shared/schemas/design-specs.js";
 import type { CopyFramework } from "../../shared/schemas/copy-frameworks.js";
 
@@ -19,6 +19,12 @@ const ContentResponseSchema = z.object({
     question: z.string(),
     answer: z.string(),
   })).optional(),
+});
+
+const HugoTemplateResponseSchema = z.object({
+  baseof: z.string().min(50),
+  city_hub: z.string().min(50),
+  service_subpage: z.string().min(50),
 });
 
 export interface Agent3Config {
@@ -491,7 +497,8 @@ function summarizeSeasonalResearch(
 async function applyDesignSystem(
   niche: string,
   db: DbClient,
-  hugo: ReturnType<typeof createHugoManager>
+  hugo: ReturnType<typeof createHugoManager>,
+  llm: LlmClient
 ): Promise<DesignSystemContext> {
   const designResult = await db.query("SELECT * FROM design_specs WHERE niche = $1 LIMIT 1", [niche]);
   const copyResult = await db.query("SELECT * FROM copy_frameworks WHERE niche = $1 LIMIT 1", [niche]);
@@ -540,6 +547,33 @@ async function applyDesignSystem(
   const faqQuestion = faqLead?.question || `How is the ${designSpec.archetype.replace(/[_-]+/g, " ")} process structured?`;
   const faqAnswer = faqLead?.answer_template || `The page layout follows ${layoutLabels.join(", ") || "the researched service sequence"} so visitors can move from urgency to proof to action without friction.`;
 
+  // Try LLM-generated Hugo templates first, fall back to hardcoded
+  let usedLlmTemplates = false;
+  try {
+    const designSpecSummary = JSON.stringify({
+      archetype: designSpec.archetype,
+      layout: designSpec.layout,
+      components: designSpec.components,
+      colors: designSpec.colors,
+      typography: designSpec.typography,
+      responsive_breakpoints: designSpec.responsive_breakpoints,
+    }, null, 2);
+    const hugoPrompt = HUGO_TEMPLATE_PROMPT.replace("{design_spec}", designSpecSummary);
+    const hugoTemplates = await llm.call({
+      prompt: hugoPrompt,
+      schema: HugoTemplateResponseSchema,
+      model: "haiku",
+    });
+    hugo.writeTemplate("_default/baseof.html", hugoTemplates.baseof);
+    hugo.writeTemplate("_default/list.html", hugoTemplates.city_hub);
+    hugo.writeTemplate("_default/single.html", hugoTemplates.service_subpage);
+    usedLlmTemplates = true;
+    console.log("[Agent 3] Wrote LLM-generated Hugo templates");
+  } catch (err) {
+    console.warn(`[Agent 3] LLM template generation failed, using hardcoded fallback: ${err instanceof Error ? err.message : err}`);
+  }
+
+  if (!usedLlmTemplates) {
   hugo.writeTemplate("_default/baseof.html", `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -736,6 +770,7 @@ async function applyDesignSystem(
   </nav>
 </article>
 {{ end }}`);
+  } // end hardcoded fallback
 
   hugo.writeStaticFile("css/generated-theme.css", `:root {
   --color-primary: ${primary};
@@ -1016,7 +1051,7 @@ export async function runAgent3(
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const hugo = createHugoManager(cfg.hugoSitePath);
   hugo.ensureProject();
-  const designSystem = await applyDesignSystem(cfg.niche, db, hugo);
+  const designSystem = await applyDesignSystem(cfg.niche, db, hugo, llm);
 
   console.log(`[Agent 3] Starting site build for ${cfg.niche}`);
   eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Starting", detail: cfg.niche, timestamp: Date.now() });
