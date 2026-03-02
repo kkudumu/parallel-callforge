@@ -12,7 +12,18 @@ type CommandError = Error & {
   signal?: NodeJS.Signals | null;
   stdout?: string;
   stderr?: string;
+  elapsedMs?: number;
+  stdoutTail?: string;
+  stderrTail?: string;
 };
+
+function tailText(value: string, maxChars = 4000): string {
+  if (value.length <= maxChars) {
+    return value;
+  }
+
+  return value.slice(-maxChars);
+}
 
 export function runCliCommand(
   file: string,
@@ -20,6 +31,7 @@ export function runCliCommand(
   options: RunCliCommandOptions
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
     const child = spawn(file, args, {
       env: options.env,
       stdio: ["pipe", "pipe", "pipe"],
@@ -38,6 +50,9 @@ export function runCliCommand(
       clearTimeout(timeout);
       err.stdout = stdout;
       err.stderr = stderr;
+      err.elapsedMs = Date.now() - startedAt;
+      err.stdoutTail = tailText(stdout);
+      err.stderrTail = tailText(stderr);
       reject(err);
     };
 
@@ -58,7 +73,11 @@ export function runCliCommand(
 
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
-      fail(new Error(`Command timed out after ${options.timeoutMs}ms`) as CommandError);
+      fail(
+        new Error(
+          `Command timed out after ${options.timeoutMs}ms (elapsed ${Date.now() - startedAt}ms)`
+        ) as CommandError
+      );
     }, options.timeoutMs);
 
     child.stdout?.setEncoding("utf8");
@@ -93,6 +112,9 @@ export function runCliCommand(
       error.signal = signal;
       error.stdout = stdout;
       error.stderr = stderr;
+      error.elapsedMs = Date.now() - startedAt;
+      error.stdoutTail = tailText(stdout);
+      error.stderrTail = tailText(stderr);
       reject(error);
     });
 

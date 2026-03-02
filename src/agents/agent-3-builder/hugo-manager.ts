@@ -16,6 +16,7 @@ export interface HugoManager {
   writeContentFile(filePath: string, frontmatter: Record<string, unknown>, content: string): void;
   writeTemplate(filePath: string, html: string): void;
   writeStaticFile(filePath: string, content: string | Buffer): void;
+  validateSite(): Promise<{ success: boolean; output: string }>;
   buildSite(): Promise<{ success: boolean; output: string }>;
   deployDraftSite(siteId: string): Promise<DeployResult>;
   publishSite(siteId: string): Promise<DeployResult>;
@@ -371,6 +372,18 @@ If you are requesting that your personal information not be sold or shared beyon
       fs.writeFileSync(fullPath, content);
     },
 
+    async validateSite() {
+      try {
+        const { stdout, stderr } = await execFileAsync("hugo", ["--renderToMemory"], {
+          cwd: hugoSitePath,
+          timeout: 30_000,
+        });
+        return { success: true, output: stdout + stderr };
+      } catch (err: any) {
+        return { success: false, output: formatExecFailure(err) };
+      }
+    },
+
     async buildSite() {
       try {
         const { stdout, stderr } = await execFileAsync("hugo", ["--minify"], {
@@ -388,7 +401,7 @@ If you are requesting that your personal information not be sold or shared beyon
       try {
         const { stdout, stderr } = await execFileAsync(
           "netlify",
-          ["deploy", "--dir", publicDir, "--site", siteId, "--json"],
+          ["deploy", "--dir", publicDir, "--site", siteId, "--json", "--no-build"],
           { cwd: hugoSitePath, timeout: 120_000 }
         );
 
@@ -414,7 +427,7 @@ If you are requesting that your personal information not be sold or shared beyon
       try {
         const { stdout, stderr } = await execFileAsync(
           "netlify",
-          ["deploy", "--prod", "--dir", publicDir, "--site", siteId, "--json"],
+          ["deploy", "--prod", "--dir", publicDir, "--site", siteId, "--json", "--no-build"],
           { cwd: hugoSitePath, timeout: 120_000 }
         );
 

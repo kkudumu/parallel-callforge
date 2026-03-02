@@ -1,13 +1,10 @@
 import type { DbClient } from "../../shared/db/client.js";
-import fs from "node:fs";
-import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { eventBus } from "../../shared/events/event-bus.js";
 import {
   buildCheckpointScope,
   createCheckpointTracker,
 } from "../../shared/checkpoints.js";
+import { importGeoZipReferenceIntoDb } from "../../shared/db/import-geo-zip-reference.js";
 import { syncOfferGeoCoverageFromProfile } from "../../shared/offer-profiles.js";
 
 export interface GeoZipReferenceRow {
@@ -90,8 +87,7 @@ const METRO_PARENT_POPULATION_MIN = 500_000;
 const CLUSTER_RADIUS_MILES = 30;
 const DEFAULT_MISSING_ZIP_COUNT_THRESHOLD = 25;
 const DEFAULT_MISSING_ZIP_RATIO_THRESHOLD = 0.05;
-const GEO_REFERENCE_IMPORT_SCRIPT = path.resolve("src/shared/db/import-geo-zip-reference.ts");
-const execFileAsync = promisify(execFile);
+const MIN_EXPECTED_GEO_REFERENCE_ROWS = 30_000;
 
 const HIGH_PEST_PRESSURE_STATES = new Set([
   "FL", "TX", "LA", "MS", "AL", "GA", "SC", "NC", "AZ", "NV", "CA",
@@ -1009,7 +1005,8 @@ async function maybeRefreshGeoReference(
   offerId: string,
   totalZipCount: number,
   missingZipCount: number,
-  config: Agent05Config
+  config: Agent05Config,
+  db: DbClient
 ): Promise<GeoReferenceRefreshOutcome> {
   const mode = config.geoReferenceRefreshMode ?? "prompt";
   const prompt = buildGeoReferenceRefreshPrompt(offerId, missingZipCount, totalZipCount);
@@ -1023,12 +1020,9 @@ async function maybeRefreshGeoReference(
     };
   }
 
-  if (mode === "script" && fs.existsSync(GEO_REFERENCE_IMPORT_SCRIPT)) {
+  if (mode === "script") {
     try {
-      await execFileAsync("npm", ["run", "import:geo-zips"], {
-        cwd: process.cwd(),
-        env: process.env,
-      });
+      await importGeoZipReferenceIntoDb(db);
       return {
         triggered: true,
         mode: "script",
@@ -1054,9 +1048,44 @@ async function maybeRefreshGeoReference(
     mode: "prompt",
     reason: "Geo reference import script unavailable; prompt prepared",
     prompt,
-    scriptAttempted: mode === "script",
+    scriptAttempted: false,
     scriptSucceeded: false,
   };
+}
+
+async function getGeoReferenceRowCount(db: DbClient): Promise<number> {
+  const result = await db.query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM geo_zip_reference"
+  );
+  return Number(result.rows[0]?.count ?? "0");
+}
+
+async function ensureGeoReferenceCoverage(
+  db: DbClient,
+  offerId: string,
+  config: Agent05Config
+): Promise<void> {
+  const rowCount = await getGeoReferenceRowCount(db);
+  if (rowCount >= MIN_EXPECTED_GEO_REFERENCE_ROWS) {
+    return;
+  }
+
+  console.warn(
+    `[Agent 0.5] geo_zip_reference is undersized (${rowCount} rows). Refreshing before scoring ${offerId}.`
+  );
+  const refresh = await maybeRefreshGeoReference(offerId, rowCount, rowCount, {
+    ...config,
+    autoRefreshGeoReference: config.autoRefreshGeoReference ?? true,
+    geoReferenceRefreshMode: "script",
+  }, db);
+  console.warn(`[Agent 0.5] ${refresh.reason}`);
+
+  const refreshedRowCount = await getGeoReferenceRowCount(db);
+  if (refreshedRowCount < MIN_EXPECTED_GEO_REFERENCE_ROWS) {
+    throw new Error(
+      `geo_zip_reference remains undersized after refresh (${refreshedRowCount} rows; expected at least ${MIN_EXPECTED_GEO_REFERENCE_ROWS})`
+    );
+  }
 }
 
 export async function runAgent05(
@@ -1113,6 +1142,8 @@ export async function runAgent05(
     if (allZipCodes.length === 0) {
       throw new Error(`No ZIP coverage available for offer ${offerId}`);
     }
+
+    await ensureGeoReferenceCoverage(db, offerId, config);
 
     const checkpointScope = buildCheckpointScope([
       offerId,
@@ -1178,7 +1209,8 @@ export async function runAgent05(
         offerId,
         allZipCodes.length,
         missingZipCount,
-        config
+        config,
+        db
       );
       console.warn(
         `[Agent 0.5] High unmapped ZIP coverage for ${offerId}: ${missingZipCount}/${allZipCodes.length}. ${geoReferenceRefresh.reason}`

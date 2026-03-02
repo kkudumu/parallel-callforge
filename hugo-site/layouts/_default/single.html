@@ -1,469 +1,485 @@
 {{ define "main" }}
-<section class="service-hero">
-  <div class="container">
-    <h1>{{ .Title }} Control in {{ .Params.city }}</h1>
-    <p class="service-subheading">Professional treatment by licensed technicians | Satisfaction guaranteed</p>
-    <div class="service-call-actions">
-      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-primary">📞 Call Now For Inspection</a>
-      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-secondary">Talk To A Local Specialist</a>
-    </div>
-    <p class="service-microcopy">No forms. No obligation. Fast local routing.</p>
-  </div>
-</section>
-
-<style scoped>
-.service-hero {
-  background: linear-gradient(135deg, rgba(29, 53, 87, 0.95) 0%, rgba(42, 157, 143, 0.1) 100%);
-  color: white;
-  padding: 2rem 0;
-  text-align: center;
-}
-@media (min-width: 768px) {
-  .service-hero {
-    padding: 3rem 0;
+<style>
+  .hero {
+    background: linear-gradient(135deg, #f7f7f5 0%, #ffffff 100%);
+    padding: 40px 0;
   }
-}
-.service-hero h1 {
-  color: white;
-  margin-bottom: 0.5rem;
-}
-.service-subheading {
-  font-size: 1.125rem;
-  color: #E5E7EB;
-  margin-bottom: 1.5rem;
-  font-weight: 500;
-}
-.service-call-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  max-width: 520px;
-  margin-left: auto;
-  margin-right: auto;
-}
-@media (min-width: 768px) {
-  .service-call-actions {
-    flex-direction: row;
-    justify-content: center;
-    max-width: none;
+  @media (min-width: 768px) {
+    .hero {
+      padding: 60px 0;
+    }
   }
-}
-.service-call-actions .btn {
-  min-height: 60px;
-}
-.service-microcopy {
-  margin-top: 1rem;
-  color: #E5E7EB;
-  font-size: 0.95rem;
-}
-</style>
-
-<section class="service-overview">
-  <div class="container">
-    <div class="grid-2">
-      {{ if .Params.serviceImage }}
-      <img src="{{ .Params.serviceImage }}" alt="{{ .Title }}" class="service-image" loading="lazy">
-      {{ end }}
-      <div>
-        <h2>About {{ .Title }} Problems</h2>
-        {{ .Content }}
-        <div class="service-features">
-          <h3>Our {{ .Title }} Control Process</h3>
-          <ul>
-            {{ range .Params.processSteps | default (slice) }}
-            <li>{{ . }}</li>
-            {{ end }}
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<style scoped>
-.service-overview {
-  background: var(--bg-primary);
-}
-.service-image {
-  border-radius: 8px;
-  width: 100%;
-  height: auto;
-}
-.service-overview h2 {
-  margin-bottom: 1.5rem;
-  color: var(--trust-blue);
-}
-.service-overview p {
-  color: var(--text-muted);
-  line-height: 1.8;
-  margin-bottom: 1rem;
-}
-.service-features h3 {
-  color: var(--trust-blue);
-  margin-bottom: 1rem;
-  margin-top: 1.5rem;
-}
-.service-features ul {
-  list-style: none;
-  padding: 0;
-}
-.service-features li {
-  padding: 0.75rem 0;
-  padding-left: 2rem;
-  position: relative;
-  color: var(--text-dark);
-}
-.service-features li:before {
-  content: "✓";
-  position: absolute;
-  left: 0;
-  color: var(--eco-green);
-  font-weight: 700;
-  font-size: 1.25rem;
-}
-</style>
-
-<section class="service-why">
-  <div class="container">
-    <h2>Why Choose Our {{ .Title }} Control</h2>
-    <div class="grid-3">
-      {{ range .Params.whyChoosePoints | default (slice) }}
-      <div class="why-card">
-        <div class="why-icon">🏆</div>
-        <h3>{{ .title }}</h3>
-        <p>{{ .description }}</p>
-      </div>
-      {{ end }}
-    </div>
-  </div>
-</section>
-
-<style scoped>
-.service-why {
-  background: var(--bg-secondary);
-}
-.service-why h2 {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-.why-card {
-  background: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  text-align: center;
-  border: 1px solid var(--border-light);
-}
-.why-icon {
-  font-size: 2.5rem;
-  margin-bottom: 0.75rem;
-}
-.why-card h3 {
-  color: var(--trust-blue);
-  margin-bottom: 0.75rem;
-}
-.why-card p {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-}
-</style>
-
-<section class="service-testimonials">
-  <div class="container">
-    <h2>{{ .Title }} Control Success Stories</h2>
-    <div class="testimonials-slider">
-      {{ range where .Site.RegularPages "Type" "testimonial" }}
-      {{ if in .Params.services .Title }}
-      <div class="testimonial-card">
-        <div class="stars">⭐⭐⭐⭐⭐</div>
-        <p class="testimonial-quote">"{{ .Content }}"</p>
-        <p class="testimonial-author">— {{ .Params.author }}</p>
-        <p class="testimonial-date">{{ .Params.date }}</p>
-      </div>
-      {{ end }}
-      {{ end }}
-    </div>
-  </div>
-</section>
-
-<style scoped>
-.service-testimonials h2 {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-.testimonials-slider {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.5rem;
-}
-@media (min-width: 768px) {
-  .testimonials-slider {
+  @media (min-width: 1024px) {
+    .hero {
+      padding: 80px 0;
+    }
+  }
+  .hero-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 32px;
+    align-items: center;
+  }
+  @media (min-width: 768px) {
+    .hero-content {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .hero-text h1 {
+    color: #1A1A1A;
+    margin-bottom: 16px;
+  }
+  .hero-subheadline {
+    font-size: 18px;
+    color: #C8290F;
+    font-weight: 600;
+    margin-bottom: 24px;
+    line-height: 1.4;
+  }
+  .hero-image {
+    width: 100%;
+    height: 300px;
+    background-color: #E8E8E8;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  @media (min-width: 768px) {
+    .hero-image {
+      height: 400px;
+    }
+  }
+  .trust-bar {
+    background-color: #F7F7F5;
+    padding: 24px 0;
+    display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 2rem;
+    gap: 16px;
   }
-}
-@media (min-width: 1024px) {
-  .testimonials-slider {
-    grid-template-columns: repeat(3, 1fr);
+  @media (min-width: 768px) {
+    .trust-bar {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
   }
-}
-.testimonial-card {
-  background: white;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 1.5rem;
-}
-.testimonial-card .stars {
-  font-size: 1.25rem;
-  margin-bottom: 0.75rem;
-}
-.testimonial-quote {
-  font-style: italic;
-  color: var(--text-dark);
-  margin-bottom: 0.75rem;
-  line-height: 1.6;
-}
-.testimonial-author {
-  font-weight: 600;
-  color: var(--trust-blue);
-  margin-bottom: 0.25rem;
-}
-.testimonial-date {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
+  .trust-item {
+    text-align: center;
+    padding: 12px;
+  }
+  .trust-item-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+  }
+  .trust-item-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1A1A1A;
+  }
+  .trust-item-sublabel {
+    font-size: 12px;
+    color: #5C5C5C;
+  }
+  .pest-threat {
+    padding: 40px 0;
+    border-bottom: 1px solid #E8E8E8;
+  }
+  @media (min-width: 768px) {
+    .pest-threat {
+      padding: 60px 0;
+    }
+  }
+  .pest-threat-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  @media (min-width: 768px) {
+    .pest-threat-content {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .identification-signs {
+    padding: 40px 0;
+  }
+  @media (min-width: 768px) {
+    .identification-signs {
+      padding: 60px 0;
+    }
+  }
+  .signs-list {
+    list-style: none;
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 768px) {
+    .signs-list {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  .signs-list li {
+    padding: 16px;
+    background-color: #F7F7F5;
+    border-radius: 8px;
+    border-left: 4px solid #D93A12;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .signs-list li:before {
+    content: "⚠️";
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .mid-page-cta {
+    background-color: #D93A12;
+    color: white;
+    padding: 48px 0;
+    text-align: center;
+  }
+  @media (min-width: 768px) {
+    .mid-page-cta {
+      padding: 64px 0;
+    }
+  }
+  .mid-page-cta-number {
+    font-size: 40px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+  @media (min-width: 768px) {
+    .mid-page-cta-number {
+      font-size: 48px;
+    }
+  }
+  .mid-page-cta-text {
+    font-size: 16px;
+    margin-bottom: 24px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .mid-page-cta .btn-primary {
+    background-color: #FFFFFF;
+    color: #D93A12;
+  }
+  .mid-page-cta .btn-primary:hover {
+    background-color: #F7F7F5;
+  }
+  .social-proof {
+    padding: 40px 0;
+  }
+  @media (min-width: 768px) {
+    .social-proof {
+      padding: 60px 0;
+    }
+  }
+  .testimonial-card {
+    background-color: #F7F7F5;
+    padding: 24px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  .testimonial-stars {
+    color: #FFB800;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  .testimonial-text {
+    font-size: 15px;
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+  .testimonial-author {
+    font-weight: 600;
+    font-size: 14px;
+    color: #1A1A1A;
+  }
+  .testimonial-city {
+    font-size: 13px;
+    color: #5C5C5C;
+  }
+  .service-area {
+    padding: 40px 0;
+  }
+  @media (min-width: 768px) {
+    .service-area {
+      padding: 60px 0;
+    }
+  }
+  .city-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .city-pill {
+    background-color: #E8E8E8;
+    color: #1A1A1A;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .faq {
+    padding: 40px 0;
+  }
+  @media (min-width: 768px) {
+    .faq {
+      padding: 60px 0;
+    }
+  }
+  .faq-item {
+    margin-bottom: 16px;
+  }
+  .faq-item details {
+    background-color: #F7F7F5;
+    border-radius: 8px;
+    padding: 16px;
+    cursor: pointer;
+  }
+  .faq-item summary {
+    font-weight: 600;
+    font-size: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+  .faq-item summary:before {
+    content: "▶";
+    display: inline-block;
+    margin-right: 12px;
+    transition: transform 0.2s;
+  }
+  .faq-item details[open] summary:before {
+    transform: rotate(90deg);
+  }
+  .faq-item-content {
+    margin-top: 12px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #1A1A1A;
+  }
+  .faq-cta {
+    margin-top: 12px;
+    padding: 8px 0;
+  }
+  .faq-cta a {
+    color: #D93A12;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .disclaimer {
+    background-color: #FDF6F3;
+    padding: 32px 0;
+    border-top: 3px solid #D93A12;
+  }
+  @media (min-width: 768px) {
+    .disclaimer {
+      padding: 40px 0;
+    }
+  }
+  .disclaimer-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .disclaimer-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+  .disclaimer-title {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .disclaimer-text {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #1A1A1A;
+  }
+  .trust-bullets {
+    list-style: none;
+    margin: 16px 0;
+    gap: 12px;
+    display: flex;
+    flex-direction: column;
+  }
+  .trust-bullets li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 16px;
+  }
+  .trust-bullets li:before {
+    content: "✓";
+    color: #2D7A3A;
+    font-weight: 700;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
 </style>
 
-<section class="service-faq">
+<section class="hero">
   <div class="container">
-    <h2>{{ .Title }} Control Questions</h2>
-    <div class="accordion">
-      {{ range .Params.serviceFaq | default (slice) }}
-      <div class="accordion-item" id="faq-{{ .question | slugify }}">
-        <button class="accordion-header" onclick="toggleAccordion('faq-{{ .question | slugify }}')">
-          {{ .question }}
-          <span class="accordion-icon">+</span>
-        </button>
-        <div class="accordion-content">
-          <p>{{ .answer }}</p>
-        </div>
+    <div class="hero-content">
+      <div class="hero-text">
+        <h1>{{ .Params.h1_title }}</h1>
+        <p class="hero-subheadline">{{ .Params.subheadline }}</p>
+        <a href="tel:{{ .Site.Params.phone_raw }}" class="btn btn-primary">Call a Local Pro Now</a>
+        <ul class="trust-bullets">
+          {{ range .Params.hero_bullets }}
+          <li>{{ . }}</li>
+          {{ end }}
+        </ul>
       </div>
-      {{ end }}
-    </div>
-  </div>
-</section>
-
-<style scoped>
-.service-faq {
-  background: var(--bg-secondary);
-}
-.service-faq h2 {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-.accordion {
-  max-width: 800px;
-  margin: 0 auto;
-}
-.accordion-item {
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  margin-bottom: 1rem;
-  overflow: hidden;
-}
-.accordion-header {
-  width: 100%;
-  padding: 1.25rem;
-  background: white;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-  font-family: 'Inter', system-ui, sans-serif;
-  font-weight: 600;
-  font-size: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: background 0.3s;
-}
-.accordion-header:hover {
-  background: var(--bg-secondary);
-}
-.accordion-icon {
-  font-size: 1.5rem;
-  color: var(--trust-blue);
-  transition: transform 0.3s;
-}
-.accordion-item.open .accordion-icon {
-  transform: rotate(45deg);
-}
-.accordion-content {
-  display: none;
-  padding: 1.25rem;
-  background: white;
-  color: var(--text-dark);
-  border-top: 1px solid var(--border-light);
-}
-.accordion-item.open .accordion-content {
-  display: block;
-}
-.accordion-content p {
-  margin: 0;
-  line-height: 1.8;
-}
-</style>
-
-<section class="service-guarantee">
-  <div class="container">
-    <div class="guarantee-section">
-      <h2>Our {{ .Title }} Control Guarantee</h2>
-      <p>{{ .Params.guaranteeDescription | default "We stand behind our work with a 100% satisfaction guarantee." }}</p>
-      <div class="guarantee-terms">
-        <div class="term">
-          <h4>Results Guaranteed</h4>
-          <p>Or we'll retreat at no charge</p>
-        </div>
-        <div class="term">
-          <h4>30-Day Window</h4>
-          <p>Full guarantee for 30 days after service</p>
-        </div>
-        <div class="term">
-          <h4>No Hassle</h4>
-          <p>Simple process with no questions asked</p>
-        </div>
+      <div class="hero-image">
+        {{ if .Params.hero_image }}
+        <img src="{{ .Params.hero_image }}" alt="{{ .Params.pest_name }} treatment expert" loading="lazy" width="400" height="400">
+        {{ else }}
+        <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #2D7A3A 0%, #1A5C2A 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 48px;">🐛</div>
+        {{ end }}
       </div>
     </div>
   </div>
 </section>
 
-<style scoped>
-.service-guarantee {
-  background: linear-gradient(135deg, var(--eco-green), var(--trust-blue));
-  color: white;
-  text-align: center;
-}
-.guarantee-section {
-  padding: 2rem;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-}
-.guarantee-section h2 {
-  color: white;
-  margin-bottom: 1rem;
-}
-.guarantee-section p {
-  color: #E5E7EB;
-  margin-bottom: 1.5rem;
-  font-size: 1.125rem;
-}
-.guarantee-terms {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.5rem;
-}
-@media (min-width: 768px) {
-  .guarantee-terms {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-.term {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 1.5rem;
-  border-radius: 6px;
-}
-.term h4 {
-  color: white;
-  margin-bottom: 0.5rem;
-  font-size: 1.125rem;
-}
-.term p {
-  margin: 0;
-  font-size: 0.95rem;
-}
-</style>
-
-<section class="service-cta-final">
-  <div class="container">
-    <h2>Ready to Eliminate Your {{ .Title }} Problem?</h2>
-    <p>Call us now for immediate assistance or schedule your free inspection online</p>
-    <div class="final-cta-buttons">
-      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-primary">📞 Call Now</a>
-      <button class="btn btn-secondary" onclick="scrollToForm()">Schedule Inspection</button>
+<section class="trust-bar">
+  <div class="container" style="display: contents;">
+    <div class="trust-item">
+      <div class="trust-item-icon">🏛️</div>
+      <div class="trust-item-label">Licensed & Insured</div>
+      <div class="trust-item-sublabel">Certified specialists</div>
+    </div>
+    <div class="trust-item">
+      <div class="trust-item-icon">⭐</div>
+      <div class="trust-item-label">{{ .Site.Params.review_rating }} Stars</div>
+      <div class="trust-item-sublabel">{{ .Site.Params.review_count }}+ reviews</div>
+    </div>
+    <div class="trust-item">
+      <div class="trust-item-icon">🛡️</div>
+      <div class="trust-item-label">Guaranteed Results</div>
+      <div class="trust-item-sublabel">Satisfaction included</div>
+    </div>
+    <div class="trust-item">
+      <div class="trust-item-icon">👨‍👩‍👧</div>
+      <div class="trust-item-label">Safe Treatment</div>
+      <div class="trust-item-sublabel">Child & pet friendly</div>
     </div>
   </div>
 </section>
 
-<style scoped>
-.service-cta-final {
-  background: linear-gradient(135deg, var(--urgency-red), var(--action-orange));
-  color: white;
-  text-align: center;
-}
-.service-cta-final h2 {
-  color: white;
-  margin-bottom: 0.75rem;
-}
-.service-cta-final p {
-  font-size: 1.125rem;
-  margin-bottom: 1.5rem;
-}
-.final-cta-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-@media (min-width: 768px) {
-  .final-cta-buttons {
-    flex-direction: row;
-    justify-content: center;
-  }
-}
-.final-cta-buttons .btn {
-  min-height: 60px;
-}
-</style>
-
+{{ if .Params.threat_description }}
+<section class="pest-threat">
+  <div class="container">
+    <div class="pest-threat-content">
+      <div>
+        <h2>Why {{ .Params.pest_name }} Are a Problem</h2>
+        <p>{{ .Params.threat_description }}</p>
+        {{ if .Params.threat_risks }}
+        <ul class="trust-bullets">
+          {{ range .Params.threat_risks }}
+          <li>{{ . }}</li>
+          {{ end }}
+        </ul>
+        {{ end }}
+      </div>
+      <div style="background-color: #FDF6F3; padding: 24px; border-radius: 8px; display: flex; align-items: center; justify-content: center; min-height: 300px;">
+        <div style="font-size: 80px; text-align: center;">{{ .Params.pest_icon }}</div>
+      </div>
+    </div>
+  </div>
+</section>
 {{ end }}
 
-{{ define "schema" }}
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "Service",
-  "name": "{{ .Title }} Control Service",
-  "description": "{{ .Summary }}",
-  "provider": {
-    "@type": "LocalBusiness",
-    "name": "{{ .Site.Params.companyName }}",
-    "telephone": "{{ .Site.Params.phone }}",
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "{{ .Site.Params.streetAddress }}",
-      "addressLocality": "{{ .Site.Params.city }}",
-      "addressRegion": "{{ .Site.Params.state }}",
-      "postalCode": "{{ .Site.Params.zipCode }}"
-    }
-  },
-  "areaServed": "{{ .Params.city }}",
-  "availableLanguage": "en-US"
-}
-</script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [
-    {{ range $index, $item := .Params.serviceFaq }}
-    {
-      "@type": "Question",
-      "name": "{{ $item.question }}",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "{{ $item.answer }}"
-      }
-    }{{ if not (eq $index (sub (len $.Params.serviceFaq) 1)) }},{{ end }}
+{{ if .Params.identification_signs }}
+<section class="identification-signs">
+  <div class="container">
+    <h2 style="margin-bottom: 24px;">How to Spot {{ .Params.pest_name }}</h2>
+    <p>{{ .Params.identification_intro }}</p>
+    <ul class="signs-list">
+      {{ range .Params.identification_signs }}
+      <li>{{ . }}</li>
+      {{ end }}
+    </ul>
+    <div style="margin-top: 32px; padding: 24px; background-color: #FDF6F3; border-radius: 8px; border-left: 4px solid #D93A12;">
+      <p><strong>Found signs of {{ .Params.pest_name }}?</strong> Don't wait for the problem to grow. <a href="tel:{{ .Site.Params.phone_raw }}" style="color: #D93A12; font-weight: 600; text-decoration: none;">Call us at {{ .Site.Params.phone }}</a> for immediate inspection and treatment.</p>
+    </div>
+  </div>
+</section>
+{{ end }}
+
+<section class="mid-page-cta">
+  <div class="container">
+    <div class="mid-page-cta-number">{{ .Site.Params.phone }}</div>
+    <p class="mid-page-cta-text">Professional {{ .Params.pest_name }} treatment available for homes and businesses. Licensed technician dispatched to your location.</p>
+    <a href="tel:{{ .Site.Params.phone_raw }}" class="btn btn-primary">Talk to a Local Expert</a>
+  </div>
+</section>
+
+{{ if .Params.testimonials }}
+<section class="social-proof">
+  <div class="container">
+    <h2 style="text-align: center; margin-bottom: 32px;">Customer Results</h2>
+    <div class="grid-2">
+      {{ range .Params.testimonials }}
+      <div class="testimonial-card">
+        <div class="testimonial-stars">{{ .stars }} ⭐ ({{ .rating }}/5)</div>
+        <div class="testimonial-text">"{{ .text }}"</div>
+        <div class="testimonial-author">— {{ .author }}</div>
+        <div class="testimonial-city">{{ .city }}</div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}
+
+<section class="service-area">
+  <div class="container">
+    <h2 style="margin-bottom: 16px;">{{ .Params.pest_name }} Treatment in Your Area</h2>
+    <p>We provide professional {{ .Params.pest_name | lower }} control and treatment services throughout {{ .Params.region }}.</p>
+    {{ if .Params.service_cities }}
+    <div class="city-list">
+      {{ range .Params.service_cities }}
+      <span class="city-pill">{{ . }}</span>
+      {{ end }}
+    </div>
     {{ end }}
-  ]
-}
-</script>
+  </div>
+</section>
+
+{{ if .Params.faqs }}
+<section class="faq">
+  <div class="container">
+    <h2 style="margin-bottom: 32px;">{{ .Params.pest_name }} Questions & Answers</h2>
+    {{ range .Params.faqs }}
+    <div class="faq-item">
+      <details>
+        <summary>{{ .question }}</summary>
+        <div class="faq-item-content">
+          {{ .answer }}
+          <div class="faq-cta">
+            <a href="tel:{{ .Site.Params.phone_raw }}">Need help now? Call {{ .Site.Params.phone }}</a>
+          </div>
+        </div>
+      </details>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}
+
+<section class="disclaimer">
+  <div class="container">
+    <div class="disclaimer-header">
+      <div class="disclaimer-icon">ℹ️</div>
+      <h3 class="disclaimer-title">Important Disclosure</h3>
+    </div>
+    <p class="disclaimer-text">
+      {{ .Params.disclaimer_text }}
+    </p>
+  </div>
+</section>
 {{ end }}

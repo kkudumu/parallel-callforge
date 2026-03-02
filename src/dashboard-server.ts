@@ -544,7 +544,7 @@ export function createDashboardServer(db?: DbClient) {
         killSwitch,
         defaults: {
           citySource: env.CITY_SOURCE_MODE,
-          defaultOfferId: env.DEFAULT_OFFER_ID ?? availableOffers[0] ?? null,
+          defaultOfferId: null,
           searchConsoleEnabled: env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
           agent7Provider: env.AGENT7_PROVIDER,
         },
@@ -736,13 +736,6 @@ export function createDashboardServer(db?: DbClient) {
       console.error("[dashboard] Migration error:", err.message);
       emitPipelineRun("error", `Migration failed: ${err.message}`);
       return;
-    }
-
-    if (citySource === "deployment_candidates" && !offerId) {
-      const availableOffers = await getAvailableOfferIds(db);
-      if (availableOffers.length > 0) {
-        offerId = availableOffers[0];
-      }
     }
 
     if (offerId && rawOfferText) {

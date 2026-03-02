@@ -1,5 +1,7 @@
 import { URL } from "node:url";
 
+const IMAGE_FETCH_TIMEOUT_MS = 10_000;
+
 function normalizeExtFromContentType(contentType: string | null): string {
   const value = (contentType ?? "").toLowerCase();
   if (value.includes("image/png")) return "png";
@@ -74,6 +76,7 @@ async function fetchPexelsImage(query: string, apiKey: string): Promise<string |
   endpoint.searchParams.set("orientation", "landscape");
 
   const response = await fetch(endpoint, {
+    signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
     headers: {
       Authorization: apiKey,
     },
@@ -110,7 +113,9 @@ async function fetchPixabayImage(query: string, apiKey: string): Promise<string 
   endpoint.searchParams.set("safesearch", "true");
   endpoint.searchParams.set("per_page", "5");
 
-  const response = await fetch(endpoint);
+  const response = await fetch(endpoint, {
+    signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
+  });
   if (!response.ok) {
     return null;
   }
@@ -126,7 +131,9 @@ async function fetchPixabayImage(query: string, apiKey: string): Promise<string 
 }
 
 async function downloadBinary(rawUrl: string): Promise<{ bytes: Buffer; ext: string } | null> {
-  const response = await fetch(rawUrl);
+  const response = await fetch(rawUrl, {
+    signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
+  });
   if (!response.ok) {
     return null;
   }
@@ -146,12 +153,12 @@ export async function fetchStockImageAsset(options: {
   city: string;
   pestType?: string;
 }): Promise<{ bytes: Buffer; ext: string } | null> {
-  const pexelsKey = process.env.PEXELS_API_KEY?.trim();
-  const pixabayKey = process.env.PIXABAY_API_KEY?.trim();
-  if (!pexelsKey && !pixabayKey) {
+  if (!hasStockImageProviderKeys()) {
     return null;
   }
 
+  const pexelsKey = process.env.PEXELS_API_KEY?.trim();
+  const pixabayKey = process.env.PIXABAY_API_KEY?.trim();
   const queries = buildQueries(options.pageType, options.city, options.pestType);
 
   for (const query of queries) {
@@ -185,4 +192,8 @@ export async function fetchStockImageAsset(options: {
   }
 
   return null;
+}
+
+export function hasStockImageProviderKeys(): boolean {
+  return Boolean(process.env.PEXELS_API_KEY?.trim() || process.env.PIXABAY_API_KEY?.trim());
 }

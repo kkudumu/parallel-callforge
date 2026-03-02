@@ -16,6 +16,12 @@ import {
   isFreshTimestamp,
   normalizeNiche,
 } from "../../shared/cache-policy.js";
+
+const AGENT2_COMPETITOR_ANALYSIS_TIMEOUT_MS = 420_000;
+const AGENT2_DESIGN_SPEC_TIMEOUT_MS = 180_000;
+const AGENT2_COPY_FRAMEWORK_TIMEOUT_MS = 180_000;
+const AGENT2_SCHEMA_TEMPLATES_TIMEOUT_MS = 120_000;
+const AGENT2_SEASONAL_CALENDAR_TIMEOUT_MS = 180_000;
 // Internal schema for competitor analysis (not persisted to DB as its own table)
 const CompetitorAnalysisSchema = z.object({
   patterns: z.array(z.object({
@@ -263,6 +269,7 @@ export async function runAgent2(
       prompt: competitorPrompt,
       schema: CompetitorAnalysisSchema,
       model: "sonnet",
+      timeoutMs: AGENT2_COMPETITOR_ANALYSIS_TIMEOUT_MS,
       logLabel: "[Agent 2][Step 1][Competitor analysis]",
     });
     console.log(`[Agent 2] Found ${competitorAnalysis.patterns.length} CRO patterns`);
@@ -312,6 +319,7 @@ export async function runAgent2(
       prompt: designPrompt,
       schema: DesignSpecSchema,
       model: "sonnet",
+      timeoutMs: AGENT2_DESIGN_SPEC_TIMEOUT_MS,
       logLabel: "[Agent 2][Step 2][Design specification]",
     });
     console.log(`[Agent 2] Design archetype: ${designSpec.archetype}`);
@@ -370,6 +378,7 @@ export async function runAgent2(
       prompt: copyPrompt,
       schema: CopyFrameworkSchema,
       model: "sonnet",
+      timeoutMs: AGENT2_COPY_FRAMEWORK_TIMEOUT_MS,
       logLabel: "[Agent 2][Step 3][Copy framework]",
     });
     console.log(
@@ -436,6 +445,7 @@ export async function runAgent2(
       prompt: schemaPrompt,
       schema: SchemaTemplateSchema,
       model: "haiku",
+      timeoutMs: AGENT2_SCHEMA_TEMPLATES_TIMEOUT_MS,
       logLabel: "[Agent 2][Step 4][Schema templates]",
     });
     console.log(
@@ -482,6 +492,7 @@ export async function runAgent2(
       prompt: seasonalPrompt,
       schema: SeasonalCalendarSchema,
       model: "sonnet",
+      timeoutMs: AGENT2_SEASONAL_CALENDAR_TIMEOUT_MS,
       logLabel: "[Agent 2][Step 5][Seasonal calendar]",
     });
     console.log(

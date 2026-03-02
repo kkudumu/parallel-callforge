@@ -5,6 +5,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getEnv } from "../../config/env.js";
+import type { DbClient } from "./client.js";
 import { createDbClient } from "./client.js";
 
 const execFileAsync = promisify(execFile);
@@ -418,7 +419,7 @@ async function fetchCensusZipPopulations(): Promise<ZipPopulationMap> {
 }
 
 async function insertRows(
-  db: ReturnType<typeof createDbClient>,
+  db: DbClient,
   rows: GeoZipReferenceImportRow[]
 ): Promise<void> {
   for (let index = 0; index < rows.length; index += IMPORT_BATCH_SIZE) {
@@ -447,9 +448,9 @@ async function insertRows(
   }
 }
 
-async function importGeoZipReference(): Promise<void> {
-  const env = getEnv();
-  const db = createDbClient(env.DATABASE_URL);
+export async function importGeoZipReferenceIntoDb(
+  db: DbClient
+): Promise<GeoZipImportStats> {
   let archivePath: string | null = null;
 
   try {
@@ -468,17 +469,27 @@ async function importGeoZipReference(): Promise<void> {
       throw error;
     }
 
+    return stats;
+  } finally {
+    if (archivePath) {
+      await fs.rm(archivePath, { force: true });
+    }
+  }
+}
+
+async function importGeoZipReference(): Promise<void> {
+  const env = getEnv();
+  const db = createDbClient(env.DATABASE_URL);
+
+  try {
+    const stats = await importGeoZipReferenceIntoDb(db);
     console.log(`Geo ZIP raw rows: ${stats.rawRowCount}`);
     console.log(`Geo ZIP valid rows: ${stats.validRowCount}`);
     console.log(`Geo ZIP final rows: ${stats.finalRowCount}`);
     console.log(`Geo ZIP duplicate ZIPs: ${stats.duplicateZipCount}`);
     console.log(`Geo ZIP invalid rows: ${stats.invalidRowCount}`);
-    console.log(`Geo ZIP population rows: ${zipPopulations.size}`);
     console.log(`Geo ZIP imputed population rows: ${stats.imputedPopulationCount}`);
   } finally {
-    if (archivePath) {
-      await fs.rm(archivePath, { force: true });
-    }
     await db.end();
   }
 }

@@ -19,7 +19,6 @@ const EnvSchema = z.object({
   PEXELS_API_KEY: z.string().optional(),
   PIXABAY_API_KEY: z.string().optional(),
   CITY_SOURCE_MODE: CitySourceModeSchema.default("deployment_candidates"),
-  DEFAULT_OFFER_ID: z.string().optional(),
   AGENT7_PROVIDER: Agent7ProviderModeSchema.default("database"),
   SEARCH_CONSOLE_INTEGRATION_ENABLED: z
     .enum(["true", "false"])

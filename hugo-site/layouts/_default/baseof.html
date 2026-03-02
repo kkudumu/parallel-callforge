@@ -1,443 +1,457 @@
-{{ "<!DOCTYPE html" }}<html lang="en-US">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="{{ .Params.description | default .Summary }}">
-  <title>{{ .Title }}{{ if not .IsHome }} | {{ .Site.Title }}{{ end }}</title>
-  {{ $css := resources.Get "css/style.css" | minify }}
-  <link rel="stylesheet" href="{{ $css.RelPermalink }}">
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
-  {{ block "head" . }}{{ end }}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .Title }} | {{ .Site.Title }}</title>
+  <meta name="description" content="{{ .Description }}">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="{{ .Permalink }}">
+  <meta property="og:title" content="{{ .Title }}">
+  <meta property="og:description" content="{{ .Description }}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ .Permalink }}">
   <style>
-    :root {
-      --text-dark: #111827;
-      --text-muted: #4B5563;
-      --border-light: #E5E7EB;
-      --bg-primary: #FFFFFF;
-      --eco-green: #2A9D8F;
-      --urgency-red: #E63946;
-      --bg-secondary: #F3F4F6;
-      --action-orange: #F4A261;
-      --trust-blue: #1D3557;
-    }
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
     html {
-      font-size: 16px;
       scroll-behavior: smooth;
     }
     body {
-      font-family: 'Roboto', system-ui, -apple-system, sans-serif;
-      font-weight: 400;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      color: #1A1A1A;
+      background-color: #FFFFFF;
+      font-size: 16px;
       line-height: 1.6;
-      color: var(--text-dark);
-      background: var(--bg-primary);
-      overflow-x: hidden;
     }
-    h1, h2, h3, h4, h5, h6 {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      line-height: 1.2;
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 16px;
     }
-    h1 { font-size: 2rem; }
-    h2 { font-size: 1.75rem; }
-    h3 { font-size: 1.375rem; }
     @media (min-width: 768px) {
-      h1 { font-size: 3rem; }
-      h2 { font-size: 2.25rem; }
-      h3 { font-size: 1.75rem; }
+      .container {
+        padding: 0 24px;
+      }
     }
     @media (min-width: 1024px) {
-      h1 { font-size: 3.5rem; }
-      h2 { font-size: 2.5rem; }
+      .container {
+        padding: 0 32px;
+      }
     }
-    a {
-      color: var(--trust-blue);
-      text-decoration: none;
-      transition: color 0.3s ease;
-    }
-    a:hover {
-      color: var(--urgency-red);
-    }
-    button, .btn {
-      font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
+    /* Typography */
+    h1 {
+      font-size: 28px;
       font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
+      line-height: 1.2;
+      margin-bottom: 16px;
+    }
+    @media (min-width: 768px) {
+      h1 {
+        font-size: 36px;
+      }
+    }
+    @media (min-width: 1024px) {
+      h1 {
+        font-size: 42px;
+      }
+    }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 16px;
+    }
+    @media (min-width: 768px) {
+      h2 {
+        font-size: 32px;
+      }
+    }
+    h3 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    p {
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      color: #1A1A1A;
+    }
+    @media (min-width: 768px) {
+      p {
+        font-size: 17px;
+      }
+    }
+    /* Button Styles */
+    .btn, a.btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 24px;
+      min-height: 60px;
+      font-size: 18px;
+      font-weight: 600;
+      text-decoration: none;
       border: none;
       border-radius: 6px;
       cursor: pointer;
-      transition: all 0.3s ease;
-      min-height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.95rem;
-      padding: 0 1.5rem;
+      transition: background-color 0.2s ease;
+      gap: 8px;
+      white-space: nowrap;
     }
     .btn-primary {
-      background: var(--urgency-red);
-      color: white;
+      background-color: #D93A12;
+      color: #FFFFFF;
       width: 100%;
     }
     .btn-primary:hover {
-      background: #d62828;
-      transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(230, 57, 70, 0.3);
-    }
-    .btn-secondary {
-      background: var(--action-orange);
-      color: white;
-    }
-    .btn-secondary:hover {
-      background: #d97f3b;
-      transform: translateY(-2px);
-    }
-    .sticky-header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: var(--bg-primary);
-      border-bottom: 1px solid var(--border-light);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-    .header-container {
-      max-width: 100%;
-      margin: 0 auto;
-      padding: 1rem 1.25rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      background-color: #B52D0E;
     }
     @media (min-width: 768px) {
-      .header-container {
-        padding: 1.25rem 2rem;
-        max-width: 100%;
+      .btn-primary {
+        width: auto;
+        min-width: 240px;
       }
     }
-    .logo {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      font-weight: 800;
-      font-size: 1.375rem;
-      color: var(--trust-blue);
+    .btn-secondary {
+      background-color: #2D7A3A;
+      color: #FFFFFF;
     }
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
+    .btn-secondary:hover {
+      background-color: #1A5C2A;
     }
-    .phone-display {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: var(--urgency-red);
-    }
-    .phone-icon {
-      display: none;
-      font-size: 1.5rem;
-    }
-    @media (max-width: 480px) {
-      .phone-display span {
-        display: none;
-      }
-      .phone-icon {
-        display: inline;
-      }
-      .header-cta {
-        display: none;
-      }
-    }
-    .header-cta {
-      min-height: 44px;
-      padding: 0 1rem;
-      font-size: 0.85rem;
-    }
-    main {
-      min-height: calc(100vh - 200px);
-    }
-    .sticky-mobile-footer {
-      display: none;
+    /* Sticky Call Bar */
+    .sticky-call-bar {
       position: fixed;
       bottom: 0;
       left: 0;
       right: 0;
-      background: var(--trust-blue);
-      color: white;
-      z-index: 99;
-      padding: 0.75rem 1rem;
-      gap: 0.5rem;
+      height: 56px;
+      background-color: #D93A12;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 0 16px;
+      z-index: 1000;
+      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.12);
     }
-    @media (max-width: 768px) {
-      .sticky-mobile-footer {
-        display: flex;
-        flex-direction: row;
-      }
-      main {
-        padding-bottom: 60px;
+    @media (min-width: 768px) {
+      .sticky-call-bar {
+        position: static;
+        display: none;
       }
     }
-    .call-button-mobile {
+    .sticky-call-bar__icon {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .sticky-call-bar__content {
       flex: 1;
-      background: var(--urgency-red);
-      color: white;
-      border: none;
-      padding: 0.75rem;
-      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .sticky-call-bar__urgency {
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .sticky-call-bar__number {
+      font-size: 16px;
       font-weight: 700;
-      min-height: 44px;
-      font-size: 0.95rem;
-      cursor: pointer;
     }
-    .sms-button-mobile {
-      flex: 1;
-      background: var(--action-orange);
-      color: white;
-      border: none;
-      padding: 0.75rem;
-      border-radius: 6px;
+    .sticky-call-bar__link {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      text-decoration: none;
+      color: #FFFFFF;
+    }
+    /* Header */
+    header {
+      background-color: #FFFFFF;
+      border-bottom: 1px solid #E8E8E8;
+      padding: 16px 0;
+      position: relative;
+      z-index: 100;
+    }
+    .header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      font-size: 20px;
       font-weight: 700;
-      min-height: 44px;
-      font-size: 0.95rem;
-      cursor: pointer;
+      color: #1A1A1A;
+      text-decoration: none;
     }
-    .container {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 0 1.25rem;
+    .header-phone {
+      display: none;
     }
     @media (min-width: 768px) {
-      .container {
-        padding: 0 2rem;
+      .header-phone {
+        display: block;
+        font-size: 18px;
+        font-weight: 600;
+        color: #D93A12;
       }
     }
-    @media (min-width: 1024px) {
-      .container {
-        padding: 0 3rem;
-      }
+    .nav {
+      display: flex;
+      gap: 24px;
+      align-items: center;
     }
-    section {
-      padding: 2rem 0;
+    .nav a {
+      color: #1A1A1A;
+      text-decoration: none;
+      font-size: 16px;
+      transition: color 0.2s;
+    }
+    .nav a:hover {
+      color: #D93A12;
+    }
+    /* Footer */
+    footer {
+      background-color: #F7F7F5;
+      padding: 40px 0 56px;
     }
     @media (min-width: 768px) {
-      section {
-        padding: 3rem 0;
-      }
-    }
-    @media (min-width: 1024px) {
-      section {
-        padding: 4rem 0;
-      }
-    }
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1.5rem;
-    }
-    @media (min-width: 768px) {
-      .grid-2 {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 2rem;
-      }
-    }
-    .grid-3 {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1.5rem;
-    }
-    @media (min-width: 768px) {
-      .grid-3 {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 2rem;
-      }
-    }
-    @media (min-width: 1024px) {
-      .grid-3 {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 2rem;
-      }
-    }
-    .grid-4 {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1.5rem;
-    }
-    @media (min-width: 768px) {
-      .grid-4 {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 2rem;
-      }
-    }
-    @media (min-width: 1024px) {
-      .grid-4 {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 2rem;
-      }
-    }
-    .footer {
-      background: var(--trust-blue);
-      color: white;
-      padding: 2rem 0;
-      margin-top: 2rem;
-    }
-    @media (min-width: 768px) {
-      .footer {
-        padding: 3rem 0;
-        margin-top: 3rem;
+      footer {
+        padding: 60px 0 40px;
       }
     }
     .footer-content {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 2rem;
-      margin-bottom: 2rem;
+      gap: 32px;
     }
     @media (min-width: 768px) {
       .footer-content {
         grid-template-columns: repeat(2, 1fr);
-        gap: 3rem;
       }
     }
     @media (min-width: 1024px) {
       .footer-content {
         grid-template-columns: repeat(4, 1fr);
-        gap: 2rem;
       }
     }
     .footer-section h3 {
-      font-size: 1rem;
-      margin-bottom: 1rem;
-      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .footer-section ul {
+      list-style: none;
+    }
+    .footer-section li {
+      margin-bottom: 8px;
     }
     .footer-section a {
-      color: #E5E7EB;
-      display: block;
-      margin-bottom: 0.75rem;
-      font-size: 0.95rem;
+      color: #5C5C5C;
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
     }
     .footer-section a:hover {
-      color: white;
+      color: #D93A12;
     }
     .nap-block {
-      line-height: 1.8;
-      margin-bottom: 1.5rem;
+      margin-bottom: 24px;
     }
     .nap-block p {
-      margin-bottom: 0.25rem;
-      font-size: 0.95rem;
+      font-size: 14px;
+      margin-bottom: 8px;
     }
-    .license-info {
-      font-size: 0.85rem;
-      color: #D1D5DB;
-      margin-bottom: 1rem;
+    .footer-phone {
+      font-size: 20px;
+      font-weight: 700;
+      color: #D93A12;
+      margin-bottom: 12px;
     }
-    .social-links {
+    .trust-icons-row {
       display: flex;
-      gap: 1rem;
-      margin-top: 1rem;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 24px;
     }
-    .social-links a {
-      display: inline-block;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1);
+    .trust-icon {
+      width: 48px;
+      height: 48px;
+      background-color: #FFFFFF;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      font-size: 1.25rem;
-    }
-    .social-links a:hover {
-      background: rgba(255, 255, 255, 0.2);
-      color: var(--action-orange);
-    }
-    .footer-bottom {
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-      padding-top: 1.5rem;
-      font-size: 0.85rem;
+      font-size: 12px;
       text-align: center;
-      color: #D1D5DB;
+      padding: 8px;
+      font-weight: 600;
+      color: #2D7A3A;
+    }
+    /* Spacing */
+    section {
+      padding: 32px 0;
     }
     @media (min-width: 768px) {
-      .footer-bottom {
-        text-align: left;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+      section {
+        padding: 48px 0;
       }
     }
+    @media (min-width: 1024px) {
+      section {
+        padding: 64px 0;
+      }
+    }
+    /* Layout Helpers */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+    @media (min-width: 768px) {
+      .grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    @media (min-width: 768px) {
+      .grid-3 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (min-width: 1024px) {
+      .grid-3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    @media (min-width: 768px) {
+      .grid-4 {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+      }
+    }
+    @media (min-width: 1024px) {
+      .grid-4 {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+      }
+    }
+    /* Loading optimization */
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
   </style>
+  {{ block "additional-styles" . }}{{ end }}
+  {{ if .Params.schema }}
+  <script type="application/ld+json">
+  {{ .Params.schema | jsonify }}
+  </script>
+  {{ end }}
 </head>
 <body>
-  <header class="sticky-header">
-    <div class="header-container">
-      <div class="logo">{{ .Site.Params.companyName | default "Pest Control" }}</div>
-      <div class="header-right">
-        <div class="phone-display">
-          <span class="phone-icon">📞</span>
-          <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}">{{ .Site.Params.phone }}</a>
+  <a href="#main-content" class="skip-link" style="position: absolute; top: -40px; left: 0; background: #D93A12; color: white; padding: 8px; z-index: 100;">Skip to main content</a>
+  
+  <header role="banner">
+    <div class="container">
+      <div class="header-content">
+        <a href="{{ .Site.BaseURL }}" class="logo">{{ .Site.Params.business_name }}</a>
+        <div class="nav">
+          <span class="header-phone">{{ .Site.Params.phone }}</span>
         </div>
-        <a class="btn btn-secondary header-cta" href="tel:{{ .Site.Params.phone | replaceRE \"[^0-9]\" \"\" }}">Call For Fast Help</a>
       </div>
     </div>
   </header>
+
+  <div class="sticky-call-bar" id="sticky-call-bar">
+    <svg class="sticky-call-bar__icon" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.92 7.02C17.45 6.18 16.84 5.48 16.07 4.9M19.07 11.07C19.54 10.23 19.93 9.32 20.16 8.37M21 16.92v3.5c0 1.08-.892 2-2 2-.59 0-1.12-.147-1.6-.38-1.95-.88-3.63-2.24-4.8-3.97-.5-.75-.88-1.58-1.11-2.49-.1-.39-.15-.8-.15-1.23v-2c0-1.1.9-2 2-2h2.5c1.1 0 2 .9 2 2 0 .5-.1 1-.27 1.46"/>
+    </svg>
+    <div class="sticky-call-bar__content">
+      <div class="sticky-call-bar__urgency">Help Now</div>
+      <div class="sticky-call-bar__number">{{ .Site.Params.phone }}</div>
+    </div>
+    <a href="tel:{{ .Site.Params.phone_raw }}" class="sticky-call-bar__link"></a>
+  </div>
 
   <main id="main-content">
     {{ block "main" . }}{{ end }}
   </main>
 
-  <div class="sticky-mobile-footer">
-    <button class="call-button-mobile" onclick="window.location.href='tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}'">📞 Call Now</button>
-    <button class="sms-button-mobile" onclick="window.location.href='tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}'">Call For Same-Day Help</button>
-  </div>
-
-  <footer class="footer">
+  <footer role="contentinfo">
     <div class="container">
       <div class="footer-content">
-        {{ block "footer-sections" . }}{{ end }}
-      </div>
-      <div class="footer-bottom">
-        <p>&copy; {{ now.Year }} {{ .Site.Params.companyName }}. All rights reserved.</p>
-        {{ block "footer-links" . }}{{ end }}
+        <div class="footer-section">
+          <div class="nap-block">
+            <h3>{{ .Site.Params.business_name }}</h3>
+            <p>{{ .Site.Params.address }}</p>
+            <p>{{ .Site.Params.service_area }}</p>
+            <div class="footer-phone">
+              <a href="tel:{{ .Site.Params.phone_raw }}" style="color: #D93A12; text-decoration: none;">{{ .Site.Params.phone }}</a>
+            </div>
+          </div>
+        </div>
+        <div class="footer-section">
+          <h3>Pest Services</h3>
+          <ul>
+            {{ range .Site.Params.pest_services }}
+            <li><a href="/services/{{ .slug }}/">{{ .name }}</a></li>
+            {{ end }}
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h3>Service Areas</h3>
+          <ul>
+            {{ range .Site.Params.service_cities }}
+            <li><a href="/{{ .slug }}/">{{ .name }}</a></li>
+            {{ end }}
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h3>Company</h3>
+          <ul>
+            <li><a href="/about/">About Us</a></li>
+            <li><a href="/disclaimer/">Disclaimer</a></li>
+            <li><a href="/privacy/">Privacy Policy</a></li>
+            <li><a href="/contact/">Contact</a></li>
+          </ul>
+          <div class="trust-icons-row">
+            <div class="trust-icon">Licensed</div>
+            <div class="trust-icon">Insured</div>
+            <div class="trust-icon">⭐5.0</div>
+          </div>
+        </div>
       </div>
     </div>
   </footer>
 
-  {{ block "schema" . }}{{ end }}
-
   <script>
-    function scrollToForm() {
-      const form = document.getElementById('contact-form');
-      if (form) {
-        form.scrollIntoView({ behavior: 'smooth' });
-        document.querySelector('[name="name"]')?.focus();
-      }
+    // Mobile body padding for sticky bar
+    if (window.innerWidth < 768) {
+      document.body.style.paddingBottom = '56px';
     }
-    function submitForm(e) {
-      e.preventDefault();
-      const form = e.target;
-      const formData = new FormData(form);
-      const data = Object.fromEntries(formData);
-      console.log('Form submission:', data);
-      // Add form submission handler (e.g., API call)
-      alert('Thank you for requesting a free inspection!');
-      form.reset();
-    }
-    function toggleAccordion(id) {
-      const item = document.getElementById(id);
-      const isOpen = item.classList.contains('open');
-      document.querySelectorAll('.accordion-item').forEach(el => {
-        el.classList.remove('open');
-      });
-      if (!isOpen) {
-        item.classList.add('open');
-      }
+    // Smooth scroll behavior polyfill
+    if (!('scrollBehavior' in document.documentElement.style)) {
+      document.documentElement.style.scrollBehavior = 'auto';
     }
   </script>
 </body>

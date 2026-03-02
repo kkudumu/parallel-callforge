@@ -99,6 +99,17 @@ Ingestion paths:
 
 The offer profile parser is currently heuristic. It is designed for practical control, not perfect semantic extraction.
 
+Additional parser rule:
+
+- external source URLs must preserve original character casing during parsing/storage
+
+Reason:
+
+- Google Sheets document IDs are case-sensitive
+- lowercasing spreadsheet URLs corrupts the ID and breaks ZIP coverage sync from offer profiles
+
+This specifically applies to `constraints.target_geo_sources`.
+
 ### 3. Runtime Execution State
 
 At runtime, the system loads:
@@ -198,6 +209,19 @@ Responsibilities:
 New behavior:
 
 - if no ZIP coverage is stored for the offer and the offer profile contains target spreadsheet URLs, Agent 0.5 imports ZIP coverage directly from the offer profile before scoring
+- Agent 0.5 now performs a geo-reference preflight before scoring:
+  - it checks whether `geo_zip_reference` is large enough to be considered usable
+  - if the table is badly undersized, it auto-runs the geo ZIP importer
+  - if the table is still badly undersized after refresh, it fails loudly instead of continuing with degraded data
+
+Operational stance:
+
+- a few missing ZIP mappings are acceptable and are handled by the existing unmapped-ZIP thresholds
+- a catastrophically missing reference dataset is not acceptable and should hard-fail
+
+Current threshold:
+
+- `geo_zip_reference` must have at least `30,000` rows before Agent 0.5 will trust it for scoring
 
 This makes geography offer-driven instead of manually seeded.
 
@@ -320,6 +344,24 @@ Current behavior:
 - the runtime then loads the vertical profile and merges constraints
 - downstream agents receive the merged runtime context
 
+Offer targeting rule:
+
+- offer-scoped CLI execution should use an explicit `offerId`
+- the runtime should not silently fall back to a hidden global default offer
+
+Reason:
+
+- implicit offer selection creates incorrect runs that look valid while operating on the wrong context
+- explicit offer targeting is safer than environment-driven hidden state for offer-bound agents
+
+This applies to:
+
+- `pipeline`
+- `agent-1`
+- `agent-2`
+- `agent-3`
+- any other execution path that depends on offer-scoped context
+
 ### Dashboard Server
 
 File:
@@ -331,6 +373,11 @@ Current behavior:
 - `/api/offers/profile` can ingest raw offer text
 - `/api/pipeline/start` accepts raw offer text and will parse/save it before starting
 - pipeline tasks load the active offer profile and vertical profile before dispatching agents
+
+Offer-selection rule:
+
+- the dashboard should not silently auto-select an arbitrary stored offer when none is supplied
+- if the run is offer-scoped, the caller should provide the intended offer explicitly
 
 ## Why `offerId` Exists
 
@@ -445,3 +492,210 @@ This means the system now has both:
 - execution-plane vertical strategies (`vertical-strategies`)
 
 That is the intended foundation for eventually having fully distinct per-vertical prompt and schema stacks.
+
+## March 2, 2026 Run-Time Decisions
+
+The following decisions were added during the `pestcontrol-1` pipeline debugging and Agent 3 hardening work.
+
+### Limiters Are Off By Default During Build / Optimization
+
+Until explicitly re-enabled, limiter enforcement should be treated as disabled during active build and optimization work.
+
+This includes:
+
+- provider rate limiters
+- content deploy limiters
+- other automatic throttles that slow internal generation work
+
+Reason:
+
+- internal generation, research, and refinement work should not be blocked while the system is still building content
+- hidden throttling made active runs look hung when they were actually waiting on limiter state
+
+Operational rule:
+
+- no limiter should gate normal generation unless explicitly turned back on by operator decision
+
+### Content Creation Must Not Be Capped
+
+The system should distinguish between:
+
+- creating content
+- publishing content
+
+Creation should be effectively uncapped.
+
+This means the system should be allowed to:
+
+- generate many city pages ahead of time
+- save them in the repo
+- save them in the database
+- keep them staged and ready for later release
+
+This is not considered a risk by itself.
+
+The only place where gating belongs is publication / release control.
+
+That enables future workflows such as:
+
+- scheduled releases
+- staged publication windows
+- separate build and launch phases
+- later publishing by another agent running on a schedule
+
+Practical consequence:
+
+- weekly new-city caps should not block content generation
+- if a cap exists, it should apply only to actual launch / publish actions
+
+### Agent 3 Weekly New-City Cap Is Disabled By Default
+
+Agent 3 previously used a weekly new-city cap in the content-generation path.
+
+That was the wrong scope.
+
+The cap is now disabled by default for Agent 3 content builds, because:
+
+- it blocked page creation instead of publication
+- it caused new cities to be silently skipped during normal builds
+- it prevented pre-generating content for later release
+
+If publication gating is needed later, it should be implemented in the release path, not the page-construction path.
+
+### Agent 3 Must Log Silent Wait States Explicitly
+
+Agent 3 had multiple phases that could appear hung because they emitted no progress logs.
+
+The system should now explicitly log:
+
+- limiter waits and acquisitions (if limiters are ever reintroduced)
+- image-resolution steps
+- template review steps
+- template validation steps
+
+Reason:
+
+- a silent wait is operationally indistinguishable from a hang
+- build logs must reveal where time is being spent
+
+### Image Sourcing Must Be Opt-In
+
+Agent 3 should not attempt remote stock-image retrieval unless at least one image provider key is configured.
+
+Specifically:
+
+- do not try remote image fetches unless `PEXELS_API_KEY` or `PIXABAY_API_KEY` is present
+- if no key is configured, use generated placeholder imagery immediately
+
+Reason:
+
+- remote image lookup should not block or destabilize content generation
+- placeholder images are acceptable defaults until image providers are configured
+
+Operational rule:
+
+- lack of image API keys is a normal state, not an error state
+
+### Generated Hugo Templates Require Review Before Use
+
+LLM-generated Hugo templates are allowed, but they must not be written blindly.
+
+A generated template must pass three stages before being trusted:
+
+1. structural review / normalization
+2. cache write of the reviewed version
+3. Hugo validation run
+
+Reason:
+
+- generated templates can be structurally invalid even when they satisfy the output schema
+- in this session, the model emitted nested `{{ define ... }}` blocks inside `{{ define "main" }}`, which Hugo rejects
+
+### Template Cache Must Heal Bad Entries
+
+Cached generated templates are not inherently trustworthy.
+
+If cached templates fail structural review, the system should:
+
+- treat the cache as poisoned
+- discard that cached entry logically
+- regenerate fresh templates
+- re-run review and validation
+
+It should not keep reusing a broken cached template indefinitely.
+
+### Generated Template Validation Is a Hard Gate
+
+After template review, Agent 3 should run a real Hugo validation step before moving on to content generation.
+
+If template validation fails:
+
+- stop the run
+- surface the exact Hugo error
+
+Do not proceed with page generation on invalid templates.
+
+This is a required quality gate, not optional best-effort behavior.
+
+### Agent 3 QA Should Auto-Repair Certain Content Failures
+
+Some QA failures are fixable without discarding the page entirely.
+
+Agent 3 should automatically attempt a repair pass when the only failures are within a repairable class.
+
+Current repairable classes:
+
+- `placeholder_tokens`
+- `banned_phrases`
+
+Reason:
+
+- these failures often come from otherwise usable content
+- a targeted rewrite is faster and less wasteful than full regeneration
+- in this session, Deland content failed only because of the phrase `when it comes to`, which is an AI-style banned phrase and should be rewritten rather than causing a hard stop
+
+The repair prompt should:
+
+- remove exact banned phrases that were detected
+- remove generic banned phrase patterns from the known blocklist
+- replace any placeholder tokens with concrete copy
+- preserve page intent, locality, and word-count requirements
+
+### Checkpointed Pages With Placeholder Tokens Must Not Be Reused
+
+Checkpoint reuse should not blindly trust prior generated files.
+
+If an existing content file still contains placeholder tokens, Agent 3 should:
+
+- treat that file as invalid for reuse
+- regenerate the page instead of skipping it
+
+Reason:
+
+- stale checkpointed content with unresolved placeholders can silently poison future builds
+- reusing invalid files defeats downstream QA and creates misleading “successful” reuse
+
+### Built Artifact QA Currently Reflects the Entire Built Site
+
+Built artifact QA currently scans all generated HTML in the built output, not just pages created in the current run.
+
+This matters because:
+
+- stale legacy pages can still fail build QA even if newly generated pages are clean
+- unrelated historical placeholder pages can block a current pipeline run
+
+That behavior is currently exposing real risk, but it also means the system still needs a cleaner strategy for:
+
+- staged historical content
+- per-run build scope
+- release-ready subsets vs. legacy generated pages
+
+The immediate rule remains:
+
+- if built HTML contains placeholders anywhere, artifact QA should fail loudly
+
+But future release logic should separate:
+
+- current build artifacts
+- staged content not intended for release
+- legacy content that should be retired or excluded

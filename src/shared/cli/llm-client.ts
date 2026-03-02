@@ -28,7 +28,24 @@ function summarizeError(err: unknown): string {
 
 function formatErrorDetails(err: unknown): string {
   if (err instanceof Error) {
-    return err.stack ?? err.message;
+    const enriched = err as Error & {
+      elapsedMs?: number;
+      stdoutTail?: string;
+      stderrTail?: string;
+    };
+    const sections = [err.stack ?? err.message];
+
+    if (typeof enriched.elapsedMs === "number") {
+      sections.push(`Elapsed: ${enriched.elapsedMs}ms`);
+    }
+    if (typeof enriched.stdoutTail === "string" && enriched.stdoutTail.trim()) {
+      sections.push(`stdout tail:\n${enriched.stdoutTail}`);
+    }
+    if (typeof enriched.stderrTail === "string" && enriched.stderrTail.trim()) {
+      sections.push(`stderr tail:\n${enriched.stderrTail}`);
+    }
+
+    return sections.join("\n\n");
   }
 
   return String(err);

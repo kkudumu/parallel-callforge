@@ -46,6 +46,24 @@ function uniqNormalized(values: string[]): string[] {
   return result;
 }
 
+function uniqTrimmed(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const dedupeKey = trimmed.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+    result.push(trimmed);
+  }
+  return result;
+}
+
 function titleToSlug(value: string): string {
   return value
     .toLowerCase()
@@ -169,7 +187,7 @@ function extractCallDuration(rawOfferText: string): {
 }
 
 function extractGeoSources(rawOfferText: string): string[] {
-  return uniqNormalized(
+  return uniqTrimmed(
     [...rawOfferText.matchAll(/https:\/\/docs\.google\.com\/spreadsheets\/[^\s)]+/gi)].map(
       (match) => match[0]
     )

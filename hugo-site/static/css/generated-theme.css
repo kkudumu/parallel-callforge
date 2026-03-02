@@ -1,11 +1,11 @@
 :root {
-  --color-primary: #111827;
-  --color-primary-dark: #111827;
-  --color-secondary: #111827;
-  --color-bg-alt: #111827;
-  --color-success: #111827;
-  --font-heading: "Avenir Next", "Segoe UI", sans-serif;
-  --font-body: "Trebuchet MS", "Segoe UI", sans-serif;
+  --color-primary: #C8290F;
+  --color-primary-dark: #C8290F;
+  --color-secondary: #1A5C2A;
+  --color-bg-alt: #F7F7F5;
+  --color-success: #1A1A1A;
+  --font-heading: Inter, system-ui, -apple-system, sans-serif;
+  --font-body: Inter, system-ui, -apple-system, sans-serif;
 }
 
 .brand-shell {
@@ -45,6 +45,12 @@
 .hero-support {
   margin-bottom: 24px;
   opacity: 0.85;
+}
+
+.cta-microcopy {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  opacity: 0.82;
 }
 
 .hero-actions {
@@ -157,7 +163,7 @@
 .faq-highlight {
   padding: 28px;
   border-radius: 24px;
-  background: linear-gradient(135deg, #111827 0%, #111827 100%);
+  background: linear-gradient(135deg, #1A5C2A 0%, #C8290F 100%);
   color: #fff;
 }
 
@@ -166,8 +172,13 @@
   margin-top: 0;
 }
 
+.faq-guarantee {
+  margin-top: 16px;
+  font-weight: 700;
+}
+
 .cta-section-premium {
-  background: linear-gradient(135deg, #111827 0%, #111827 100%);
+  background: linear-gradient(135deg, #1A5C2A 0%, #C8290F 100%);
 }
 
 .mini-list {

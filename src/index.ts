@@ -94,15 +94,30 @@ function getAgent7Provider(env: ReturnType<typeof getEnv>, db: ReturnType<typeof
   return new DatabaseBackedDataProvider(db);
 }
 
+function normalizeOptionalArg(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function requireOfferIdArg(offerId: string | undefined, commandName: string): string {
+  if (!offerId) {
+    throw new Error(`${commandName} requires an offerId argument`);
+  }
+  return offerId;
+}
+
 function buildAgent1Config(
   env: ReturnType<typeof getEnv>,
   overrides: Partial<Parameters<typeof runAgent1>[0]> = {}
 ) {
   const citySource = overrides.citySource ?? env.CITY_SOURCE_MODE;
-  const offerId = overrides.offerId ?? env.DEFAULT_OFFER_ID;
+  const offerId = overrides.offerId;
   const niche = overrides.offerProfile?.niche ?? overrides.niche ?? DEFAULT_NICHE;
 
-  if (citySource === "deployment_candidates" && offerId) {
+  if (citySource === "deployment_candidates") {
+    if (!offerId) {
+      throw new Error("deployment_candidates mode requires an explicit offerId");
+    }
     return {
       niche,
       citySource,
@@ -165,9 +180,8 @@ async function runSingleAgent(agentName: string) {
     // Run migrations first
     await runMigrations(env.DATABASE_URL, path.resolve("src/shared/db/migrations"));
 
-    const offerIdArg = process.argv[3];
+    const offerIdArg = normalizeOptionalArg(process.argv[3]);
     const zipInputArg = process.argv.slice(4).join(" ").trim();
-    const offerContext = await getOfferContext(db, offerIdArg ?? env.DEFAULT_OFFER_ID);
 
     switch (agentName) {
       case "vertical-profile": {
@@ -235,8 +249,12 @@ async function runSingleAgent(agentName: string) {
         );
         break;
       case "agent-1":
+        {
+          const requiredOfferId = requireOfferIdArg(offerIdArg, "agent-1");
+          const offerContext = await getOfferContext(db, requiredOfferId);
         await runAgent1(
           buildAgent1Config(env, {
+            offerId: requiredOfferId,
             offerProfile: offerContext.offerProfile,
             verticalProfile: offerContext.verticalProfile,
             niche: offerContext.niche,
@@ -244,15 +262,23 @@ async function runSingleAgent(agentName: string) {
           llm,
           db
         );
+        }
         break;
       case "agent-2":
+        {
+          const requiredOfferId = requireOfferIdArg(offerIdArg, "agent-2");
+          const offerContext = await getOfferContext(db, requiredOfferId);
         await runAgent2({
           niche: offerContext.niche,
           offerProfile: offerContext.offerProfile,
           verticalProfile: offerContext.verticalProfile,
         }, llm, db);
+        }
         break;
       case "agent-3":
+        {
+          const requiredOfferId = requireOfferIdArg(offerIdArg, "agent-3");
+          const offerContext = await getOfferContext(db, requiredOfferId);
         await runAgent3({
           niche: offerContext.niche,
           offerProfile: offerContext.offerProfile,
@@ -261,7 +287,6 @@ async function runSingleAgent(agentName: string) {
           phone: env.BUSINESS_PHONE,
           minWordCountHub: 800,
           minWordCountSubpage: 1200,
-          deployLimiter: limiters.contentDeploy,
           indexationKillSwitchEnabled:
             env.INDEXATION_KILL_SWITCH_ENABLED && env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
           searchConsoleIntegrationEnabled: env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
@@ -269,9 +294,13 @@ async function runSingleAgent(agentName: string) {
           indexationLookbackDays: env.INDEXATION_LOOKBACK_DAYS,
           minIndexationRatio: env.INDEXATION_RATIO_THRESHOLD,
         }, llm, db);
+        }
         break;
       case "agent-7":
-        await runAgent7({ niche: offerContext.niche }, db, getAgent7Provider(env, db));
+        {
+          const offerContext = await getOfferContext(db, offerIdArg);
+          await runAgent7({ niche: offerContext.niche }, db, getAgent7Provider(env, db));
+        }
         break;
       default:
         console.error(`Unknown agent: ${agentName}`);
@@ -293,12 +322,14 @@ async function runPipeline() {
 
   try {
     await runMigrations(env.DATABASE_URL, path.resolve("src/shared/db/migrations"));
-    const offerContext = await getOfferContext(db, env.DEFAULT_OFFER_ID);
+    const offerIdArg = requireOfferIdArg(normalizeOptionalArg(process.argv[3]), "pipeline");
+    const offerContext = await getOfferContext(db, offerIdArg);
 
     console.log("=== CallForge Pipeline ===");
     console.log("Step 1/4: Keyword Research");
     await runAgent1(
       buildAgent1Config(env, {
+        offerId: offerIdArg,
         offerProfile: offerContext.offerProfile,
         verticalProfile: offerContext.verticalProfile,
         niche: offerContext.niche,
@@ -323,7 +354,6 @@ async function runPipeline() {
       phone: env.BUSINESS_PHONE,
       minWordCountHub: 800,
       minWordCountSubpage: 1200,
-      deployLimiter: limiters.contentDeploy,
       indexationKillSwitchEnabled:
         env.INDEXATION_KILL_SWITCH_ENABLED && env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
       searchConsoleIntegrationEnabled: env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
@@ -355,7 +385,7 @@ async function runOrchestrated() {
     name: "agent-1",
     async execute(payload) {
       const effectiveOfferId =
-        typeof payload?.offerId === "string" ? payload.offerId : env.DEFAULT_OFFER_ID;
+        typeof payload?.offerId === "string" ? normalizeOptionalArg(payload.offerId) : undefined;
       const offerContext = await getOfferContext(db, effectiveOfferId);
       const payloadCity = typeof payload?.city === "string" ? payload.city : null;
       const payloadState = typeof payload?.state === "string" ? payload.state : null;
@@ -395,7 +425,7 @@ async function runOrchestrated() {
     name: "agent-2",
     async execute(payload) {
       const effectiveOfferId =
-        typeof payload?.offerId === "string" ? payload.offerId : env.DEFAULT_OFFER_ID;
+        typeof payload?.offerId === "string" ? normalizeOptionalArg(payload.offerId) : undefined;
       const offerContext = await getOfferContext(db, effectiveOfferId);
       await runAgent2({
         niche: offerContext.niche,
@@ -411,7 +441,7 @@ async function runOrchestrated() {
     name: "agent-3",
     async execute(payload) {
       const effectiveOfferId =
-        typeof payload?.offerId === "string" ? payload.offerId : env.DEFAULT_OFFER_ID;
+        typeof payload?.offerId === "string" ? normalizeOptionalArg(payload.offerId) : undefined;
       const offerContext = await getOfferContext(db, effectiveOfferId);
       await runAgent3({
         niche: offerContext.niche,
@@ -421,7 +451,6 @@ async function runOrchestrated() {
         phone: env.BUSINESS_PHONE,
         minWordCountHub: 800,
         minWordCountSubpage: 1200,
-        deployLimiter: limiters.contentDeploy,
         targetCities: typeof payload?.city === "string" ? [payload.city] : undefined,
         indexationKillSwitchEnabled:
           env.INDEXATION_KILL_SWITCH_ENABLED && env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
@@ -439,7 +468,7 @@ async function runOrchestrated() {
     name: "agent-7",
     async execute(payload) {
       const effectiveOfferId =
-        typeof payload?.offerId === "string" ? payload.offerId : env.DEFAULT_OFFER_ID;
+        typeof payload?.offerId === "string" ? normalizeOptionalArg(payload.offerId) : undefined;
       const offerContext = await getOfferContext(db, effectiveOfferId);
       await runAgent7(
         { niche: offerContext.niche },
@@ -490,12 +519,12 @@ if (command === "pipeline") {
   console.log("CallForge - Parallel Content Pipeline");
   console.log("");
   console.log("Usage:");
-  console.log("  npx tsx src/index.ts pipeline     Run full pipeline sequentially");
+  console.log("  npx tsx src/index.ts pipeline <offerId>  Run full pipeline sequentially");
   console.log("  npx tsx src/index.ts orchestrate   Run via task queue orchestrator");
   console.log("  npx tsx src/index.ts vertical-profile <verticalKey> <json-or-file>  Save a vertical definition");
   console.log("  npx tsx src/index.ts offer-profile <offerId> <raw-text-or-file>  Save parsed offer profile");
   console.log("  npx tsx src/index.ts agent-0.5 <offerId> [zip-list]  Run Agent 0.5");
-  console.log("  npx tsx src/index.ts agent-1       Run single agent (0.5, 1, 2, 3, or 7)");
+  console.log("  npx tsx src/index.ts agent-1 <offerId>  Run single agent (0.5, 1, 2, 3, or 7)");
   console.log("");
   console.log("Environment: Set DATABASE_URL in .env");
 }

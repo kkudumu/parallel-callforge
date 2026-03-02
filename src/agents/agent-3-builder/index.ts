@@ -5,8 +5,9 @@ import type Bottleneck from "bottleneck";
 import type { LlmClient } from "../../shared/cli/llm-client.js";
 import type { DbClient } from "../../shared/db/client.js";
 import { createHugoManager } from "./hugo-manager.js";
-import { findPlaceholderTokens, runQualityGate } from "./quality-gate.js";
-import { fetchStockImageAsset } from "./image-sourcing.js";
+import { BANNED_PHRASES, findPlaceholderTokens, runQualityGate } from "./quality-gate.js";
+import { fetchStockImageAsset, hasStockImageProviderKeys } from "./image-sourcing.js";
+import { reviewGeneratedHugoTemplates } from "./template-review.js";
 import { slugify } from "../agent-1-keywords/index.js";
 import { eventBus } from "../../shared/events/event-bus.js";
 import {
@@ -51,6 +52,7 @@ export interface Agent3Config {
   minWordCountSubpage: number;
   deployLimiter?: Bottleneck;
   maxNewCitiesPerWeek?: number;
+  enforceNewCityCap?: boolean;
   targetCities?: string[];
   indexationKillSwitchEnabled?: boolean;
   searchConsoleIntegrationEnabled?: boolean;
@@ -65,6 +67,7 @@ const DEFAULT_CONFIG: Partial<Agent3Config> = {
   minWordCountHub: 800,
   minWordCountSubpage: 1200,
   maxNewCitiesPerWeek: 3,
+  enforceNewCityCap: false,
   indexationKillSwitchEnabled: false,
   searchConsoleIntegrationEnabled: false,
   indexationMinPageAgeDays: 21,
@@ -75,6 +78,54 @@ const DEFAULT_CONFIG: Partial<Agent3Config> = {
 const AGENT3_TEMPLATE_TIMEOUT_MS = 180_000;
 const AGENT3_CONTENT_TIMEOUT_MS = 300_000;
 const AGENT3_SUBPAGE_CONCURRENCY = 2;
+
+async function getLimiterSnapshot(limiter: Bottleneck): Promise<{
+  queued: number;
+  reservoir: number | "unknown";
+}> {
+  let reservoir: number | "unknown" = "unknown";
+  try {
+    const value = await limiter.currentReservoir();
+    if (typeof value === "number") {
+      reservoir = value;
+    }
+  } catch {
+    reservoir = "unknown";
+  }
+
+  return {
+    queued: limiter.queued(),
+    reservoir,
+  };
+}
+
+async function scheduleWithVerboseLimiter<T>(
+  limiter: Bottleneck | undefined,
+  label: string,
+  task: () => Promise<T>
+): Promise<T> {
+  if (!limiter) {
+    return task();
+  }
+
+  const before = await getLimiterSnapshot(limiter);
+  console.log(
+    `[Agent 3] Waiting for deploy limiter slot for ${label} (queued=${before.queued}, reservoir=${before.reservoir})`
+  );
+  if (before.reservoir === 0) {
+    console.warn(
+      `[Agent 3] Deploy limiter reservoir is exhausted before ${label}; execution will pause until the limiter refreshes.`
+    );
+  }
+
+  return limiter.schedule(async () => {
+    const acquired = await getLimiterSnapshot(limiter);
+    console.log(
+      `[Agent 3] Acquired deploy limiter slot for ${label} (queued=${acquired.queued}, reservoir=${acquired.reservoir})`
+    );
+    return task();
+  });
+}
 
 function createVerboseProviderLogger(prefix: string) {
   const partials: Record<"stdout" | "stderr", string> = {
@@ -278,9 +329,21 @@ function collectFilesRecursive(root: string, matcher: (filePath: string) => bool
   return files;
 }
 
-function runBuiltArtifactQa(hugoSitePath: string): { passed: boolean; failures: string[] } {
+function runBuiltArtifactQa(
+  hugoSitePath: string,
+  citySlugs: string[] = []
+): { passed: boolean; failures: string[] } {
   const publicDir = path.join(hugoSitePath, "public");
-  const htmlFiles = collectFilesRecursive(publicDir, (filePath) => filePath.endsWith(".html"));
+  const normalizedCitySlugs = [...new Set(citySlugs.map((slug) => slug.trim()).filter(Boolean))];
+  const htmlFiles =
+    normalizedCitySlugs.length > 0
+      ? normalizedCitySlugs.flatMap((slug) =>
+          collectFilesRecursive(
+            path.join(publicDir, slug),
+            (filePath) => filePath.endsWith(".html")
+          )
+        )
+      : collectFilesRecursive(publicDir, (filePath) => filePath.endsWith(".html"));
   const failures: string[] = [];
 
   if (htmlFiles.length === 0) {
@@ -310,6 +373,7 @@ async function repairContentForQa(
     minWordCount: number;
     supplementalTexts: string[];
     failures: string[];
+    bannedPhrasesFound?: string[];
     logLabel: string;
     replacements: Record<string, string>;
   }
@@ -330,6 +394,9 @@ Hard requirements:
 - Keep the city name "${options.city}" naturally present in the body copy.
 - Keep the body content at or above ${options.minWordCount} words.
 - Preserve the same page intent and local-business framing.
+- Remove AI-sounding boilerplate phrases such as: ${BANNED_PHRASES.join(", ")}.
+- If any specific banned phrases were detected, remove them completely: ${(options.bannedPhrasesFound ?? []).join(", ") || "none detected"}.
+- Rewrite any sentence that contains a banned phrase instead of making a minimal token swap.
 - Do not include explanations, only the corrected structured response.
 
 Previous structured response:
@@ -407,6 +474,15 @@ function resolveGeneratedContentPlaceholders(
       answer: replaceString(item.answer),
     })),
   };
+}
+
+function canAutoRepairQaFailures(failures: string[]): boolean {
+  const repairableFailures = new Set([
+    "placeholder_tokens",
+    "banned_phrases",
+  ]);
+
+  return failures.length > 0 && failures.every((failure) => repairableFailures.has(failure));
 }
 
 function asObject<T>(value: unknown, fallback: T): T {
@@ -607,6 +683,25 @@ async function writePageVisual(
   city: string,
   pestType?: string
 ): Promise<string> {
+  const assetLabel = parts.join("/");
+  console.log(`[Agent 3][Visual][${assetLabel}] Resolving page visual...`);
+  if (!hasStockImageProviderKeys()) {
+    const fallbackPath = `images/generated/${createAssetSlug(parts)}.svg`;
+    hugo.writeStaticFile(
+      fallbackPath,
+      createDeterministicImageSvg(
+        title,
+        subtitle,
+        design.primary,
+        design.secondary,
+        design.tertiary,
+        design.highlight
+      )
+    );
+    console.log(`[Agent 3][Visual][${assetLabel}] No image API keys configured; using generated SVG fallback`);
+    return `/${fallbackPath}`;
+  }
+
   const stockAsset = await fetchStockImageAsset({
     pageType,
     city,
@@ -615,6 +710,7 @@ async function writePageVisual(
   if (stockAsset) {
     const assetPath = `images/sourced/${createAssetSlug(parts)}.${stockAsset.ext}`;
     hugo.writeStaticFile(assetPath, stockAsset.bytes);
+    console.log(`[Agent 3][Visual][${assetLabel}] Using sourced stock image (${stockAsset.ext})`);
     return `/${assetPath}`;
   }
 
@@ -630,6 +726,7 @@ async function writePageVisual(
       design.highlight
     )
   );
+  console.log(`[Agent 3][Visual][${assetLabel}] Using generated SVG fallback`);
   return `/${fallbackPath}`;
 }
 
@@ -1107,299 +1204,123 @@ async function applyDesignSystem(
   const faqQuestion = faqLead?.question || `How is the ${designSpec.archetype.replace(/[_-]+/g, " ")} process structured?`;
   const faqAnswer = faqLead?.answer_template || `The page layout follows ${layoutLabels.join(", ") || "the researched service sequence"} so visitors can move from urgency to proof to action without friction.`;
 
-  // Try LLM-generated Hugo templates first, fall back to hardcoded
-  let usedLlmTemplates = false;
-  try {
-    const designSpecSummary = JSON.stringify({
-      archetype: designSpec.archetype,
-      layout: designSpec.layout,
-      components: designSpec.components,
-      colors: designSpec.colors,
-      typography: designSpec.typography,
-      responsive_breakpoints: designSpec.responsive_breakpoints,
-    }, null, 2);
-    const designFingerprint = computeCacheFingerprint(designSpecSummary);
-    const templateCache = await db.query<{
-      design_fingerprint: string;
-      baseof: string;
-      city_hub: string;
-      service_subpage: string;
-    }>(
-      `SELECT design_fingerprint, baseof, city_hub, service_subpage
-       FROM hugo_template_cache
-       WHERE niche = $1
-       LIMIT 1`,
-      [normalizeNiche(niche)]
-    );
+  const designSpecSummary = JSON.stringify({
+    archetype: designSpec.archetype,
+    layout: designSpec.layout,
+    components: designSpec.components,
+    colors: designSpec.colors,
+    typography: designSpec.typography,
+    responsive_breakpoints: designSpec.responsive_breakpoints,
+  }, null, 2);
+  const designFingerprint = computeCacheFingerprint(designSpecSummary);
+  const templateCache = await db.query<{
+    design_fingerprint: string;
+    baseof: string;
+    city_hub: string;
+    service_subpage: string;
+  }>(
+    `SELECT design_fingerprint, baseof, city_hub, service_subpage
+     FROM hugo_template_cache
+     WHERE niche = $1
+     LIMIT 1`,
+    [normalizeNiche(niche)]
+  );
 
-    let hugoTemplates = templateCache.rows[0];
-    if (!hugoTemplates || hugoTemplates.design_fingerprint !== designFingerprint) {
-      const hugoPrompt = HUGO_TEMPLATE_PROMPT.replace("{design_spec}", designSpecSummary);
-      const templateLogger = createVerboseProviderLogger("[Agent 3][Design system][Hugo templates]");
-      let generatedTemplates;
-      try {
-        generatedTemplates = await llm.call({
-          prompt: hugoPrompt,
-          schema: HugoTemplateResponseSchema,
-          model: "haiku",
-          timeoutMs: AGENT3_TEMPLATE_TIMEOUT_MS,
-          logLabel: "[Agent 3][Design system][Hugo templates]",
-          onOutput: (chunk, stream) => templateLogger.onOutput(chunk, stream),
-        });
-      } finally {
-        templateLogger.flush();
-      }
-      const generatedMarkup = [
-        generatedTemplates.baseof,
-        generatedTemplates.city_hub,
-        generatedTemplates.service_subpage,
-      ].join("\n");
-      if (/<form\b/i.test(generatedMarkup)) {
-        throw new Error("LLM template generation violated pay-per-call rules by emitting a user-facing form");
-      }
-      await db.query(
-        `INSERT INTO hugo_template_cache
-         (niche, design_fingerprint, baseof, city_hub, service_subpage,
-          cache_provider, cache_version, retrieval_method, confidence_score, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'llm', 'v1', 'generated', 0.7, now())
-         ON CONFLICT (niche) DO UPDATE SET
-           design_fingerprint = EXCLUDED.design_fingerprint,
-           baseof = EXCLUDED.baseof,
-           city_hub = EXCLUDED.city_hub,
-           service_subpage = EXCLUDED.service_subpage,
-           cache_provider = EXCLUDED.cache_provider,
-           cache_version = EXCLUDED.cache_version,
-           retrieval_method = EXCLUDED.retrieval_method,
-           confidence_score = EXCLUDED.confidence_score,
-           updated_at = now()`,
-        [
-          normalizeNiche(niche),
-          designFingerprint,
-          generatedTemplates.baseof,
-          generatedTemplates.city_hub,
-          generatedTemplates.service_subpage,
-        ]
-      );
-      hugoTemplates = {
-        design_fingerprint: designFingerprint,
-        ...generatedTemplates,
-      };
-    } else {
-      console.log("[Agent 3] Reusing cached Hugo templates");
+  const generateHugoTemplatesFromLlm = async () => {
+    const hugoPrompt = HUGO_TEMPLATE_PROMPT.replace("{design_spec}", designSpecSummary);
+    const templateLogger = createVerboseProviderLogger("[Agent 3][Design system][Hugo templates]");
+    let generatedTemplates;
+    try {
+      generatedTemplates = await llm.call({
+        prompt: hugoPrompt,
+        schema: HugoTemplateResponseSchema,
+        model: "haiku",
+        timeoutMs: AGENT3_TEMPLATE_TIMEOUT_MS,
+        logLabel: "[Agent 3][Design system][Hugo templates]",
+        onOutput: (chunk, stream) => templateLogger.onOutput(chunk, stream),
+      });
+    } finally {
+      templateLogger.flush();
     }
+    const generatedMarkup = [
+      generatedTemplates.baseof,
+      generatedTemplates.city_hub,
+      generatedTemplates.service_subpage,
+    ].join("\n");
+    if (/<form\b/i.test(generatedMarkup)) {
+      throw new Error("LLM template generation violated pay-per-call rules by emitting a user-facing form");
+    }
+    return {
+      design_fingerprint: designFingerprint,
+      ...generatedTemplates,
+    };
+  };
 
-    hugo.writeTemplate("_default/baseof.html", hugoTemplates.baseof);
-    hugo.writeTemplate("_default/list.html", hugoTemplates.city_hub);
-    hugo.writeTemplate("_default/single.html", hugoTemplates.service_subpage);
-    usedLlmTemplates = true;
-    console.log("[Agent 3] Wrote LLM-generated Hugo templates");
-  } catch (err) {
-    console.warn(`[Agent 3] LLM template generation failed, using hardcoded fallback: ${err instanceof Error ? err.message : err}`);
+  let hugoTemplates = templateCache.rows[0];
+  if (!hugoTemplates || hugoTemplates.design_fingerprint !== designFingerprint) {
+    hugoTemplates = await generateHugoTemplatesFromLlm();
+  } else {
+    console.log("[Agent 3] Reusing cached Hugo templates");
   }
 
-  if (!usedLlmTemplates) {
-  hugo.writeTemplate("_default/baseof.html", `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ if .Title }}{{ .Title }} | {{ end }}{{ .Site.Title }}</title>
-  <meta name="description" content="{{ .Params.description | default .Site.Params.tagline }}">
-  <link rel="canonical" href="{{ .Permalink }}">
-  <link rel="stylesheet" href="/css/main.css">
-  <link rel="stylesheet" href="/css/generated-theme.css">
-  {{ block "head" . }}{{ end }}
-</head>
-<body class="brand-shell">
-  {{ partial "header.html" . }}
-  <main>
-    {{ block "main" . }}{{ end }}
-  </main>
-  {{ partial "footer.html" . }}
-  {{ partial "cta-sticky.html" . }}
-  {{ block "schema" . }}
-    {{ partial "schema-jsonld.html" . }}
-  {{ end }}
-</body>
-</html>`);
+  let reviewedTemplateResult;
+  try {
+    reviewedTemplateResult = reviewGeneratedHugoTemplates({
+      baseof: hugoTemplates.baseof,
+      city_hub: hugoTemplates.city_hub,
+      service_subpage: hugoTemplates.service_subpage,
+    });
+  } catch (err) {
+    if (templateCache.rows[0] && hugoTemplates === templateCache.rows[0]) {
+      console.warn(
+        `[Agent 3][Design system][Template review] Cached template review failed, regenerating: ${err instanceof Error ? err.message : err}`
+      );
+      hugoTemplates = await generateHugoTemplatesFromLlm();
+      reviewedTemplateResult = reviewGeneratedHugoTemplates({
+        baseof: hugoTemplates.baseof,
+        city_hub: hugoTemplates.city_hub,
+        service_subpage: hugoTemplates.service_subpage,
+      });
+    } else {
+      throw err;
+    }
+  }
+  if (reviewedTemplateResult.repairsApplied.length > 0) {
+    console.log(
+      `[Agent 3][Design system][Template review] Applied repairs: ${reviewedTemplateResult.repairsApplied.join(", ")}`
+    );
+  } else {
+    console.log("[Agent 3][Design system][Template review] No repairs needed");
+  }
 
-  hugo.writeTemplate("_default/list.html", `{{ define "main" }}
-<article class="city-hub city-hub-premium">
-  <section class="hero hero-split">
-    <div class="container hero-grid">
-      <div class="hero-copy">
-        <p class="eyebrow">{{ .Params.city }} {{ .Params.state }} Pest Coverage</p>
-        <h1>{{ .Title }}</h1>
-        <p class="hero-subtitle">{{ .Params.description | default "${escapeHtml(heroHeadline)}" }}</p>
-        <p class="hero-support">${escapeHtml(secondaryHeadline)}</p>
-        <div class="hero-actions">
-          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">${escapeHtml(primaryCta)}</a>
-          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-secondary">${escapeHtml(secondaryCta)}</a>
-        </div>
-        <p class="cta-microcopy">${escapeHtml(ctaMicrocopyText)}</p>
-        {{ partial "cta-badge.html" . }}
-      </div>
-      <div class="hero-visual">
-        <img src="{{ .Params.hero_image }}" alt="{{ .Title }}">
-      </div>
-    </div>
-  </section>
+  await db.query(
+    `INSERT INTO hugo_template_cache
+     (niche, design_fingerprint, baseof, city_hub, service_subpage,
+      cache_provider, cache_version, retrieval_method, confidence_score, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'llm', 'v2', 'generated', 0.75, now())
+     ON CONFLICT (niche) DO UPDATE SET
+       design_fingerprint = EXCLUDED.design_fingerprint,
+       baseof = EXCLUDED.baseof,
+       city_hub = EXCLUDED.city_hub,
+       service_subpage = EXCLUDED.service_subpage,
+       cache_provider = EXCLUDED.cache_provider,
+       cache_version = EXCLUDED.cache_version,
+       retrieval_method = EXCLUDED.retrieval_method,
+       confidence_score = EXCLUDED.confidence_score,
+       updated_at = now()`,
+    [
+      normalizeNiche(niche),
+      designFingerprint,
+      reviewedTemplateResult.templates.baseof,
+      reviewedTemplateResult.templates.city_hub,
+      reviewedTemplateResult.templates.service_subpage,
+    ]
+  );
 
-  <section class="trust-ribbon">
-    <div class="container">
-      <ul class="trust-points">
-        ${trustMarkup}
-      </ul>
-    </div>
-  </section>
-
-  <section class="content-body">
-    <div class="container content-grid">
-      <div class="content-main">
-        {{ .Content }}
-      </div>
-      <aside class="content-side">
-        <div class="side-card">
-          <h2>{{ .Params.city }} Search Intent Snapshot</h2>
-          <p>The city hub is assembled around the primary keyword <strong>{{ .Params.target_keyword }}</strong> and uses the researched layout order to move visitors from local problem awareness into the strongest conversion action.</p>
-        </div>
-        <div class="side-card side-image">
-          <img src="{{ .Params.feature_image }}" alt="{{ .Title }}">
-        </div>
-      </aside>
-    </div>
-  </section>
-
-  {{ if .Pages }}
-  <section id="service-grid" class="services-grid services-grid-premium">
-    <div class="container">
-      <div class="section-intro">
-        <p class="eyebrow">Popular Treatments</p>
-        <h2>Targeted Services{{ if .Params.city }} in {{ .Params.city }}{{ end }}</h2>
-      </div>
-      <div class="grid">
-        {{ range .Pages }}
-        <a href="{{ .Permalink }}" class="service-card premium-card">
-          <p class="service-label">Fast Response</p>
-          <h3>{{ .Title }}</h3>
-          <p>{{ .Params.description }}</p>
-          <span class="card-cta">View Service Plan &rarr;</span>
-        </a>
-        {{ end }}
-      </div>
-    </div>
-  </section>
-  {{ end }}
-
-  <section class="faq-section spotlight-faq">
-    <div class="container">
-      <div class="faq-highlight">
-        <p class="eyebrow">Common Question</p>
-        <h2>${escapeHtml(faqQuestion)}</h2>
-        <p>${escapeHtml(faqAnswer)}</p>
-        <p class="faq-guarantee">${escapeHtml(guaranteeLead)}</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="cta-section cta-section-premium">
-    <div class="container">
-      <p class="eyebrow">Need Help Today?</p>
-      <h2>Talk to a local team that moves fast.</h2>
-      <p>Call for same-day scheduling, property-specific recommendations, and clear next steps before we start treatment.</p>
-      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call {{ .Site.Params.phone }}</a>
-      <p class="cta-microcopy">${escapeHtml(ctaMicrocopyText)}</p>
-      {{ partial "cta-badge.html" . }}
-    </div>
-  </section>
-</article>
-{{ end }}`);
-
-  hugo.writeTemplate("_default/single.html", `{{ define "main" }}
-<article class="service-page service-page-premium">
-  <section class="hero hero-split service-hero">
-    <div class="container hero-grid">
-      <div class="hero-copy">
-        <p class="eyebrow">{{ .Params.city }} {{ .Params.state }} Service</p>
-        <h1>{{ .Title }}</h1>
-        {{ if .Params.city }}
-        <p class="hero-subtitle">{{ .Params.pest_type | default "Pest" }} control built around the keyword target <strong>{{ .Params.target_keyword }}</strong> and the same conversion pattern defined in design research.</p>
-        {{ end }}
-        <div class="hero-actions">
-          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">${escapeHtml(primaryCta)}</a>
-          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-secondary">${escapeHtml(secondaryCta)}</a>
-        </div>
-        <p class="cta-microcopy">${escapeHtml(ctaMicrocopyText)}</p>
-        {{ partial "cta-badge.html" . }}
-      </div>
-      <div class="hero-visual">
-        <img src="{{ .Params.feature_image }}" alt="{{ .Title }}">
-      </div>
-    </div>
-  </section>
-
-  <section class="trust-ribbon">
-    <div class="container">
-      <ul class="trust-points">
-        ${trustMarkup}
-      </ul>
-    </div>
-  </section>
-
-  <section id="service-content" class="content-body">
-    <div class="container content-grid">
-      <div class="content-main">
-        {{ .Content }}
-      </div>
-      <aside class="content-side">
-        <div class="side-card">
-          <h2>Keyword-Driven Page Focus</h2>
-          <p>This service page exists because Agent 1 identified <strong>{{ .Params.target_keyword }}</strong> as a standalone search theme with its own treatment intent and URL path.</p>
-        </div>
-        <div class="side-card">
-          <h2>Design System Components</h2>
-          <ul class="mini-list">
-            <li>${escapeHtml(componentLabels[0] || "Hero section")}</li>
-            <li>${escapeHtml(componentLabels[1] || "Trust block")}</li>
-            <li>${escapeHtml(componentLabels[2] || "Primary CTA block")}</li>
-          </ul>
-        </div>
-      </aside>
-    </div>
-  </section>
-
-  {{ if .Params.faq }}
-  <section class="faq-section">
-    <div class="container">
-      <h2>Frequently Asked Questions</h2>
-      {{ partial "faq.html" . }}
-    </div>
-  </section>
-  {{ end }}
-
-  <section class="cta-section cta-section-premium">
-    <div class="container">
-      <p class="eyebrow">Same-Day Scheduling</p>
-      <h2>Get ahead of the infestation before it spreads.</h2>
-      <p>Call now for a fast inspection, practical treatment options, and a plan that fits your home or commercial property.</p>
-      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call {{ .Site.Params.phone }}</a>
-      <p class="cta-microcopy">${escapeHtml(ctaMicrocopyText)}</p>
-      {{ partial "cta-badge.html" . }}
-    </div>
-  </section>
-
-  <nav class="breadcrumb">
-    <div class="container">
-      <a href="/">Home</a> &rsaquo;
-      {{ if .Parent }}
-      <a href="{{ .Parent.Permalink }}">{{ .Parent.Title }}</a> &rsaquo;
-      {{ end }}
-      <span>{{ .Title }}</span>
-    </div>
-  </nav>
-</article>
-{{ end }}`);
-  } // end hardcoded fallback
+  hugo.writeTemplate("_default/baseof.html", reviewedTemplateResult.templates.baseof);
+  hugo.writeTemplate("_default/list.html", reviewedTemplateResult.templates.city_hub);
+  hugo.writeTemplate("_default/single.html", reviewedTemplateResult.templates.service_subpage);
+  console.log("[Agent 3] Wrote reviewed LLM-generated Hugo templates");
 
   hugo.writeStaticFile("css/generated-theme.css", `:root {
   --color-primary: ${primary};
@@ -1625,6 +1546,13 @@ async function applyDesignSystem(
   }
 }`);
 
+  console.log("[Agent 3][Design system][Template review] Running Hugo template validation...");
+  const templateValidation = await hugo.validateSite();
+  if (!templateValidation.success) {
+    throw new Error(`Generated Hugo templates failed validation: ${templateValidation.output}`);
+  }
+  console.log("[Agent 3][Design system][Template review] Hugo template validation passed");
+
   console.log(`[Agent 3] Applied generated design system for ${niche} (${designSpec.archetype})`);
   return {
     designSpec,
@@ -1691,6 +1619,15 @@ function getContentFilePath(hugoSitePath: string, relativePath: string): string 
   return path.join(hugoSitePath, "content", relativePath);
 }
 
+function contentFileHasPlaceholders(contentFilePath: string): boolean {
+  if (!fs.existsSync(contentFilePath)) {
+    return false;
+  }
+
+  const fileContent = fs.readFileSync(contentFilePath, "utf-8");
+  return findPlaceholderTokens([fileContent]).length > 0;
+}
+
 async function shouldSkipCheckpointedPage(
   db: DbClient,
   checkpoints: Awaited<ReturnType<typeof createCheckpointTracker>>,
@@ -1700,10 +1637,28 @@ async function shouldSkipCheckpointedPage(
 ): Promise<boolean> {
   const fileExists = fs.existsSync(contentFilePath);
   if (checkpoints.has(checkpointKey)) {
-    return fileExists;
+    if (!fileExists) {
+      return false;
+    }
+
+    if (contentFileHasPlaceholders(contentFilePath)) {
+      console.warn(
+        `[Agent 3] Checkpointed output contains placeholder tokens, regenerating: ${contentSlug}`
+      );
+      return false;
+    }
+
+    return true;
   }
 
   if (!fileExists) {
+    return false;
+  }
+
+  if (contentFileHasPlaceholders(contentFilePath)) {
+    console.warn(
+      `[Agent 3] Existing output contains placeholder tokens, regenerating: ${contentSlug}`
+    );
     return false;
   }
 
@@ -1842,19 +1797,22 @@ export async function runAgent3(
       return;
     }
 
-    const recentDeploysResult = await db.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count
-       FROM pages
-       WHERE niche = $1
-         AND created_at >= now() - interval '7 days'`,
-      [cfg.niche]
-    );
-    let newCitySlotsRemaining = Math.max(
-      0,
-      Number(cfg.maxNewCitiesPerWeek ?? 3) - Number(recentDeploysResult.rows[0]?.count ?? "0")
-    );
-    if (newCitySlotsRemaining === 0) {
-      console.warn("[Agent 3] Weekly new-city deployment cap reached. Skipping new city launches.");
+    let newCitySlotsRemaining = Number.POSITIVE_INFINITY;
+    if (cfg.enforceNewCityCap) {
+      const recentDeploysResult = await db.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+         FROM pages
+         WHERE niche = $1
+           AND created_at >= now() - interval '7 days'`,
+        [cfg.niche]
+      );
+      newCitySlotsRemaining = Math.max(
+        0,
+        Number(cfg.maxNewCitiesPerWeek ?? 3) - Number(recentDeploysResult.rows[0]?.count ?? "0")
+      );
+      if (newCitySlotsRemaining === 0) {
+        console.warn("[Agent 3] Weekly new-city deployment cap reached. Skipping new city launches.");
+      }
     }
 
     if (
@@ -1905,11 +1863,13 @@ export async function runAgent3(
         );
         const isExistingCity = existingPageResult.rows.length > 0;
         if (!isExistingCity) {
-          if (newCitySlotsRemaining <= 0) {
+          if (cfg.enforceNewCityCap && newCitySlotsRemaining <= 0) {
             console.warn(`[Agent 3] Skipping ${city}, ${state}; weekly new-city cap reached.`);
             return;
           }
-          newCitySlotsRemaining -= 1;
+          if (cfg.enforceNewCityCap) {
+            newCitySlotsRemaining -= 1;
+          }
         }
 
         const routeAssignments = deriveRouteAssignments(cityRow.url_mapping, citySlug);
@@ -2031,15 +1991,13 @@ export async function runAgent3(
             ]
           );
           if (!hubQuality.passed) {
-            const canRepairPlaceholders =
-              hubQuality.failures.length === 1 &&
-              hubQuality.failures.includes("placeholder_tokens");
-            if (!canRepairPlaceholders) {
+            const canAutoRepair = canAutoRepairQaFailures(hubQuality.failures);
+            if (!canAutoRepair) {
               throw new Error(`Hub page QA failed for ${city}: ${hubQuality.failures.join(", ")}`);
             }
 
             console.warn(
-              `[Agent 3] Hub page QA found placeholder tokens for ${city}; attempting repair`
+              `[Agent 3] Hub page QA found repairable issues for ${city}: ${hubQuality.failures.join(", ")}; attempting repair`
             );
             const repaired = await repairContentForQa(llm, {
               prompt: hubPrompt,
@@ -2048,6 +2006,7 @@ export async function runAgent3(
               minWordCount: cfg.minWordCountHub!,
               supplementalTexts: [JSON.stringify(hubSchemaTemplate)],
               failures: hubQuality.failures,
+              bannedPhrasesFound: hubQuality.metrics.bannedPhrasesFound,
               logLabel: `[Agent 3][Hub page repair][${city}]`,
               replacements: hubReplacements,
             });
@@ -2221,15 +2180,13 @@ export async function runAgent3(
             ]
           );
           if (!subQuality.passed) {
-            const canRepairPlaceholders =
-              subQuality.failures.length === 1 &&
-              subQuality.failures.includes("placeholder_tokens");
-            if (!canRepairPlaceholders) {
+            const canAutoRepair = canAutoRepairQaFailures(subQuality.failures);
+            if (!canAutoRepair) {
               throw new Error(`Subpage QA failed for ${city}/${pestType}: ${subQuality.failures.join(", ")}`);
             }
 
             console.warn(
-              `[Agent 3] Subpage QA found placeholder tokens for ${city}/${pestType}; attempting repair`
+              `[Agent 3] Subpage QA found repairable issues for ${city}/${pestType}: ${subQuality.failures.join(", ")}; attempting repair`
             );
             const repaired = await repairContentForQa(llm, {
               prompt: subPrompt,
@@ -2238,6 +2195,7 @@ export async function runAgent3(
               minWordCount: cfg.minWordCountSubpage!,
               supplementalTexts: [JSON.stringify(subSchemaTemplate)],
               failures: subQuality.failures,
+              bannedPhrasesFound: subQuality.metrics.bannedPhrasesFound,
               logLabel: `[Agent 3][Subpage repair][${city}/${pestType}]`,
               replacements: subReplacements,
             });
@@ -2326,11 +2284,7 @@ export async function runAgent3(
         console.log(`[Agent 3] Registered page ${pageUrl}`);
       };
 
-      if (cfg.deployLimiter) {
-        await cfg.deployLimiter.schedule(processCity);
-      } else {
-        await processCity();
-      }
+      await scheduleWithVerboseLimiter(cfg.deployLimiter, `${cityRow.city}, ${cityRow.state}`, processCity);
     }
 
     console.log("[Agent 3] Building Hugo site...");
@@ -2348,7 +2302,10 @@ export async function runAgent3(
         build_output_preview: buildResult.output.slice(0, 500),
       },
     });
-    const artifactQa = runBuiltArtifactQa(cfg.hugoSitePath);
+    const artifactQa = runBuiltArtifactQa(
+      cfg.hugoSitePath,
+      cityRows.map((row) => slugify(String(row.city ?? "")))
+    );
     if (!artifactQa.passed) {
       throw new Error(`Built artifact QA failed: ${artifactQa.failures.join(", ")}`);
     }
