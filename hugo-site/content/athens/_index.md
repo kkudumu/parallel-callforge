@@ -25,8 +25,79 @@
   - "athens/athens-rodent-control"
   - "athens/athens-silverfish-control"
 "draft": false
+"h1_title": "Professional Pest Control in Athens, GA"
+"subheadline": "Fast, Professional Pest Control in Athens, GA"
+"disclaimer_text": "This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance. The specific services, pricing, scheduling, and service guarantees are determined by the independent provider dispatched to your location."
+"mid_cta_text": "Professional pest control available for homes and businesses in Athens. Vetted technician dispatched to your location."
+"service_area_copy": "Our pest control network covers Athens and the surrounding GA communities. Call to confirm coverage in your neighborhood."
+"hero_bullets": 
+  - "Vetted & insured professionals"
+  - "Same-day scheduling available"
+  - "Child and pet safe treatments"
+"services": 
+  -
+    "icon": "🐀"
+    "name": "Rodent Control"
+    "description": "Professional mouse and rat removal with exclusion sealing to prevent re-entry."
+    "link": "/athens/rodent-control/"
+  -
+    "icon": "🐛"
+    "name": "Silverfish Control"
+    "description": "Targeted treatment for silverfish infestations in basements, bathrooms, and storage areas."
+    "link": "/athens/silverfish-control/"
+  -
+    "icon": "🐜"
+    "name": "Ant Control"
+    "description": "Eliminate ant colonies at the source with professional-grade baiting and barrier treatments."
+    "link": "/athens/ant-control/"
+  -
+    "icon": "🕷️"
+    "name": "Spider Control"
+    "description": "Remove spiders and their webs with targeted interior and exterior treatments."
+    "link": "/athens/spider-control/"
+  -
+    "icon": "🪳"
+    "name": "Cockroach Control"
+    "description": "Comprehensive cockroach elimination using gel baits, growth regulators, and exclusion methods."
+    "link": "/athens/cockroach-control/"
+  -
+    "icon": "🪵"
+    "name": "Termite Control"
+    "description": "Protect your home from structural damage with professional termite inspection and treatment."
+    "link": "/athens/termite-control/"
+"faqs": 
+  -
+    "question": "How quickly can I get pest control service in Athens?"
+    "answer": "Most service requests in Athens, GA are scheduled within 24-48 hours. Same-day service may be available depending on technician availability in your area."
+  -
+    "question": "What pests do you treat in Athens?"
+    "answer": "Our network of local professionals handles common household pests including rodents (mice and rats), silverfish, ants, spiders, cockroaches, and more. Call to discuss your specific pest issue."
+  -
+    "question": "Are the treatments safe for kids and pets?"
+    "answer": "Yes. The technicians in our network use EPA-registered products and follow all safety protocols. Treatments are designed to be effective against pests while remaining safe for your family and pets."
+  -
+    "question": "How much does pest control cost in Athens?"
+    "answer": "Pricing varies based on the type of pest, severity of the infestation, and size of your property. The service provider dispatched to your location will provide a specific quote before beginning work."
+  -
+    "question": "Do I need to leave my home during treatment?"
+    "answer": "In most cases, no. Your technician will advise you on any specific precautions for your treatment type. Some treatments may require brief periods of ventilation."
+  -
+    "question": "What if the pests come back after treatment?"
+    "answer": "Many providers in our network offer follow-up treatments or satisfaction guarantees. Ask your technician about their specific warranty and retreatment policies."
+"nearby_cities": 
+  -
+    "name": "Deland"
+    "slug": "deland"
+  -
+    "name": "Lenexa"
+    "slug": "lenexa"
+  -
+    "name": "Port Orange"
+    "slug": "port-orange"
+  -
+    "name": "Shawnee"
+    "slug": "shawnee"
 ---
-
 Rodents in Athens are a year-round problem. With the University of Georgia anchoring a dense urban core, green corridors along the North Oconee River, and a mix of aging bungalows and newer construction, mice and rats have no shortage of habitat—and plenty of motivation to move inside your home when the temperature drops.
 
 Our locally operated team serves Clarke County homeowners with licensed, household-safe rodent control. We've worked in Five Points bungalows, Normaltown rental houses, and new construction along the east side of town. Whatever the age of your home, rodents can get in—and getting them out requires a methodical approach.
@@ -130,5 +201,4 @@ If you're seeing signs of a rodent problem in your home, don't let it go another
 We route calls locally. You'll speak directly with a licensed professional who knows Clarke County—not a voicemail box or a national dispatch queue.
 
 ---
-
 *[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site].*

@@ -15,6 +15,7 @@ import {
   createCheckpointTracker,
 } from "../../shared/checkpoints.js";
 import type { OfferProfile } from "../../shared/offer-profiles.js";
+import { serviceSlugToLabel } from "../../shared/offer-profiles.js";
 import type { VerticalProfile } from "../../shared/vertical-profiles.js";
 import { resolveVerticalStrategy } from "../../shared/vertical-strategies.js";
 import { HUGO_TEMPLATE_PROMPT } from "./prompts.js";
@@ -582,6 +583,89 @@ function asSeasonalMonths(value: unknown): Array<{
 
   return [];
 }
+
+const PEST_ICON_MAP: Record<string, string> = {
+  ants: "🐜",
+  ant: "🐜",
+  spiders: "🕷️",
+  spider: "🕷️",
+  cockroaches: "🪳",
+  cockroach: "🪳",
+  roach: "🪳",
+  termites: "🪵",
+  termite: "🪵",
+  mice: "🐭",
+  mouse: "🐭",
+  rats: "🐀",
+  rat: "🐀",
+  rodent: "🐀",
+  "rodent-control": "🐀",
+  silverfish: "🐛",
+  earwigs: "🪲",
+  earwig: "🪲",
+  centipedes: "🐛",
+  centipede: "🐛",
+  millipedes: "🐛",
+  millipede: "🐛",
+  "bed-bugs": "🛏️",
+  "bed-bug": "🛏️",
+  moths: "🦋",
+  moth: "🦋",
+  "clothes-moths": "🦋",
+  crickets: "🦗",
+  cricket: "🦗",
+  "house-crickets": "🦗",
+  fleas: "🔬",
+  flea: "🔬",
+  mosquitoes: "🦟",
+  mosquito: "🦟",
+  wasps: "🐝",
+  wasp: "🐝",
+  bees: "🐝",
+  bee: "🐝",
+};
+
+function getPestIcon(pestSlug: string): string {
+  const normalized = pestSlug.toLowerCase().replace(/[^a-z-]/g, "");
+  if (PEST_ICON_MAP[normalized]) {
+    return PEST_ICON_MAP[normalized];
+  }
+  // Try matching partial keys
+  for (const [key, icon] of Object.entries(PEST_ICON_MAP)) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return icon;
+    }
+  }
+  return "🛡️";
+}
+
+function getPestDescription(pestName: string): string {
+  const lower = pestName.toLowerCase();
+  if (lower.includes("ant")) return "Fast-acting ant control for homes and yards.";
+  if (lower.includes("spider")) return "Safe spider removal for families and pets.";
+  if (lower.includes("cockroach") || lower.includes("roach")) return "Thorough cockroach elimination and prevention.";
+  if (lower.includes("termite")) return "Protect your home from termite damage.";
+  if (lower.includes("rodent") || lower.includes("mouse") || lower.includes("mice") || lower.includes("rat")) return "Professional rodent control and exclusion.";
+  if (lower.includes("silverfish")) return "Targeted silverfish treatment for your home.";
+  if (lower.includes("bed bug") || lower.includes("bed-bug")) return "Complete bed bug elimination services.";
+  if (lower.includes("mosquito")) return "Reduce mosquito populations around your property.";
+  if (lower.includes("flea")) return "Effective flea treatment for homes with pets.";
+  if (lower.includes("wasp") || lower.includes("bee")) return "Safe removal of stinging insect nests.";
+  if (lower.includes("moth")) return "Moth control for closets and pantries.";
+  if (lower.includes("cricket")) return "Cricket removal to restore quiet in your home.";
+  if (lower.includes("earwig")) return "Earwig control inside and outside your home.";
+  if (lower.includes("centipede") || lower.includes("millipede")) return "Centipede and millipede removal services.";
+  return `Professional ${pestName.toLowerCase()} control services.`;
+}
+
+// States that require a pest control business license for advertising/operation
+const LICENSE_REQUIRED_STATES = new Set([
+  "CA", "FL", "TX", "NY", "IL", "PA", "OH", "GA", "NC", "MI",
+  "NJ", "VA", "WA", "AZ", "MA", "TN", "IN", "MO", "MD", "WI",
+  "CO", "MN", "SC", "AL", "LA", "KY", "OR", "OK", "CT", "UT",
+  "IA", "NV", "AR", "MS", "KS", "NM", "NE", "WV", "ID", "HI",
+  "NH", "ME", "MT", "RI", "DE", "SD", "ND", "AK", "VT", "WY", "DC",
+]);
 
 function escapeHtml(text: string): string {
   return text
@@ -1906,6 +1990,14 @@ export async function runAgent3(
           hubKeyword
         );
 
+        // Compute service clusters early so hub page can reference them
+        const serviceClusterTypes = orderedClusters.filter(
+          (c: any) =>
+            isServiceCluster(c, city, hubKeyword) &&
+            findRouteAssignment(c, routeAssignments) &&
+            isAllowedServiceCluster(c, cfg.offerProfile, cfg.verticalProfile)
+        );
+
         const hubCheckpointKey = `hub:${citySlug}`;
         const hubContentPath = getContentFilePath(cfg.hugoSitePath, `${citySlug}/_index.md`);
         const shouldSkipHub = await shouldSkipCheckpointedPage(
@@ -2039,9 +2131,60 @@ export async function runAgent3(
             "city_hub",
             city
           );
+          // Build services grid from service clusters for the hub page
+          const hubServices = serviceClusterTypes.slice(0, 8).map((cluster: any) => {
+            const pestName = serviceSlugToLabel(cluster.cluster_name);
+            const svcSlug = resolveServiceSlug(cluster, routeAssignments);
+            return {
+              icon: getPestIcon(cluster.cluster_name),
+              name: pestName,
+              description: getPestDescription(pestName),
+              link: `/${citySlug}/${svcSlug}/`,
+            };
+          });
+
+          // Build nearby cities list from other cities in this build
+          const nearbyCities = cityRows
+            .filter((row: any) => String(row.city ?? "").trim().toLowerCase() !== city.trim().toLowerCase())
+            .map((row: any) => ({
+              name: String(row.city ?? "").trim(),
+              slug: slugify(String(row.city ?? "")),
+            }))
+            .slice(0, 12);
+
+          // Resolve disclaimer text from offer profile or use generic referral disclaimer
+          const disclaimerText =
+            cfg.offerProfile?.constraints?.required_disclaimer?.trim() ||
+            `${cfg.offerProfile?.constraints?.required_disclaimer?.trim() ? "" : ""}This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance. The specific services, pricing, scheduling, and service guarantees are determined by the independent provider dispatched to your location.`.trim();
+
+          // Build FAQ data from LLM-generated content and copy framework
+          const hubFaqs = (finalHubContent.faq ?? []).length > 0
+            ? finalHubContent.faq!
+            : designSystem.copyFramework.faq_templates.slice(0, 6).map((tpl) => ({
+                question: tpl.question.replace(/\{city\}/g, city).replace(/\{service\}/g, cfg.niche),
+                answer: tpl.answer_template.replace(/\{city\}/g, city).replace(/\{phone\}/g, cfg.phone ?? "").replace(/\{service\}/g, cfg.niche),
+              }));
+
+          // Determine license status for this state
+          const hasLicense = false; // Configurable: set true when business obtains a pest control license
+          const stateRequiresLicense = LICENSE_REQUIRED_STATES.has(state);
+          if (stateRequiresLicense && !hasLicense) {
+            console.log(`[Agent 3] Note: ${state} requires pest control license. Site will not display license claims for ${city}.`);
+          }
+
+          // Derive mid-CTA text and service area copy (license-aware)
+          const midCtaText = hasLicense
+            ? `Professional pest control available for homes and businesses in ${city}. Licensed technician dispatched to your location.`
+            : `Professional pest control available for homes and businesses in ${city}. Vetted technician dispatched to your location.`;
+          const serviceAreaCopy = `Our pest control network covers ${city} and the surrounding ${state} communities. Call to confirm coverage in your neighborhood.`;
+
           hugo.writeContentFile(hubSlug, {
             title: finalHubContent.title,
             description: finalHubContent.meta_description,
+            h1_title: finalHubContent.title,
+            subheadline: hasLicense
+              ? `Fast, Licensed Pest Control in ${city}, ${state}`
+              : `Fast, Professional Pest Control in ${city}, ${state}`,
             city: city,
             state: state,
             type: "city_hub",
@@ -2051,6 +2194,23 @@ export async function runAgent3(
             schema_template: hubSchemaTemplate,
             seasonal_focus: hubSeasonalSummary,
             approved_routes: approvedRoutes,
+            services: hubServices,
+            faqs: hubFaqs,
+            nearby_cities: nearbyCities,
+            disclaimer_text: disclaimerText,
+            mid_cta_text: midCtaText,
+            service_area_copy: serviceAreaCopy,
+            hero_bullets: hasLicense
+              ? [
+                  "Licensed & insured professionals",
+                  "Same-day scheduling available",
+                  "Child and pet safe treatments",
+                ]
+              : [
+                  "Vetted & insured professionals",
+                  "Same-day scheduling available",
+                  "Child and pet safe treatments",
+                ],
             draft: false,
           }, finalHubContent.content);
 
@@ -2074,13 +2234,6 @@ export async function runAgent3(
             city,
           });
         }
-
-        const serviceClusterTypes = orderedClusters.filter(
-          (c: any) =>
-            isServiceCluster(c, city, hubKeyword) &&
-            findRouteAssignment(c, routeAssignments) &&
-            isAllowedServiceCluster(c, cfg.offerProfile, cfg.verticalProfile)
-        );
 
         await mapWithConcurrency(
           serviceClusterTypes.slice(0, 5),
@@ -2229,18 +2382,51 @@ export async function runAgent3(
             city,
             pestType
           );
+          // Build subpage FAQs from LLM content or copy framework templates
+          const subFaqs = (finalSubContent.faq ?? []).length > 0
+            ? finalSubContent.faq!
+            : designSystem.copyFramework.faq_templates
+                .filter((tpl) => {
+                  const lower = tpl.question.toLowerCase();
+                  return lower.includes("{service}") || lower.includes("{pest}") || lower.includes("pest");
+                })
+                .slice(0, 4)
+                .map((tpl) => ({
+                  question: tpl.question
+                    .replace(/\{city\}/g, city)
+                    .replace(/\{service\}/g, pestType)
+                    .replace(/\{pest\}/g, pestType),
+                  answer: tpl.answer_template
+                    .replace(/\{city\}/g, city)
+                    .replace(/\{phone\}/g, cfg.phone ?? "")
+                    .replace(/\{service\}/g, pestType)
+                    .replace(/\{pest\}/g, pestType),
+                }));
+
+          const subDisclaimerText =
+            cfg.offerProfile?.constraints?.required_disclaimer?.trim() ||
+            `This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance.`;
+
           hugo.writeContentFile(`${citySlug}/${pestSlug}.md`, {
             title: finalSubContent.title,
             description: finalSubContent.meta_description,
+            h1_title: finalSubContent.title,
+            subheadline: `Expert ${serviceSlugToLabel(pestType)} Services in ${city}`,
             city: city,
             state: state,
+            region: `${city}, ${state}`,
             pest_type: pestType,
+            pest_name: serviceSlugToLabel(pestType),
+            pest_icon: getPestIcon(pestType),
             type: "service_subpage",
             target_keyword: cluster.primary_keyword,
             hero_image: subHeroImage,
             feature_image: subFeatureImage,
             schema_template: subSchemaTemplate,
             seasonal_focus: serviceSeasonalSummary,
+            faqs: subFaqs,
+            disclaimer_text: subDisclaimerText,
+            service_cities: cityRows.map((row: any) => String(row.city ?? "").trim()).slice(0, 10),
             draft: false,
           }, finalSubContent.content);
 
@@ -2286,6 +2472,140 @@ export async function runAgent3(
 
       await scheduleWithVerboseLimiter(cfg.deployLimiter, `${cityRow.city}, ${cityRow.state}`, processCity);
     }
+
+    // Write site-level navigation data (footer links for services + cities)
+    const allServiceSlugs = new Set<string>();
+    const allCitySlugs: Array<{ name: string; slug: string }> = [];
+    for (const cityRow of cityRows) {
+      const rowCity = String(cityRow.city ?? "").trim();
+      const rowCitySlug = slugify(rowCity);
+      allCitySlugs.push({ name: rowCity, slug: rowCitySlug });
+
+      const rowClusterIds = Array.isArray(cityRow.keyword_cluster_ids) ? cityRow.keyword_cluster_ids : [];
+      const rowClusters = (await db.query("SELECT * FROM keyword_clusters WHERE id = ANY($1::uuid[])", [rowClusterIds])).rows;
+      const rowRoutes = deriveRouteAssignments(cityRow.url_mapping, rowCitySlug);
+      for (const cluster of rowClusters) {
+        if (
+          isServiceCluster(cluster, rowCity, "") &&
+          isAllowedServiceCluster(cluster, cfg.offerProfile, cfg.verticalProfile)
+        ) {
+          const svcSlug = resolveServiceSlug(cluster, rowRoutes);
+          const svcName = serviceSlugToLabel(String(cluster.cluster_name ?? ""));
+          allServiceSlugs.add(`${svcSlug}|${svcName}`);
+        }
+      }
+    }
+
+    const uniqueServices = [...allServiceSlugs].slice(0, 10).map((entry) => {
+      const [svcSlug, svcName] = entry.split("|");
+      return { slug: svcSlug, name: svcName };
+    });
+
+    // Write Hugo data files for footer navigation
+    const dataDir = path.join(cfg.hugoSitePath, "data");
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dataDir, "nav.json"),
+      JSON.stringify({
+        pest_services: uniqueServices,
+        service_cities: allCitySlugs.slice(0, 12),
+      }, null, 2),
+      "utf-8"
+    );
+
+    // Update config.toml with site-level params for footer
+    const configPath = path.join(cfg.hugoSitePath, "config.toml");
+    let configContent = fs.readFileSync(configPath, "utf-8");
+
+    // Remove fake license number if present
+    configContent = configContent.replace(/\s*license_number\s*=\s*"[^"]*"\s*\n?/g, "\n");
+
+    // Ensure has_license = false is set
+    if (!configContent.includes("has_license")) {
+      configContent = configContent.replace(
+        "[params]\n",
+        "[params]\n  has_license = false\n"
+      );
+    }
+
+    fs.writeFileSync(configPath, configContent, "utf-8");
+
+    // Extract business name from config for homepage generation
+    const businessName = configContent.match(/business_name\s*=\s*"([^"]*)"/)?.[1] ?? "Extermanation";
+
+    // Generate site-level homepage (content/_index.md) aggregating all cities and services
+    const hasLicenseSite = false; // Set true when business obtains a pest control license
+    const homepageDisclaimer =
+      cfg.offerProfile?.constraints?.required_disclaimer?.trim() ||
+      "This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance. The specific services, pricing, scheduling, and service guarantees are determined by the independent provider dispatched to your location.";
+
+    // Build services grid for homepage from aggregated unique services
+    const firstCitySlug = allCitySlugs.length > 0 ? allCitySlugs[0].slug : "";
+    const homepageServices = uniqueServices.slice(0, 8).map((svc) => ({
+      icon: getPestIcon(svc.slug),
+      name: svc.name,
+      description: getPestDescription(svc.name),
+      link: `/${firstCitySlug}/${svc.slug}/`,
+    }));
+
+    // Build nearby cities for homepage from all processed cities
+    const homepageNearbyCities = allCitySlugs.slice(0, 12).map((c) => ({
+      name: c.name,
+      slug: c.slug,
+    }));
+
+    // Derive state list for homepage copy
+    const uniqueStates = [...new Set(cityRows.map((row: any) => String(row.state ?? "").trim()).filter(Boolean))];
+    const stateList = uniqueStates.length > 0 ? uniqueStates.join(", ") : "your area";
+
+    // Build homepage FAQs
+    const homepageFaqs = [
+      { question: "What areas do you serve?", answer: `Our pest control network covers communities across ${stateList}. We currently serve ${allCitySlugs.map((c) => c.name).join(", ")}, with more locations coming soon.` },
+      { question: "How quickly can I get service?", answer: "Most service requests are scheduled within 24-48 hours. Same-day service may be available depending on technician availability in your area." },
+      { question: "What pests do you treat?", answer: "Our network of local professionals handles common household pests including rodents (mice and rats), silverfish, ants, spiders, cockroaches, termites, and more. Call to discuss your specific pest issue." },
+      { question: "Are the treatments safe for kids and pets?", answer: "Yes. The technicians in our network use EPA-registered products and follow all safety protocols. Treatments are designed to be effective against pests while remaining safe for your family and pets." },
+      { question: "How much does pest control cost?", answer: "Pricing varies based on the type of pest, severity of the infestation, and size of your property. The service provider dispatched to your location will provide a specific quote before beginning work." },
+      { question: "What if the pests come back after treatment?", answer: "Many providers in our network offer follow-up treatments or satisfaction guarantees. Ask your technician about their specific warranty and retreatment policies." },
+    ];
+
+    const homepageContent = `${businessName} connects homeowners with vetted, local pest control professionals who know your area. Whether you're dealing with rodents in the attic, ants in the kitchen, or termites threatening your foundation, our network of qualified technicians provides fast, effective treatment using EPA-registered products that are safe for your family and pets.
+
+## Coverage Across ${uniqueStates.length > 1 ? `${uniqueStates.length} States` : "Your Area"}
+
+Our service network spans communities in ${stateList}. Each technician in our network is locally based, insured, and experienced with the specific pest pressures in your region.
+
+## How It Works
+
+Call the number on this page and describe your pest problem. We match you with a qualified local technician who can schedule an inspection — often within 24-48 hours. Your technician handles everything from initial assessment through treatment and follow-up, with transparent pricing provided before any work begins.
+
+## Commitment to Safety
+
+Every technician in our network uses EPA-registered products applied according to manufacturer specifications. Treatments are selected to be effective against target pests while minimizing exposure risk to children, pets, and the surrounding environment.`;
+
+    hugo.writeContentFile("_index.md", {
+      title: `Professional Pest Control Services | ${businessName}`,
+      description: `${businessName} connects you with vetted local pest control professionals in ${stateList}. Same-day scheduling available. Call now.`,
+      type: "city_hub",
+      h1_title: "Professional Pest Control Services",
+      subheadline: hasLicenseSite
+        ? `Fast, Licensed Pest Control Across ${stateList}`
+        : `Fast, Reliable Pest Control Across ${stateList}`,
+      hero_image: `/images/generated/${firstCitySlug}-hub-hero.svg`,
+      feature_image: `/images/generated/${firstCitySlug}-hub-feature.svg`,
+      hero_bullets: hasLicenseSite
+        ? ["Licensed & insured professionals", "Same-day scheduling available", "Child and pet safe treatments"]
+        : ["Vetted & insured professionals", "Same-day scheduling available", "Child and pet safe treatments"],
+      services: homepageServices,
+      faqs: homepageFaqs,
+      nearby_cities: homepageNearbyCities,
+      disclaimer_text: homepageDisclaimer,
+      mid_cta_text: hasLicenseSite
+        ? "Professional pest control available for homes and businesses across our service areas. Licensed technician dispatched to your location."
+        : "Professional pest control available for homes and businesses across our service areas. Vetted technician dispatched to your location.",
+      service_area_copy: `Our pest control network covers communities in ${stateList}. Call to confirm coverage in your neighborhood.`,
+      draft: false,
+    }, homepageContent);
+    console.log("[Agent 3] Generated homepage _index.md");
 
     console.log("[Agent 3] Building Hugo site...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hugo build", detail: "Compiling site", timestamp: Date.now() });

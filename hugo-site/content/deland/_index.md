@@ -25,8 +25,79 @@
   - "deland/rodent-control-services-deland"
   - "deland/silverfish-control-services-deland"
 "draft": false
+"h1_title": "Professional Pest Control in Deland, FL"
+"subheadline": "Fast, Professional Pest Control in Deland, FL"
+"disclaimer_text": "This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance. The specific services, pricing, scheduling, and service guarantees are determined by the independent provider dispatched to your location."
+"mid_cta_text": "Professional pest control available for homes and businesses in Deland. Vetted technician dispatched to your location."
+"service_area_copy": "Our pest control network covers Deland and the surrounding FL communities. Call to confirm coverage in your neighborhood."
+"hero_bullets": 
+  - "Vetted & insured professionals"
+  - "Same-day scheduling available"
+  - "Child and pet safe treatments"
+"services": 
+  -
+    "icon": "🐀"
+    "name": "Rodent Control"
+    "description": "Professional mouse and rat removal with exclusion sealing to prevent re-entry."
+    "link": "/deland/rodent-control/"
+  -
+    "icon": "🐛"
+    "name": "Silverfish Control"
+    "description": "Targeted treatment for silverfish infestations in basements, bathrooms, and storage areas."
+    "link": "/deland/silverfish-control/"
+  -
+    "icon": "🐜"
+    "name": "Ant Control"
+    "description": "Eliminate ant colonies at the source with professional-grade baiting and barrier treatments."
+    "link": "/deland/ant-control/"
+  -
+    "icon": "🕷️"
+    "name": "Spider Control"
+    "description": "Remove spiders and their webs with targeted interior and exterior treatments."
+    "link": "/deland/spider-control/"
+  -
+    "icon": "🪳"
+    "name": "Cockroach Control"
+    "description": "Comprehensive cockroach elimination using gel baits, growth regulators, and exclusion methods."
+    "link": "/deland/cockroach-control/"
+  -
+    "icon": "🪵"
+    "name": "Termite Control"
+    "description": "Protect your home from structural damage with professional termite inspection and treatment."
+    "link": "/deland/termite-control/"
+"faqs": 
+  -
+    "question": "How quickly can I get pest control service in Deland?"
+    "answer": "Most service requests in Deland, FL are scheduled within 24-48 hours. Same-day service may be available depending on technician availability in your area."
+  -
+    "question": "What pests do you treat in Deland?"
+    "answer": "Our network of local professionals handles common household pests including rodents (mice and rats), silverfish, ants, spiders, cockroaches, and more. Call to discuss your specific pest issue."
+  -
+    "question": "Are the treatments safe for kids and pets?"
+    "answer": "Yes. The technicians in our network use EPA-registered products and follow all safety protocols. Treatments are designed to be effective against pests while remaining safe for your family and pets."
+  -
+    "question": "How much does pest control cost in Deland?"
+    "answer": "Pricing varies based on the type of pest, severity of the infestation, and size of your property. The service provider dispatched to your location will provide a specific quote before beginning work."
+  -
+    "question": "Do I need to leave my home during treatment?"
+    "answer": "In most cases, no. Your technician will advise you on any specific precautions for your treatment type. Some treatments may require brief periods of ventilation."
+  -
+    "question": "What if the pests come back after treatment?"
+    "answer": "Many providers in our network offer follow-up treatments or satisfaction guarantees. Ask your technician about their specific warranty and retreatment policies."
+"nearby_cities": 
+  -
+    "name": "Athens"
+    "slug": "athens"
+  -
+    "name": "Lenexa"
+    "slug": "lenexa"
+  -
+    "name": "Port Orange"
+    "slug": "port-orange"
+  -
+    "name": "Shawnee"
+    "slug": "shawnee"
 ---
-
 # Deland Rodent Control Services
 
 Florida's subtropical climate makes Deland an ideal year-round environment for rodents. Roof rats, Norway rats, and house mice move fast — from attic insulation to kitchen pantries — and what starts as a minor nuisance can become a full infestation within weeks. If you've heard scratching behind walls or spotted droppings near your appliances, this is not a wait-and-see situation.
@@ -36,7 +107,6 @@ We connect Deland homeowners with state-licensed, background-checked pest contro
 **Licensed & Insured | 4.9★ Rating on Google (200+ Reviews) | Serving Deland Homeowners for 15+ Years**
 
 ---
-
 ## Why Rodents Are a Persistent Problem in Deland
 
 Deland sits in the heart of Central Florida, surrounded by the wetlands and floodplains of the St. Johns River basin and bordered by Lake Beresford and Lake Winnemissett. This water-rich geography provides ideal breeding habitat for rodents that thrive in warm, humid environments.
@@ -52,7 +122,6 @@ The mature tree canopy throughout older residential neighborhoods — including 
 All three species gnaw through electrical wiring, contaminate food and surfaces, and spread pathogens. Early professional intervention prevents the structural and health damage from compounding.
 
 ---
-
 ## Seasonal Rodent Activity in Deland
 
 ### Spring (March–May): Peak Entry Season
@@ -70,7 +139,6 @@ Deland summers bring intense heat and humidity — conditions that accelerate ro
 When temperatures drop into the 50s during Deland's mild winters, rodents pursue warm indoor shelter. Communities near Lake Beresford Estates and along Woodland Boulevard typically see increased mouse and rat activity from November through February. Homeowners in these areas often first notice droppings, gnaw marks, or nighttime sounds in the walls during these cooler months.
 
 ---
-
 ## Our Rodent Control Process
 
 Every technician in our provider network follows a structured, multi-step approach built around Deland's specific pest pressures.
@@ -92,7 +160,6 @@ Treatment may include snap traps, enclosed bait stations, or a combination appro
 Rodent control requires follow-through. Your provider returns to check traps, monitor bait station activity, and confirm exclusion points are holding — ensuring the problem is resolved, not just reduced.
 
 ---
-
 ## Signs You Need Rodent Control Now
 
 Call a professional if you notice any of the following:
@@ -105,7 +172,6 @@ Call a professional if you notice any of the following:
 - Damaged wiring or chewed pipe insulation (this is a fire and water risk — contact a professional immediately)
 
 ---
-
 ## Serving Deland and Surrounding Volusia County Communities
 
 Our licensed provider network serves residential properties across Deland and the surrounding area, including:
@@ -117,7 +183,6 @@ Our licensed provider network serves residential properties across Deland and th
 - Nearby communities including Orange City, DeBary, and Deltona
 
 ---
-
 ## Call for Rodent Control in Deland Today
 
 Rodents are not a problem that resolves on its own. Every week without treatment means more droppings, more structural damage, and a larger population to eliminate.
@@ -129,5 +194,4 @@ Talk to a local expert today. We'll connect you with a state-licensed technician
 **State-Licensed Technicians | Household-Safe, EPA-Registered Methods | Fast Local Routing**
 
 ---
-
 *[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site].*

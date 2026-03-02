@@ -31,8 +31,32 @@
         "name": "GA"
 "seasonal_focus": "January: focus on mice, rats, cockroaches; message = prevention and early treatment — emphasize household safety and protecting the family during indoor-heavy winter months | February: focus on mice, rats, cockroaches; message = prevention with urgency — termite awareness campaign aligns with national awareness; reinforce rodent exclusion before spring thaw opens new entry points | September: focus on mice, rats, spiders; message = prevention — September is the highest-value month for rodent prevention content; homeowners are receptive to proactive messaging before cold weather drives pest indoors"
 "draft": false
+"pest_name": "Silverfish Control"
+"pest_icon": "🐛"
+"h1_title": "Silverfish Control in Athens, GA"
+"subheadline": "Professional Silverfish Control for Athens Homes"
+"disclaimer_text": "This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance. The specific services, pricing, scheduling, and service guarantees are determined by the independent provider dispatched to your location."
+"region": "GA"
+"faqs": 
+  -
+    "question": "How do I know if I have silverfish in my Athens home?"
+    "answer": "Common signs include damage to paper, fabrics, and stored goods, as well as small droppings and shed skins in dark, humid areas. A professional inspection can confirm the extent of any infestation."
+  -
+    "question": "How much does silverfish treatment cost?"
+    "answer": "Treatment costs vary based on infestation severity and property size. Your local technician will assess the situation and provide a detailed quote before starting work."
+  -
+    "question": "How long does silverfish treatment take?"
+    "answer": "Initial treatment typically takes 1-2 hours depending on your home's size. Follow-up visits may be recommended to ensure complete elimination."
+  -
+    "question": "Is silverfish treatment safe for my family?"
+    "answer": "Yes. Technicians use EPA-registered products applied according to label directions. Treatments are designed to target pests while remaining safe for people and pets."
+"service_cities": 
+  - "Athens"
+  - "Deland"
+  - "Lenexa"
+  - "Port Orange"
+  - "Shawnee"
 ---
-
 Athens silverfish control is not just about killing the insects you can see. It is about finding the moisture, food sources, and hiding spots that let them keep breeding behind walls, under sinks, and inside storage areas. Silverfish are small, fast-moving pests that do most of their damage quietly. Homeowners usually notice them after paper goods are chewed, pantry items are contaminated, or books, boxes, and fabrics start showing irregular scraping damage.
 
 If you are seeing these pests indoors, the right response is a targeted inspection followed by treatment and moisture correction. In Athens, the climate gives silverfish exactly what they want for much of the year: humidity, sheltered voids, and steady access to starchy materials. That makes professional control especially important in older homes, crawlspace homes, and properties with bathrooms, laundry rooms, basements, or closets that stay damp.

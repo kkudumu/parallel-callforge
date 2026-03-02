@@ -3,12 +3,13 @@ languageCode = "en-us"
 title = "Extermanation - Professional Pest Control"
 
 [params]
+  has_license = false
+  service_area = "Kansas, Florida, and Georgia"
+  address = "Serving multiple locations"
   phone = "(555) 123-4567"
   phone_raw = "5551234567"
   business_name = "Extermanation"
   tagline = "Local Pest Control Experts"
-  license_number = "CA-PCO-12345"
-
 [markup]
   [markup.goldmark]
     [markup.goldmark.renderer]

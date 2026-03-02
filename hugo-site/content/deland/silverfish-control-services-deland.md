@@ -31,8 +31,32 @@
         "name": "FL"
 "seasonal_focus": "January: focus on mice, rats, cockroaches; message = prevention and early treatment — emphasize household safety and protecting the family during indoor-heavy winter months | February: focus on mice, rats, cockroaches; message = prevention with urgency — termite awareness campaign aligns with national awareness; reinforce rodent exclusion before spring thaw opens new entry points | September: focus on mice, rats, spiders; message = prevention — September is the highest-value month for rodent prevention content; homeowners are receptive to proactive messaging before cold weather drives pest indoors"
 "draft": false
+"pest_name": "Silverfish Control"
+"pest_icon": "🐛"
+"h1_title": "Silverfish Control in Deland, FL"
+"subheadline": "Professional Silverfish Control for Deland Homes"
+"disclaimer_text": "This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance. The specific services, pricing, scheduling, and service guarantees are determined by the independent provider dispatched to your location."
+"region": "FL"
+"faqs": 
+  -
+    "question": "How do I know if I have silverfish in my Deland home?"
+    "answer": "Common signs include damage to paper, fabrics, and stored goods, as well as small droppings and shed skins in dark, humid areas. A professional inspection can confirm the extent of any infestation."
+  -
+    "question": "How much does silverfish treatment cost?"
+    "answer": "Treatment costs vary based on infestation severity and property size. Your local technician will assess the situation and provide a detailed quote before starting work."
+  -
+    "question": "How long does silverfish treatment take?"
+    "answer": "Initial treatment typically takes 1-2 hours depending on your home's size. Follow-up visits may be recommended to ensure complete elimination."
+  -
+    "question": "Is silverfish treatment safe for my family?"
+    "answer": "Yes. Technicians use EPA-registered products applied according to label directions. Treatments are designed to target pests while remaining safe for people and pets."
+"service_cities": 
+  - "Athens"
+  - "Deland"
+  - "Lenexa"
+  - "Port Orange"
+  - "Shawnee"
 ---
-
 Silverfish and clothes moths are quiet destroyers. They feed on fabric, stored food, and paper — and you often do not notice until the damage is already done. By the time you spot one crawling across a bathroom floor at midnight or find yellowed, chewed edges on old books stored in the closet, there is a good chance dozens more are hiding in walls, under flooring, and inside storage areas. If silverfish have moved into your Deland home, getting the right treatment in place quickly is what protects the things you cannot replace.
 
 ## What Are Silverfish?
@@ -73,7 +97,6 @@ The more immediate concern is property damage. Silverfish destroy things that ca
 A female silverfish can lay two to 20 eggs at a time and live anywhere from two to eight years. In a home with adequate moisture and accessible food sources, populations build steadily month after month without visible signs until the infestation is well established.
 
 ---
-
 **Call [phone] — Talk to a Local Expert**
 
 Our licensed technicians serve residential homeowners throughout Deland and the surrounding area. If you are seeing the signs described above, we will inspect the home, identify where silverfish are concentrated, and put together a treatment plan that addresses both the infestation and the conditions driving it.
@@ -81,7 +104,6 @@ Our licensed technicians serve residential homeowners throughout Deland and the 
 *Call Now — Protect Your Home Today*
 
 ---
-
 ## Treatment Options for Silverfish
 
 Effective silverfish control requires more than a single spray application. An established infestation needs a layered approach, and a good treatment plan addresses both the population and the conditions sustaining it.
@@ -137,7 +159,6 @@ Costs vary based on the size of the home, the severity of the infestation, and h
 These ranges reflect general market conditions. Your specific costs will depend on your home's size, the extent of the infestation, and the technician's assessment of what is needed. Always ask for a clear written estimate before treatment begins.
 
 ---
-
 **Ready to Schedule? Call [phone]**
 
 We handle residential silverfish control throughout Deland and neighboring communities. Our technicians are licensed, insured, and familiar with the conditions that make Florida homes particularly vulnerable to silverfish activity. You will get a straight answer about what you are dealing with and what it takes to resolve it.
@@ -145,5 +166,4 @@ We handle residential silverfish control throughout Deland and neighboring commu
 *Call Now — Licensed Pros Standing By*
 
 ---
-
 *[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site].*

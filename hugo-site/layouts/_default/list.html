@@ -429,8 +429,13 @@
   <div class="container" style="display: contents;">
     <div class="trust-item">
       <div class="trust-item-icon">🏛️</div>
+      {{ if .Site.Params.has_license }}
       <div class="trust-item-label">Licensed & Insured</div>
       <div class="trust-item-sublabel">State certified professionals</div>
+      {{ else }}
+      <div class="trust-item-label">Vetted Professionals</div>
+      <div class="trust-item-sublabel">Qualified local technicians</div>
+      {{ end }}
     </div>
     <div class="trust-item">
       <div class="trust-item-icon">⭐</div>
@@ -521,14 +526,16 @@
 <section class="trust-authority">
   <div class="container">
     <h2 style="margin-bottom: 32px;">Why You Can Trust Us</h2>
+    {{ if and .Site.Params.has_license .Site.Params.license_number }}
     <div class="license-info">
       <div class="license-badge">License #{{ .Site.Params.license_number }}</div>
       <p><strong>Licensed & Insured Professional</strong></p>
       <p style="font-size: 14px; color: #5C5C5C;">We maintain all required state and local licenses. Our insurance protects you and your property during all service calls.</p>
     </div>
+    {{ end }}
     <ul class="guarantee-list">
       <li>Professional treatment with proven methods</li>
-      <li>Same-qualified technician network</li>
+      <li>Qualified local technician network</li>
       <li>Transparent pricing with no surprises</li>
       <li>Pet and child-safe treatment options</li>
       <li>100% satisfaction assurance on all service</li>
@@ -542,7 +549,7 @@
     <p>{{ .Params.service_area_copy }}</p>
     <div class="city-list">
       {{ range .Params.nearby_cities }}
-      <span class="city-pill">{{ . }}</span>
+      <a href="/{{ .slug }}/" class="city-pill" style="text-decoration: none; color: #1A1A1A;">{{ .name }}</a>
       {{ end }}
     </div>
   </div>
@@ -558,7 +565,7 @@
         <div class="faq-item-content">
           {{ .answer }}
           <div class="faq-cta">
-            <a href="tel:{{ .Site.Params.phone_raw }}">Call us to discuss — {{ .Site.Params.phone }}</a>
+            <a href="tel:{{ $.Site.Params.phone_raw }}">Call us to discuss — {{ $.Site.Params.phone }}</a>
           </div>
         </div>
       </details>

@@ -31,8 +31,32 @@
         "name": "KS"
 "seasonal_focus": "January: focus on mice, rats, cockroaches; message = prevention and early treatment — emphasize household safety and protecting the family during indoor-heavy winter months | February: focus on mice, rats, cockroaches; message = prevention with urgency — termite awareness campaign aligns with national awareness; reinforce rodent exclusion before spring thaw opens new entry points | September: focus on mice, rats, spiders; message = prevention — September is the highest-value month for rodent prevention content; homeowners are receptive to proactive messaging before cold weather drives pest indoors"
 "draft": false
+"pest_name": "Silverfish Control"
+"pest_icon": "🐛"
+"h1_title": "Silverfish Control in Lenexa, KS"
+"subheadline": "Professional Silverfish Control for Lenexa Homes"
+"disclaimer_text": "This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance. The specific services, pricing, scheduling, and service guarantees are determined by the independent provider dispatched to your location."
+"region": "KS"
+"faqs": 
+  -
+    "question": "How do I know if I have silverfish in my Lenexa home?"
+    "answer": "Common signs include damage to paper, fabrics, and stored goods, as well as small droppings and shed skins in dark, humid areas. A professional inspection can confirm the extent of any infestation."
+  -
+    "question": "How much does silverfish treatment cost?"
+    "answer": "Treatment costs vary based on infestation severity and property size. Your local technician will assess the situation and provide a detailed quote before starting work."
+  -
+    "question": "How long does silverfish treatment take?"
+    "answer": "Initial treatment typically takes 1-2 hours depending on your home's size. Follow-up visits may be recommended to ensure complete elimination."
+  -
+    "question": "Is silverfish treatment safe for my family?"
+    "answer": "Yes. Technicians use EPA-registered products applied according to label directions. Treatments are designed to target pests while remaining safe for people and pets."
+"service_cities": 
+  - "Athens"
+  - "Deland"
+  - "Lenexa"
+  - "Port Orange"
+  - "Shawnee"
 ---
-
 Silverfish and clothes moths are quiet destroyers. They feed on fabric, stored food, and paper—and you often don't notice until the damage is done. In Lenexa homes, silverfish are one of the more persistent pest problems we treat, particularly in basements, bathroom vanities, and closets where moisture and undisturbed storage create exactly the conditions they need.
 
 If you're finding irregular holes in books, wallpaper with peeled edges, or yellowish staining on stored fabrics, silverfish are a likely cause. Here's what you need to know—and what to do about it.
@@ -136,7 +160,6 @@ Treatment costs vary based on the size of the home, the extent and age of the in
 If structural moisture corrections are part of the solution—crawl space encapsulation, ventilation upgrades, or dehumidifier installation—those services carry separate costs and are quoted independently after the inspection. We provide a clear picture of what the inspection finds before any work is authorized.
 
 ---
-
 ## Call Now – Talk to a Local Expert
 
 If you're finding silverfish damage or spotting the insects in your home, addressing the problem sooner reduces damage to your belongings and makes treatment more effective.
@@ -147,11 +170,9 @@ If you're finding silverfish damage or spotting the insects in your home, addres
 Our team routes calls directly to Johnson County. You'll speak with a licensed technician who knows the area—not a national dispatch queue or voicemail system.
 
 ---
-
 ## Frequently Asked Questions
 
 See below for answers to the most common silverfish questions we receive from Johnson County homeowners.
 
 ---
-
 *[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site].*

@@ -349,8 +349,13 @@
   <div class="container" style="display: contents;">
     <div class="trust-item">
       <div class="trust-item-icon">🏛️</div>
+      {{ if .Site.Params.has_license }}
       <div class="trust-item-label">Licensed & Insured</div>
       <div class="trust-item-sublabel">Certified specialists</div>
+      {{ else }}
+      <div class="trust-item-label">Vetted & Insured</div>
+      <div class="trust-item-sublabel">Professional specialists</div>
+      {{ end }}
     </div>
     <div class="trust-item">
       <div class="trust-item-icon">⭐</div>
@@ -413,7 +418,7 @@
 <section class="mid-page-cta">
   <div class="container">
     <div class="mid-page-cta-number">{{ .Site.Params.phone }}</div>
-    <p class="mid-page-cta-text">Professional {{ .Params.pest_name }} treatment available for homes and businesses. Licensed technician dispatched to your location.</p>
+    <p class="mid-page-cta-text">Professional {{ .Params.pest_name }} treatment available for homes and businesses. {{ if .Site.Params.has_license }}Licensed{{ else }}Vetted{{ end }} technician dispatched to your location.</p>
     <a href="tel:{{ .Site.Params.phone_raw }}" class="btn btn-primary">Talk to a Local Expert</a>
   </div>
 </section>
@@ -461,7 +466,7 @@
         <div class="faq-item-content">
           {{ .answer }}
           <div class="faq-cta">
-            <a href="tel:{{ .Site.Params.phone_raw }}">Need help now? Call {{ .Site.Params.phone }}</a>
+            <a href="tel:{{ $.Site.Params.phone_raw }}">Need help now? Call {{ $.Site.Params.phone }}</a>
           </div>
         </div>
       </details>

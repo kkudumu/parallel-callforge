@@ -1,0 +1,50 @@
+{
+  "pest_services": [
+    {
+      "slug": "rodent-control",
+      "name": "Rodent Control"
+    },
+    {
+      "slug": "silverfish-control",
+      "name": "Silverfish Control"
+    },
+    {
+      "slug": "ant-control",
+      "name": "Ant Control"
+    },
+    {
+      "slug": "spider-control",
+      "name": "Spider Control"
+    },
+    {
+      "slug": "cockroach-control",
+      "name": "Cockroach Control"
+    },
+    {
+      "slug": "termite-control",
+      "name": "Termite Control"
+    }
+  ],
+  "service_cities": [
+    {
+      "name": "Athens",
+      "slug": "athens"
+    },
+    {
+      "name": "Deland",
+      "slug": "deland"
+    },
+    {
+      "name": "Lenexa",
+      "slug": "lenexa"
+    },
+    {
+      "name": "Port Orange",
+      "slug": "port-orange"
+    },
+    {
+      "name": "Shawnee",
+      "slug": "shawnee"
+    }
+  ]
+}

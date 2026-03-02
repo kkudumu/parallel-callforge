@@ -413,15 +413,15 @@
         <div class="footer-section">
           <h3>Pest Services</h3>
           <ul>
-            {{ range .Site.Params.pest_services }}
-            <li><a href="/services/{{ .slug }}/">{{ .name }}</a></li>
+            {{ range .Site.Data.nav.pest_services }}
+            <li><a href="/{{ $.Page.Params.city | urlize }}/{{ .slug }}/">{{ .name }}</a></li>
             {{ end }}
           </ul>
         </div>
         <div class="footer-section">
           <h3>Service Areas</h3>
           <ul>
-            {{ range .Site.Params.service_cities }}
+            {{ range .Site.Data.nav.service_cities }}
             <li><a href="/{{ .slug }}/">{{ .name }}</a></li>
             {{ end }}
           </ul>
@@ -435,7 +435,7 @@
             <li><a href="/contact/">Contact</a></li>
           </ul>
           <div class="trust-icons-row">
-            <div class="trust-icon">Licensed</div>
+            {{ if .Site.Params.has_license }}<div class="trust-icon">Licensed</div>{{ end }}
             <div class="trust-icon">Insured</div>
             <div class="trust-icon">⭐5.0</div>
           </div>

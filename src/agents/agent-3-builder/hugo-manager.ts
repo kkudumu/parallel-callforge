@@ -132,6 +132,7 @@ title = "Extermanation - Professional Pest Control"
   phone_raw = "5551234567"
   business_name = "Extermanation"
   tagline = "Local pest control service built for fast inspections and same-day scheduling."
+  has_license = false
 `);
       } else {
         let configContent = fs.readFileSync(configPath, "utf-8");
