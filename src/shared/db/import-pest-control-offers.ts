@@ -79,20 +79,21 @@ async function importOffer(db: ReturnType<typeof createDbClient>, offer: OfferIm
     throw new Error(`No ZIPs parsed for ${offer.offerId}`);
   }
 
-  await db.query("BEGIN");
-  try {
-    await db.query("DELETE FROM offer_geo_coverage WHERE offer_id = $1", [offer.offerId]);
+  const writeOffer = async (writer: ReturnType<typeof createDbClient>) => {
+    await writer.query("DELETE FROM offer_geo_coverage WHERE offer_id = $1", [offer.offerId]);
     for (const zip of zips) {
-      await db.query(
+      await writer.query(
         `INSERT INTO offer_geo_coverage (offer_id, zip_code, source)
          VALUES ($1, $2, $3)`,
         [offer.offerId, zip, offer.source]
       );
     }
-    await db.query("COMMIT");
-  } catch (error) {
-    await db.query("ROLLBACK");
-    throw error;
+  };
+
+  if (db.withTransaction) {
+    await db.withTransaction(writeOffer);
+  } else {
+    await writeOffer(db);
   }
 
   return zips.length;

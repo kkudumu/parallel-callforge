@@ -3,6 +3,10 @@ import { evaluateThresholds, type MetricsInput, type Severity } from "./threshol
 import { calculateHealthScore, interpretScore, type HealthScoreInput } from "./health-score.js";
 import { generateMockMetrics, type MockPageMetrics } from "./mock-data.js";
 import { eventBus } from "../../shared/events/event-bus.js";
+import {
+  buildCheckpointScope,
+  createCheckpointTracker,
+} from "../../shared/checkpoints.js";
 
 export interface DataProvider {
   getMetrics(pageId: string, url: string, city: string, daysSincePublish: number): Promise<MockPageMetrics>;
@@ -163,6 +167,17 @@ export async function runAgent7(
   }
 
   const pages = pagesResult.rows as PageRow[];
+  const checkpointScope = buildCheckpointScope([
+    config.niche,
+    new Date().toISOString().slice(0, 10),
+    pages.map((page) => page.id).sort(),
+  ]);
+  const checkpoints = await createCheckpointTracker(db, "agent-7", checkpointScope);
+  if (checkpoints.has("completed")) {
+    console.log(`[Agent 7] Reusing completed checkpoint for ${config.niche}`);
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-7", step: "Checkpoint hit", detail: "Completed", timestamp: Date.now() });
+    return;
+  }
   const now = Date.now();
   let totalIndexed = 0;
   let totalRanking = 0;
@@ -378,6 +393,9 @@ export async function runAgent7(
   console.log(`[Agent 7] Pages: ${pages.length} total, ${totalIndexed} indexed, ${totalRanking} ranking top-20`);
   console.log(`[Agent 7] Critical alerts: ${criticalAlerts}`);
   console.log("[Agent 7] Performance monitoring complete");
+  await checkpoints.mark("completed", {
+    totalPages: pages.length,
+  });
 
   eventBus.emitEvent({
     type: "health_score",

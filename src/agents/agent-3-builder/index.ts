@@ -9,7 +9,14 @@ import { findPlaceholderTokens, runQualityGate } from "./quality-gate.js";
 import { fetchStockImageAsset } from "./image-sourcing.js";
 import { slugify } from "../agent-1-keywords/index.js";
 import { eventBus } from "../../shared/events/event-bus.js";
-import { CITY_HUB_PROMPT, SERVICE_SUBPAGE_PROMPT, HUGO_TEMPLATE_PROMPT } from "./prompts.js";
+import {
+  buildCheckpointScope,
+  createCheckpointTracker,
+} from "../../shared/checkpoints.js";
+import type { OfferProfile } from "../../shared/offer-profiles.js";
+import type { VerticalProfile } from "../../shared/vertical-profiles.js";
+import { resolveVerticalStrategy } from "../../shared/vertical-strategies.js";
+import { HUGO_TEMPLATE_PROMPT } from "./prompts.js";
 import type { DesignSpec } from "../../shared/schemas/design-specs.js";
 import type { CopyFramework } from "../../shared/schemas/copy-frameworks.js";
 import {
@@ -36,6 +43,8 @@ const HugoTemplateResponseSchema = z.object({
 
 export interface Agent3Config {
   niche: string;
+  offerProfile?: OfferProfile | null;
+  verticalProfile?: VerticalProfile | null;
   hugoSitePath: string;
   phone: string;
   minWordCountHub: number;
@@ -62,6 +71,69 @@ const DEFAULT_CONFIG: Partial<Agent3Config> = {
   indexationLookbackDays: 30,
   minIndexationRatio: 0.5,
 };
+
+const AGENT3_TEMPLATE_TIMEOUT_MS = 180_000;
+const AGENT3_CONTENT_TIMEOUT_MS = 300_000;
+const AGENT3_SUBPAGE_CONCURRENCY = 2;
+
+function createVerboseProviderLogger(prefix: string) {
+  const partials: Record<"stdout" | "stderr", string> = {
+    stdout: "",
+    stderr: "",
+  };
+
+  const emitLine = (line: string, stream: "stdout" | "stderr") => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    if (stream === "stderr") {
+      console.warn(`${prefix} [raw][stderr] ${trimmed}`);
+    } else {
+      console.log(`${prefix} [raw] ${trimmed}`);
+    }
+  };
+
+  return {
+    onOutput(chunk: string, stream: "stdout" | "stderr") {
+      const combined = partials[stream] + chunk;
+      const lines = combined.split(/\r?\n/);
+      partials[stream] = lines.pop() ?? "";
+
+      for (const line of lines) {
+        emitLine(line, stream);
+      }
+    },
+    flush() {
+      for (const stream of ["stdout", "stderr"] as const) {
+        emitLine(partials[stream], stream);
+        partials[stream] = "";
+      }
+    },
+  };
+}
+
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<void>
+): Promise<void> {
+  if (items.length === 0) {
+    return;
+  }
+
+  let nextIndex = 0;
+  const runWorker = async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex++;
+      await worker(items[currentIndex], currentIndex);
+    }
+  };
+
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+}
 
 interface DesignSystemContext {
   designSpec: DesignSpec;
@@ -229,6 +301,76 @@ function runBuiltArtifactQa(hugoSitePath: string): { passed: boolean; failures: 
   };
 }
 
+async function repairContentForQa(
+  llm: LlmClient,
+  options: {
+    prompt: string;
+    content: z.infer<typeof ContentResponseSchema>;
+    city: string;
+    minWordCount: number;
+    supplementalTexts: string[];
+    failures: string[];
+    logLabel: string;
+    replacements: Record<string, string>;
+  }
+): Promise<{
+  content: z.infer<typeof ContentResponseSchema>;
+  quality: ReturnType<typeof runQualityGate>;
+}> {
+  const repairPrompt = `${options.prompt}
+
+You previously returned content that failed QA with these failures:
+${options.failures.join(", ")}
+
+Return a corrected JSON response using the same schema.
+
+Hard requirements:
+- Remove all placeholder tokens such as [TOKEN], {token}, TODO, or similar markers.
+- Replace placeholders with concrete copy, not blanks.
+- Keep the city name "${options.city}" naturally present in the body copy.
+- Keep the body content at or above ${options.minWordCount} words.
+- Preserve the same page intent and local-business framing.
+- Do not include explanations, only the corrected structured response.
+
+Previous structured response:
+${JSON.stringify(options.content, null, 2)}`;
+
+  const repairLogger = createVerboseProviderLogger(options.logLabel);
+  let repairedContent;
+  try {
+    repairedContent = await llm.call({
+      prompt: repairPrompt,
+      schema: ContentResponseSchema,
+      model: "sonnet",
+      timeoutMs: AGENT3_CONTENT_TIMEOUT_MS,
+      logLabel: options.logLabel,
+      onOutput: (chunk, stream) => repairLogger.onOutput(chunk, stream),
+    });
+  } finally {
+    repairLogger.flush();
+  }
+  const normalizedRepairedContent = resolveGeneratedContentPlaceholders(
+    repairedContent,
+    options.replacements
+  );
+
+  const repairedQuality = runQualityGate(
+    normalizedRepairedContent.content,
+    options.city,
+    options.minWordCount,
+    [
+      normalizedRepairedContent.title,
+      normalizedRepairedContent.meta_description,
+      ...options.supplementalTexts,
+    ]
+  );
+
+  return {
+    content: normalizedRepairedContent,
+    quality: repairedQuality,
+  };
+}
+
 async function runDraftPreviewQa(draftUrl: string): Promise<void> {
   const response = await fetch(draftUrl);
   if (!response.ok) {
@@ -240,6 +382,31 @@ async function runDraftPreviewQa(draftUrl: string): Promise<void> {
   if (placeholdersFound.length > 0) {
     throw new Error(`Draft preview contains placeholder tokens: ${placeholdersFound.join(", ")}`);
   }
+}
+
+function resolveGeneratedContentPlaceholders(
+  content: z.infer<typeof ContentResponseSchema>,
+  replacements: Record<string, string>
+): z.infer<typeof ContentResponseSchema> {
+  const replaceString = (value: string): string =>
+    value
+      .replace(/\{([a-zA-Z0-9_.-]+)\}/g, (_match, key: string) => replacements[key] ?? "")
+      .replace(/\[([A-Z0-9_ -]+)\]/g, (_match, key: string) => {
+        const normalizedKey = key.toLowerCase().replace(/[ -]+/g, "_");
+        return replacements[normalizedKey] ?? "";
+      });
+
+  return {
+    ...content,
+    title: replaceString(content.title),
+    meta_description: replaceString(content.meta_description),
+    content: replaceString(content.content),
+    headings: content.headings?.map((heading) => replaceString(heading)),
+    faq: content.faq?.map((item) => ({
+      question: replaceString(item.question),
+      answer: replaceString(item.answer),
+    })),
+  };
 }
 
 function asObject<T>(value: unknown, fallback: T): T {
@@ -725,8 +892,43 @@ function resolveSchemaTemplate(
   city: string,
   state: string,
   title: string,
-  description: string
+  description: string,
+  phone?: string
 ): Record<string, unknown> {
+  const replacements: Record<string, string> = {
+    city,
+    state,
+    title,
+    name: title,
+    description,
+    meta_description: description,
+    phone: phone ?? "",
+    telephone: phone ?? "",
+  };
+
+  const resolveTemplateValue = (value: unknown): unknown => {
+    if (typeof value === "string") {
+      return value
+        .replace(/\{([a-zA-Z0-9_.-]+)\}/g, (_match, key: string) => replacements[key] ?? "")
+        .replace(/\[([A-Z0-9_ -]+)\]/g, "");
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => resolveTemplateValue(item));
+    }
+
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, nestedValue]) => [
+          key,
+          resolveTemplateValue(nestedValue),
+        ])
+      );
+    }
+
+    return value;
+  };
+
   const normalizeSchemaRecord = (input: Record<string, unknown>): Record<string, unknown> => {
     const normalized = { ...input };
     const localBusinessType = "LocalBusiness";
@@ -781,7 +983,7 @@ function resolveSchemaTemplate(
     const template = schemaTemplates[key];
     if (template && typeof template === "object" && !Array.isArray(template)) {
       return normalizeSchemaRecord({
-        ...(template as Record<string, unknown>),
+        ...(resolveTemplateValue(template) as Record<string, unknown>),
         name: title,
         description,
         areaServed: {
@@ -933,12 +1135,20 @@ async function applyDesignSystem(
     let hugoTemplates = templateCache.rows[0];
     if (!hugoTemplates || hugoTemplates.design_fingerprint !== designFingerprint) {
       const hugoPrompt = HUGO_TEMPLATE_PROMPT.replace("{design_spec}", designSpecSummary);
-      const generatedTemplates = await llm.call({
-        prompt: hugoPrompt,
-        schema: HugoTemplateResponseSchema,
-        model: "haiku",
-        logLabel: "[Agent 3][Design system][Hugo templates]",
-      });
+      const templateLogger = createVerboseProviderLogger("[Agent 3][Design system][Hugo templates]");
+      let generatedTemplates;
+      try {
+        generatedTemplates = await llm.call({
+          prompt: hugoPrompt,
+          schema: HugoTemplateResponseSchema,
+          model: "haiku",
+          timeoutMs: AGENT3_TEMPLATE_TIMEOUT_MS,
+          logLabel: "[Agent 3][Design system][Hugo templates]",
+          onOutput: (chunk, stream) => templateLogger.onOutput(chunk, stream),
+        });
+      } finally {
+        templateLogger.flush();
+      }
       const generatedMarkup = [
         generatedTemplates.baseof,
         generatedTemplates.city_hub,
@@ -1477,12 +1687,127 @@ function isServiceCluster(cluster: any, city: string, hubKeyword: string): boole
   return true;
 }
 
+function getContentFilePath(hugoSitePath: string, relativePath: string): string {
+  return path.join(hugoSitePath, "content", relativePath);
+}
+
+async function shouldSkipCheckpointedPage(
+  db: DbClient,
+  checkpoints: Awaited<ReturnType<typeof createCheckpointTracker>>,
+  checkpointKey: string,
+  contentFilePath: string,
+  contentSlug: string
+): Promise<boolean> {
+  const fileExists = fs.existsSync(contentFilePath);
+  if (checkpoints.has(checkpointKey)) {
+    return fileExists;
+  }
+
+  if (!fileExists) {
+    return false;
+  }
+
+  const existingItem = await db.query<{ slug: string }>(
+    "SELECT slug FROM content_items WHERE slug = $1 LIMIT 1",
+    [contentSlug]
+  );
+  if (existingItem.rows.length === 0) {
+    return false;
+  }
+
+  await checkpoints.mark(checkpointKey, {
+    slug: contentSlug,
+    source: "existing_output",
+  });
+  return true;
+}
+
+function isAllowedServiceCluster(
+  cluster: any,
+  offerProfile?: OfferProfile | null,
+  verticalProfile?: VerticalProfile | null
+): boolean {
+  if (!offerProfile && !verticalProfile) {
+    return true;
+  }
+
+  const value = `${String(cluster?.cluster_name ?? "")} ${String(cluster?.primary_keyword ?? "")}`;
+  const strategy = resolveVerticalStrategy(verticalProfile?.vertical_key ?? offerProfile?.vertical);
+  return strategy.isServiceAllowed(value, {
+    offerProfile,
+    verticalProfile,
+  });
+}
+
+function applyOfferContentRules(
+  content: z.infer<typeof ContentResponseSchema>,
+  offerProfile?: OfferProfile | null
+): z.infer<typeof ContentResponseSchema> {
+  if (!offerProfile) {
+    return content;
+  }
+
+  const scrubText = (input: string): string => {
+    let output = input;
+    for (const service of offerProfile.constraints.disallowed_services) {
+      if (!service) continue;
+      const token = service
+        .split("-")
+        .filter(Boolean)
+        .join("[\\s-]+");
+      if (!token) continue;
+      output = output.replace(
+        new RegExp(`\\b${token}\\b`, "gi"),
+        "common household pests"
+      );
+    }
+    for (const phrase of offerProfile.constraints.banned_phrases) {
+      const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      output = output.replace(new RegExp(escaped, "gi"), "Call now");
+    }
+    return output;
+  };
+
+  let normalizedContent = scrubText(content.content);
+
+  const disclaimer = offerProfile.constraints.required_disclaimer.trim();
+  if (disclaimer && !normalizedContent.includes(disclaimer)) {
+    normalizedContent = `${normalizedContent}\n\n---\n\n${disclaimer}`;
+  }
+
+  return {
+    ...content,
+    title: scrubText(content.title),
+    meta_description: scrubText(content.meta_description),
+    content: normalizedContent,
+    headings: content.headings?.map((heading) => scrubText(heading)),
+    faq: content.faq?.map((item) => ({
+      question: scrubText(item.question),
+      answer: scrubText(item.answer),
+    })),
+  };
+}
+
 export async function runAgent3(
   config: Agent3Config,
   llm: LlmClient,
   db: DbClient
 ): Promise<void> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
+  const strategy = resolveVerticalStrategy(
+    cfg.verticalProfile?.vertical_key ?? cfg.offerProfile?.vertical
+  );
+  const strategyContext = {
+    offerProfile: cfg.offerProfile,
+    verticalProfile: cfg.verticalProfile,
+  };
+  const checkpointScope = buildCheckpointScope([
+    normalizeNiche(cfg.niche),
+    cfg.offerProfile?.constraints ?? null,
+    [...(cfg.targetCities ?? [])].map((city) => city.trim().toLowerCase()).sort(),
+    cfg.phone,
+  ]);
+  const checkpoints = await createCheckpointTracker(db, "agent-3", checkpointScope);
   const buildRecord = await createSiteBuildRecord(db, cfg);
   const hugo = createHugoManager(cfg.hugoSitePath);
   let cityRows: any[] = [];
@@ -1621,116 +1946,202 @@ export async function runAgent3(
           hubKeyword
         );
 
-        console.log(`[Agent 3] Generating hub page for ${city}...`);
-        eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hub page", detail: city, timestamp: Date.now() });
-        const hubPrompt = `${CITY_HUB_PROMPT
-          .replace(/\{city\}/g, city)
-          .replace(/\{state\}/g, state)
-          .replace(/\{keyword\}/g, hubKeyword)
-          .replace(/\{phone\}/g, cfg.phone!)}
-
-Agent 1 city keyword map (authoritative):
-- Approved hub keyword: ${hubKeyword}
+        const hubCheckpointKey = `hub:${citySlug}`;
+        const hubContentPath = getContentFilePath(cfg.hugoSitePath, `${citySlug}/_index.md`);
+        const shouldSkipHub = await shouldSkipCheckpointedPage(
+          db,
+          checkpoints,
+          hubCheckpointKey,
+          hubContentPath,
+          citySlug
+        );
+        if (shouldSkipHub) {
+          console.log(`[Agent 3] Reusing checkpointed hub page for ${city}`);
+        } else {
+          console.log(`[Agent 3] Generating hub page for ${city}...`);
+          eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hub page", detail: city, timestamp: Date.now() });
+          const hubPrompt = strategy.getCityHubPrompt(
+            {
+              city,
+              state,
+              keyword: hubKeyword,
+              phone: cfg.phone!,
+              agent1Summary: `- Approved hub keyword: ${hubKeyword}
 - Approved route keys: ${approvedRoutes.join(", ") || "none"}
-- Approved cluster count: ${orderedClusters.length}
-
-Agent 2 design research (authoritative):
-- Archetype: ${designSystem.designSpec.archetype}
+- Approved cluster count: ${orderedClusters.length}`,
+              agent2Summary: `- Archetype: ${designSystem.designSpec.archetype}
 - Layout sequence: ${Object.keys(designSystem.designSpec.layout).join(", ")}
 - CTA variants: ${designSystem.copyFramework.ctas.join(" | ")}
-- Trust signals: ${designSystem.copyFramework.trust_signals.join(" | ")}
-- Seasonal guidance: ${hubSeasonalSummary}`;
-
-        const hubContent = await llm.call({
-          prompt: hubPrompt,
-          schema: ContentResponseSchema,
-          model: "sonnet",
-          logLabel: `[Agent 3][Hub page][${city}]`,
-        });
-        const hubSchemaTemplate = resolveSchemaTemplate(
-          designSystem.schemaTemplates,
-          "city_hub",
-          city,
-          state,
-          hubContent.title,
-          hubContent.meta_description
-        );
-        console.log(`[Agent 3] Hub page title: ${hubContent.title}`);
-        console.log(
-          `[Agent 3] Hub headings: ${(hubContent.headings ?? []).slice(0, 4).join(" | ") || "none"}`
-        );
-
-        const hubQuality = runQualityGate(
-          hubContent.content,
-          city,
-          cfg.minWordCountHub!,
-          [
+- Trust signals: ${designSystem.copyFramework.trust_signals.join(" | ")}`,
+              seasonalGuidance: hubSeasonalSummary,
+            },
+            strategyContext
+          );
+          const hubReplacements = {
+            city,
+            state,
+            phone: cfg.phone ?? "",
+            telephone: cfg.phone ?? "",
+            keyword: hubKeyword,
+            title: city,
+            name: city,
+          };
+          const hubLogLabel = `[Agent 3][Hub page][${city}]`;
+          const hubLogger = createVerboseProviderLogger(hubLogLabel);
+          let rawHubContent;
+          try {
+            rawHubContent = await llm.call({
+              prompt: hubPrompt,
+              schema: ContentResponseSchema,
+              model: "sonnet",
+              timeoutMs: AGENT3_CONTENT_TIMEOUT_MS,
+              logLabel: hubLogLabel,
+              onOutput: (chunk, stream) => hubLogger.onOutput(chunk, stream),
+            });
+          } finally {
+            hubLogger.flush();
+          }
+          const hubContent = applyOfferContentRules(
+            resolveGeneratedContentPlaceholders(rawHubContent, hubReplacements),
+            cfg.offerProfile
+          );
+          const hubSchemaTemplate = resolveSchemaTemplate(
+            designSystem.schemaTemplates,
+            "city_hub",
+            city,
+            state,
             hubContent.title,
             hubContent.meta_description,
-            JSON.stringify(hubSchemaTemplate),
-          ]
-        );
-        if (!hubQuality.passed) {
-          throw new Error(`Hub page QA failed for ${city}: ${hubQuality.failures.join(", ")}`);
+            cfg.phone
+          );
+          console.log(`[Agent 3] Hub page title: ${hubContent.title}`);
+          console.log(
+            `[Agent 3] Hub headings: ${(hubContent.headings ?? []).slice(0, 4).join(" | ") || "none"}`
+          );
+
+          let finalHubContent = hubContent;
+          let hubQuality = runQualityGate(
+            finalHubContent.content,
+            city,
+            cfg.minWordCountHub!,
+            [
+              finalHubContent.title,
+              finalHubContent.meta_description,
+              JSON.stringify(hubSchemaTemplate),
+            ]
+          );
+          if (!hubQuality.passed) {
+            const canRepairPlaceholders =
+              hubQuality.failures.length === 1 &&
+              hubQuality.failures.includes("placeholder_tokens");
+            if (!canRepairPlaceholders) {
+              throw new Error(`Hub page QA failed for ${city}: ${hubQuality.failures.join(", ")}`);
+            }
+
+            console.warn(
+              `[Agent 3] Hub page QA found placeholder tokens for ${city}; attempting repair`
+            );
+            const repaired = await repairContentForQa(llm, {
+              prompt: hubPrompt,
+              content: finalHubContent,
+              city,
+              minWordCount: cfg.minWordCountHub!,
+              supplementalTexts: [JSON.stringify(hubSchemaTemplate)],
+              failures: hubQuality.failures,
+              logLabel: `[Agent 3][Hub page repair][${city}]`,
+              replacements: hubReplacements,
+            });
+            finalHubContent = repaired.content;
+            hubQuality = repaired.quality;
+            if (!hubQuality.passed) {
+              throw new Error(
+                `Hub page QA failed after repair for ${city}: ${hubQuality.failures.join(", ")}`
+              );
+            }
+            console.log(`[Agent 3] Hub page repair passed QA for ${city}`);
+          }
+
+          const hubSlug = `${citySlug}/_index.md`;
+          const hubHeroImage = await writePageVisual(
+            hugo,
+            [city, "hub", "hero"],
+            city,
+            hubKeyword,
+            designSystem,
+            "city_hub",
+            city
+          );
+          const hubFeatureImage = await writePageVisual(
+            hugo,
+            [city, "hub", "feature"],
+            `${city} Coverage`,
+            designSystem.heroHeadline,
+            designSystem,
+            "city_hub",
+            city
+          );
+          hugo.writeContentFile(hubSlug, {
+            title: finalHubContent.title,
+            description: finalHubContent.meta_description,
+            city: city,
+            state: state,
+            type: "city_hub",
+            target_keyword: hubKeyword,
+            hero_image: hubHeroImage,
+            feature_image: hubFeatureImage,
+            schema_template: hubSchemaTemplate,
+            seasonal_focus: hubSeasonalSummary,
+            approved_routes: approvedRoutes,
+            draft: false,
+          }, finalHubContent.content);
+
+          await db.query(
+            `INSERT INTO content_items (title, slug, content_type, target_keyword, city, niche, word_count, quality_score)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (slug) DO UPDATE SET word_count = $7, quality_score = $8`,
+            [
+              finalHubContent.title,
+              `${citySlug}`,
+              "city_hub",
+              hubKeyword,
+              city,
+              cfg.niche,
+              hubQuality.metrics.wordCount,
+              JSON.stringify(hubQuality.metrics),
+            ]
+          );
+          await checkpoints.mark(hubCheckpointKey, {
+            slug: citySlug,
+            city,
+          });
         }
 
-        const hubSlug = `${citySlug}/_index.md`;
-        const hubHeroImage = await writePageVisual(
-          hugo,
-          [city, "hub", "hero"],
-          city,
-          hubKeyword,
-          designSystem,
-          "city_hub",
-          city
-        );
-        const hubFeatureImage = await writePageVisual(
-          hugo,
-          [city, "hub", "feature"],
-          `${city} Coverage`,
-          designSystem.heroHeadline,
-          designSystem,
-          "city_hub",
-          city
-        );
-        hugo.writeContentFile(hubSlug, {
-          title: hubContent.title,
-          description: hubContent.meta_description,
-          city: city,
-          state: state,
-          type: "city_hub",
-          target_keyword: hubKeyword,
-          hero_image: hubHeroImage,
-          feature_image: hubFeatureImage,
-          schema_template: hubSchemaTemplate,
-          seasonal_focus: hubSeasonalSummary,
-          approved_routes: approvedRoutes,
-          draft: false,
-        }, hubContent.content);
-
-        await db.query(
-          `INSERT INTO content_items (title, slug, content_type, target_keyword, city, niche, word_count, quality_score)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (slug) DO UPDATE SET word_count = $7, quality_score = $8`,
-          [
-            hubContent.title,
-            `${citySlug}`,
-            "city_hub",
-            hubKeyword,
-            city,
-            cfg.niche,
-            hubQuality.metrics.wordCount,
-            JSON.stringify(hubQuality.metrics),
-          ]
-        );
-
         const serviceClusterTypes = orderedClusters.filter(
-          (c: any) => isServiceCluster(c, city, hubKeyword) && findRouteAssignment(c, routeAssignments)
+          (c: any) =>
+            isServiceCluster(c, city, hubKeyword) &&
+            findRouteAssignment(c, routeAssignments) &&
+            isAllowedServiceCluster(c, cfg.offerProfile, cfg.verticalProfile)
         );
 
-        for (const cluster of serviceClusterTypes.slice(0, 5)) {
+        await mapWithConcurrency(
+          serviceClusterTypes.slice(0, 5),
+          AGENT3_SUBPAGE_CONCURRENCY,
+          async (cluster) => {
           const pestType = cluster.cluster_name;
           const pestSlug = resolveServiceSlug(cluster, routeAssignments);
+          const subpageCheckpointKey = `subpage:${citySlug}/${pestSlug}`;
+          const subpageContentPath = getContentFilePath(cfg.hugoSitePath, `${citySlug}/${pestSlug}.md`);
+          const shouldSkipSubpage = await shouldSkipCheckpointedPage(
+            db,
+            checkpoints,
+            subpageCheckpointKey,
+            subpageContentPath,
+            `${citySlug}/${pestSlug}`
+          );
+          if (shouldSkipSubpage) {
+            console.log(`[Agent 3] Reusing checkpointed subpage ${citySlug}/${pestSlug}`);
+            return;
+          }
           const serviceSeasonalSummary = summarizeSeasonalResearch(
             designSystem.seasonalCalendar,
             cluster.primary_keyword,
@@ -1739,51 +2150,105 @@ Agent 2 design research (authoritative):
           console.log(`[Agent 3] Generating subpage: ${city}/${pestType}...`);
           eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Subpage", detail: `${city}/${pestType}`, timestamp: Date.now() });
 
-          const subPrompt = `${SERVICE_SUBPAGE_PROMPT
-            .replace(/\{city\}/g, city)
-            .replace(/\{state\}/g, state)
-            .replace(/\{pest_type\}/g, pestType)
-            .replace(/\{keyword\}/g, cluster.primary_keyword)
-            .replace(/\{phone\}/g, cfg.phone!)}
-
-Agent 1 city keyword map (authoritative):
-- Approved service keyword: ${cluster.primary_keyword}
-- Approved URL slug: /${citySlug}/${pestSlug}/
-
-Agent 2 design research (authoritative):
-- Archetype: ${designSystem.designSpec.archetype}
+          const subPrompt = strategy.getServiceSubpagePrompt(
+            {
+              city,
+              state,
+              pestType,
+              keyword: cluster.primary_keyword,
+              phone: cfg.phone!,
+              agent1Summary: `- Approved service keyword: ${cluster.primary_keyword}
+- Approved URL slug: /${citySlug}/${pestSlug}/`,
+              agent2Summary: `- Archetype: ${designSystem.designSpec.archetype}
 - PAS sequence: ${designSystem.copyFramework.pas_scripts.map((item) => item.problem).join(" | ")}
-- CTA variants: ${designSystem.copyFramework.ctas.join(" | ")}
-- Seasonal guidance: ${serviceSeasonalSummary}`;
+- CTA variants: ${designSystem.copyFramework.ctas.join(" | ")}`,
+              seasonalGuidance: serviceSeasonalSummary,
+            },
+            strategyContext
+          );
 
-          const subContent = await llm.call({
-            prompt: subPrompt,
-            schema: ContentResponseSchema,
-            model: "sonnet",
-            logLabel: `[Agent 3][Subpage][${city}/${pestType}]`,
-          });
+          const subReplacements = {
+            city,
+            state,
+            phone: cfg.phone ?? "",
+            telephone: cfg.phone ?? "",
+            keyword: cluster.primary_keyword,
+            pest_type: pestType,
+            pest: pestType,
+            service: pestType,
+            title: `${city} ${pestType}`,
+            name: `${city} ${pestType}`,
+          };
+          const subLogLabel = `[Agent 3][Subpage][${city}/${pestType}]`;
+          const subLogger = createVerboseProviderLogger(subLogLabel);
+          let rawSubContent;
+          try {
+            rawSubContent = await llm.call({
+              prompt: subPrompt,
+              schema: ContentResponseSchema,
+              model: "sonnet",
+              timeoutMs: AGENT3_CONTENT_TIMEOUT_MS,
+              logLabel: subLogLabel,
+              onOutput: (chunk, stream) => subLogger.onOutput(chunk, stream),
+            });
+          } finally {
+            subLogger.flush();
+          }
+          const subContent = applyOfferContentRules(
+            resolveGeneratedContentPlaceholders(rawSubContent, subReplacements),
+            cfg.offerProfile
+          );
           const subSchemaTemplate = resolveSchemaTemplate(
             designSystem.schemaTemplates,
             "service_subpage",
             city,
             state,
             subContent.title,
-            subContent.meta_description
+            subContent.meta_description,
+            cfg.phone
           );
           console.log(`[Agent 3] Subpage title for ${city}/${pestType}: ${subContent.title}`);
 
-          const subQuality = runQualityGate(
-            subContent.content,
+          let finalSubContent = subContent;
+          let subQuality = runQualityGate(
+            finalSubContent.content,
             city,
             cfg.minWordCountSubpage!,
             [
-              subContent.title,
-              subContent.meta_description,
+              finalSubContent.title,
+              finalSubContent.meta_description,
               JSON.stringify(subSchemaTemplate),
             ]
           );
           if (!subQuality.passed) {
-            throw new Error(`Subpage QA failed for ${city}/${pestType}: ${subQuality.failures.join(", ")}`);
+            const canRepairPlaceholders =
+              subQuality.failures.length === 1 &&
+              subQuality.failures.includes("placeholder_tokens");
+            if (!canRepairPlaceholders) {
+              throw new Error(`Subpage QA failed for ${city}/${pestType}: ${subQuality.failures.join(", ")}`);
+            }
+
+            console.warn(
+              `[Agent 3] Subpage QA found placeholder tokens for ${city}/${pestType}; attempting repair`
+            );
+            const repaired = await repairContentForQa(llm, {
+              prompt: subPrompt,
+              content: finalSubContent,
+              city,
+              minWordCount: cfg.minWordCountSubpage!,
+              supplementalTexts: [JSON.stringify(subSchemaTemplate)],
+              failures: subQuality.failures,
+              logLabel: `[Agent 3][Subpage repair][${city}/${pestType}]`,
+              replacements: subReplacements,
+            });
+            finalSubContent = repaired.content;
+            subQuality = repaired.quality;
+            if (!subQuality.passed) {
+              throw new Error(
+                `Subpage QA failed after repair for ${city}/${pestType}: ${subQuality.failures.join(", ")}`
+              );
+            }
+            console.log(`[Agent 3] Subpage repair passed QA for ${city}/${pestType}`);
           }
 
           const subHeroImage = await writePageVisual(
@@ -1807,8 +2272,8 @@ Agent 2 design research (authoritative):
             pestType
           );
           hugo.writeContentFile(`${citySlug}/${pestSlug}.md`, {
-            title: subContent.title,
-            description: subContent.meta_description,
+            title: finalSubContent.title,
+            description: finalSubContent.meta_description,
             city: city,
             state: state,
             pest_type: pestType,
@@ -1819,14 +2284,14 @@ Agent 2 design research (authoritative):
             schema_template: subSchemaTemplate,
             seasonal_focus: serviceSeasonalSummary,
             draft: false,
-          }, subContent.content);
+          }, finalSubContent.content);
 
           await db.query(
             `INSERT INTO content_items (title, slug, content_type, target_keyword, pest_type, city, niche, word_count, quality_score)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              ON CONFLICT (slug) DO UPDATE SET word_count = $8, quality_score = $9`,
             [
-              subContent.title,
+              finalSubContent.title,
               `${citySlug}/${pestSlug}`,
               "service_subpage",
               cluster.primary_keyword,
@@ -1837,8 +2302,14 @@ Agent 2 design research (authoritative):
               JSON.stringify(subQuality.metrics),
             ]
           );
+          await checkpoints.mark(subpageCheckpointKey, {
+            slug: `${citySlug}/${pestSlug}`,
+            city,
+            pestType,
+          });
           console.log(`[Agent 3] Saved page ${citySlug}/${pestSlug} (${subQuality.metrics.wordCount} words)`);
-        }
+          }
+        );
 
         const pageUrl = `https://extermanation.com/${citySlug}/`;
         await db.query(
@@ -1847,6 +2318,11 @@ Agent 2 design research (authoritative):
            ON CONFLICT (slug) DO NOTHING`,
           [pageUrl, citySlug, city, state, cfg.niche, hubKeyword]
         );
+        await checkpoints.mark(`city:${citySlug}`, {
+          city,
+          state,
+          routeCount: serviceClusterTypes.slice(0, 5).length,
+        });
         console.log(`[Agent 3] Registered page ${pageUrl}`);
       };
 
@@ -1942,6 +2418,9 @@ Agent 2 design research (authoritative):
       });
     }
 
+    await checkpoints.mark("completed", {
+      cityCount: cityRows.length,
+    });
     console.log("[Agent 3] Site build complete");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

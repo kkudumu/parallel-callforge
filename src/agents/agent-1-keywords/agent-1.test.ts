@@ -153,7 +153,7 @@ describe("Agent 1 - Keywords", () => {
       ]);
       expect(db.query).toHaveBeenCalledWith(
         expect.stringContaining("FROM deployment_candidates"),
-        ["offer-123", 50000, 300000, 2]
+        ["offer-123", 2]
       );
     });
   });

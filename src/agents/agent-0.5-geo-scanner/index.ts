@@ -4,6 +4,11 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { eventBus } from "../../shared/events/event-bus.js";
+import {
+  buildCheckpointScope,
+  createCheckpointTracker,
+} from "../../shared/checkpoints.js";
+import { syncOfferGeoCoverageFromProfile } from "../../shared/offer-profiles.js";
 
 export interface GeoZipReferenceRow {
   zip_code: string;
@@ -1093,12 +1098,48 @@ export async function runAgent05(
       await persistOfferCoverage(db, offerId, inputZipCodes, source);
     }
 
-    const allZipCodes = inputZipCodes.length > 0
+    let allZipCodes = inputZipCodes.length > 0
       ? inputZipCodes
       : normalizeZipList(await loadOfferCoverage(db, offerId));
 
+    if (allZipCodes.length === 0 && inputZipCodes.length === 0) {
+      const syncedZipCount = await syncOfferGeoCoverageFromProfile(db, offerId);
+      if (syncedZipCount > 0) {
+        console.log(`[Agent 0.5] Imported ${syncedZipCount} ZIPs from offer profile for ${offerId}`);
+        allZipCodes = normalizeZipList(await loadOfferCoverage(db, offerId));
+      }
+    }
+
     if (allZipCodes.length === 0) {
       throw new Error(`No ZIP coverage available for offer ${offerId}`);
+    }
+
+    const checkpointScope = buildCheckpointScope([
+      offerId,
+      source,
+      allZipCodes,
+      config.topN ?? null,
+    ]);
+    const checkpoints = await createCheckpointTracker(
+      db,
+      "agent-0.5",
+      checkpointScope
+    );
+    const savedCheckpoint = checkpoints.get<{ selected?: RankedDeploymentCandidate[] }>(
+      "deployment_candidates_saved"
+    );
+    if (Array.isArray(savedCheckpoint?.selected) && savedCheckpoint.selected.length > 0) {
+      console.log(
+        `[Agent 0.5] Reusing checkpointed deployment candidates for ${offerId} (${savedCheckpoint.selected.length} cities)`
+      );
+      eventBus.emitEvent({
+        type: "agent_step",
+        agent: "agent-0.5",
+        step: "Checkpoint hit",
+        detail: `${savedCheckpoint.selected.length} cities`,
+        timestamp: Date.now(),
+      });
+      return savedCheckpoint.selected;
     }
 
     eventBus.emitEvent({
@@ -1166,15 +1207,14 @@ export async function runAgent05(
       );
     }
 
-    await db.query("BEGIN");
-    try {
-      await db.query("DELETE FROM deployment_candidates WHERE offer_id = $1", [offerId]);
+    const writeCandidates = async (writer: DbClient) => {
+      await writer.query("DELETE FROM deployment_candidates WHERE offer_id = $1", [offerId]);
 
       for (const [index, candidate] of selected.entries()) {
         console.log(
           `[Agent 0.5] Writing candidate ${index + 1}/${selected.length}: ${candidate.city}, ${candidate.state}`
         );
-        await db.query(
+        await writer.query(
           `INSERT INTO deployment_candidates
            (offer_id, city, state, zip_codes, eligible_zip_count, population,
             pre_keyword_score, status, reasoning, created_at, updated_at)
@@ -1204,12 +1244,17 @@ export async function runAgent05(
           ]
         );
       }
+    };
 
-      await db.query("COMMIT");
-    } catch (error) {
-      await db.query("ROLLBACK");
-      throw error;
+    if (db.withTransaction) {
+      await db.withTransaction(writeCandidates);
+    } else {
+      await writeCandidates(db);
     }
+
+    await checkpoints.mark("deployment_candidates_saved", {
+      selected,
+    });
 
     console.log(`[Agent 0.5] Saved ${selected.length} deployment candidates for ${offerId}`);
     eventBus.emitEvent({

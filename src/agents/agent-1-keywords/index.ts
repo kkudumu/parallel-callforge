@@ -6,6 +6,13 @@ import { KeywordClusterSchema } from "../../shared/schemas/keyword-clusters.js";
 import { createGoogleKpClient } from "./google-kp.js";
 import { eventBus } from "../../shared/events/event-bus.js";
 import {
+  buildCheckpointScope,
+  createCheckpointTracker,
+} from "../../shared/checkpoints.js";
+import type { OfferProfile } from "../../shared/offer-profiles.js";
+import type { VerticalProfile } from "../../shared/vertical-profiles.js";
+import { resolveVerticalStrategy } from "../../shared/vertical-strategies.js";
+import {
   getCityResearchFingerprint,
   getCityScoringFingerprint,
   isFreshTimestamp,
@@ -14,12 +21,6 @@ import {
   selectTopCities,
   type ScoredCity,
 } from "../../shared/cache-policy.js";
-import {
-  KEYWORD_TEMPLATE_PROMPT,
-  CITY_SCORING_PROMPT,
-  KEYWORD_CLUSTERING_PROMPT,
-} from "./prompts.js";
-
 // Schema for LLM keyword template generation
 const KeywordTemplatesResponseSchema = z.object({
   templates: z.array(z.string()).min(10).max(40),
@@ -60,9 +61,6 @@ const KeywordClusteringResponseSchema = z.object({
   ),
 });
 
-const AGENT_1_TARGET_POPULATION_MIN = 50_000;
-const AGENT_1_TARGET_POPULATION_MAX = 300_000;
-
 /** Build url_mapping deterministically from cluster data. */
 function buildUrlMapping(
   clusters: Array<{ cluster_name: string; primary_keyword: string }>,
@@ -77,6 +75,30 @@ function buildUrlMapping(
     }
   }
   return mapping;
+}
+
+function isServiceAllowed(
+  value: string,
+  offerProfile?: OfferProfile | null,
+  verticalProfile?: VerticalProfile | null
+): boolean {
+  const strategy = resolveVerticalStrategy(verticalProfile?.vertical_key ?? offerProfile?.vertical);
+  return strategy.isServiceAllowed(value, {
+    offerProfile,
+    verticalProfile,
+  });
+}
+
+function filterKeywordTemplates(
+  templates: string[],
+  offerProfile?: OfferProfile | null
+): string[] {
+  if (!offerProfile?.constraints) {
+    return templates;
+  }
+
+  const filtered = templates.filter((template) => isServiceAllowed(template, offerProfile));
+  return filtered.length > 0 ? filtered : templates;
 }
 
 function normalizeUrlMappingValue(key: string, value: unknown): string {
@@ -177,13 +199,45 @@ function summarizeCityScoringLine(line: string): string | null {
   return null;
 }
 
-function truncateReasoning(reasoning: string, maxLength = 140): string {
-  const trimmed = reasoning.replace(/\s+/g, " ").trim();
-  if (trimmed.length <= maxLength) {
-    return trimmed;
+function formatReasoning(reasoning: string): string {
+  return reasoning.replace(/\s+/g, " ").trim();
+}
+
+function formatDbErrorDetails(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
   }
 
-  return `${trimmed.slice(0, maxLength - 3)}...`;
+  const pgError = error as Error & {
+    code?: string;
+    detail?: string;
+    hint?: string;
+    where?: string;
+    table?: string;
+    constraint?: string;
+  };
+
+  const details = [pgError.message];
+  if (pgError.code) {
+    details.push(`code=${pgError.code}`);
+  }
+  if (pgError.table) {
+    details.push(`table=${pgError.table}`);
+  }
+  if (pgError.constraint) {
+    details.push(`constraint=${pgError.constraint}`);
+  }
+  if (pgError.detail) {
+    details.push(`detail=${pgError.detail}`);
+  }
+  if (pgError.hint) {
+    details.push(`hint=${pgError.hint}`);
+  }
+  if (pgError.where) {
+    details.push(`where=${pgError.where}`);
+  }
+
+  return details.join(" | ");
 }
 
 function createStreamingLogger(prefix: string) {
@@ -232,6 +286,8 @@ function createStreamingLogger(prefix: string) {
 
 export interface Agent1Config {
   niche: string;
+  offerProfile?: OfferProfile | null;
+  verticalProfile?: VerticalProfile | null;
   candidateCities?: Array<{
     city: string;
     state: string;
@@ -285,6 +341,9 @@ export async function loadCandidateCitiesFromDeploymentCandidates(
     distance_miles?: number | null;
   } | null;
 }>> {
+  console.log(
+    `[Agent 1] Loading up to ${Math.max(1, topCandidateLimit)} deployment candidates for offer ${offerId}...`
+  );
   const result = await db.query<{
     city: string;
     state: string;
@@ -331,13 +390,15 @@ export async function loadCandidateCitiesFromDeploymentCandidates(
        eligible_zip_count DESC,
        city ASC,
        state ASC
-     LIMIT $4`,
+     LIMIT $2`,
     [
       offerId,
-      AGENT_1_TARGET_POPULATION_MIN,
-      AGENT_1_TARGET_POPULATION_MAX,
       Math.max(1, topCandidateLimit),
     ]
+  );
+
+  console.log(
+    `[Agent 1] Loaded ${result.rows.length} deployment candidates for offer ${offerId}`
   );
 
   return result.rows.map((row) => ({
@@ -354,9 +415,12 @@ export async function getKeywordTemplates(
   niche: string,
   llm: LlmClient,
   db: DbClient,
-  forceRefresh = false
+  forceRefresh = false,
+  offerProfile?: OfferProfile | null,
+  verticalProfile?: VerticalProfile | null
 ): Promise<string[]> {
   const cacheKey = normalizeNiche(niche);
+  console.log(`[Agent 1] Checking keyword template cache for ${cacheKey}...`);
   const cached = await db.query<{ templates: string[]; updated_at: Date }>(
     `SELECT templates
           , updated_at
@@ -374,11 +438,15 @@ export async function getKeywordTemplates(
     : false;
   if (!forceRefresh && Array.isArray(cachedTemplates) && cachedTemplates.length > 0 && isFresh) {
     console.log(`[Agent 1] Reusing ${cachedTemplates.length} cached keyword templates`);
-    return cachedTemplates;
+    return filterKeywordTemplates(cachedTemplates, offerProfile);
   }
 
   console.log("[Agent 1] Keyword templates missing or stale, refreshing...");
-  const templatePrompt = KEYWORD_TEMPLATE_PROMPT.replace("{niche}", niche);
+  const strategy = resolveVerticalStrategy(verticalProfile?.vertical_key ?? offerProfile?.vertical);
+  const templatePrompt = strategy.getKeywordTemplatePrompt(niche, {
+    offerProfile,
+    verticalProfile,
+  });
   const { templates } = await llm.call({
     prompt: templatePrompt,
     schema: KeywordTemplatesResponseSchema,
@@ -386,6 +454,7 @@ export async function getKeywordTemplates(
     logLabel: "[Agent 1][Step 1][Keyword templates]",
   });
 
+  console.log(`[Agent 1] Saving ${templates.length} keyword templates...`);
   await db.query(
     `INSERT INTO keyword_templates
      (niche, templates, cache_provider, cache_version, retrieval_method, confidence_score, updated_at)
@@ -400,8 +469,9 @@ export async function getKeywordTemplates(
        updated_at = now()`,
     [cacheKey, templates]
   );
+  console.log("[Agent 1] Keyword templates saved");
 
-  return templates;
+  return filterKeywordTemplates(templates, offerProfile);
 }
 
 async function getScoredCities(
@@ -415,6 +485,9 @@ async function getScoredCities(
   const candidateCities = config.candidateCities ?? [];
   const cacheKey = normalizeNiche(config.niche);
   const inputFingerprint = getCityScoringFingerprint(candidateCities, templates);
+  console.log(
+    `[Agent 1] Checking city scoring cache for ${candidateCities.length} candidate cities...`
+  );
   const cached = await db.query<{ scored_cities: ScoredCity[]; updated_at: Date }>(
     `SELECT scored_cities, updated_at
      FROM city_scoring_cache
@@ -441,9 +514,19 @@ async function getScoredCities(
       `[Agent 1] Queueing city ${index + 1}/${candidateCities.length} for scoring: ${city.city}, ${city.state} (pop ${city.population.toLocaleString("en-US")})`
     );
   }
-  const scoringPrompt = CITY_SCORING_PROMPT
-    .replace("{city_data}", JSON.stringify(candidateCities, null, 2))
-    .replace("{keyword_data}", JSON.stringify(metrics.slice(0, 100), null, 2));
+  const strategy = resolveVerticalStrategy(
+    config.verticalProfile?.vertical_key ?? config.offerProfile?.vertical
+  );
+  const scoringPrompt = strategy.getCityScoringPrompt(
+    {
+      cityData: JSON.stringify(candidateCities, null, 2),
+      keywordData: JSON.stringify(metrics.slice(0, 100), null, 2),
+    },
+    {
+      offerProfile: config.offerProfile,
+      verticalProfile: config.verticalProfile,
+    }
+  );
 
   const scoringLogger = createStreamingLogger("[Agent 1][city-scoring]");
   const startedAt = Date.now();
@@ -473,10 +556,13 @@ async function getScoredCities(
   );
   for (const [index, city] of scored_cities.entries()) {
     console.log(
-      `[Agent 1] Scored city ${index + 1}/${scored_cities.length}: ${city.city}, ${city.state} -> ${city.priority_score}/100 (${truncateReasoning(city.reasoning ?? "No reasoning provided")})`
+      `[Agent 1] Scored city ${index + 1}/${scored_cities.length}: ${city.city}, ${city.state} -> ${city.priority_score}/100 (${formatReasoning(city.reasoning ?? "No reasoning provided")})`
     );
   }
 
+  console.log(
+    `[Agent 1] Saving city scoring cache for ${scored_cities.length} cities...`
+  );
   await db.query(
     `INSERT INTO city_scoring_cache
      (niche, input_fingerprint, candidate_cities, scored_cities, cache_source,
@@ -499,6 +585,7 @@ async function getScoredCities(
       JSON.stringify(scored_cities),
     ]
   );
+  console.log("[Agent 1] City scoring cache saved");
 
   return scored_cities;
 }
@@ -519,6 +606,7 @@ async function getCachedCityResearch(
     city.state,
     templates
   );
+  console.log(`[Agent 1] Checking cached keyword clusters for ${city.city}, ${city.state}...`);
   const result = await db.query<{
     id: string;
     keyword_cluster_ids: string[];
@@ -536,6 +624,7 @@ async function getCachedCityResearch(
 
   const row = result.rows[0];
   if (!row) {
+    console.log(`[Agent 1] No cached keyword clusters found for ${city.city}, ${city.state}`);
     return false;
   }
 
@@ -543,20 +632,28 @@ async function getCachedCityResearch(
     row.research_fingerprint === researchFingerprint &&
     isFreshTimestamp(row.updated_at, KEYWORD_RESEARCH_TTL_MS);
   if (!isFresh) {
+    console.log(`[Agent 1] Cached keyword clusters stale for ${city.city}, ${city.state}`);
     return false;
   }
 
   const clusterIds = Array.isArray(row.keyword_cluster_ids) ? row.keyword_cluster_ids : [];
   if (clusterIds.length === 0) {
+    console.log(`[Agent 1] Cached keyword cluster map empty for ${city.city}, ${city.state}`);
     return false;
   }
 
+  console.log(
+    `[Agent 1] Verifying ${clusterIds.length} cached keyword clusters for ${city.city}, ${city.state}...`
+  );
   const clusters = await db.query<{ id: string }>(
     "SELECT id FROM keyword_clusters WHERE id = ANY($1::uuid[])",
     [clusterIds]
   );
 
   if (clusters.rows.length !== clusterIds.length) {
+    console.log(
+      `[Agent 1] Cached keyword clusters incomplete for ${city.city}, ${city.state} (${clusters.rows.length}/${clusterIds.length})`
+    );
     return false;
   }
 
@@ -597,6 +694,28 @@ export async function runAgent1(
     ...config,
     candidateCities,
   };
+  const checkpointScope = buildCheckpointScope([
+    normalizeNiche(config.niche),
+    config.offerId ?? null,
+    config.offerProfile?.constraints ?? null,
+    config.payoutPerQualifiedCall ?? null,
+    candidateCities.map((city) => ({
+      city: city.city,
+      state: city.state,
+      population: city.population,
+    })),
+  ]);
+  const checkpoints = await createCheckpointTracker(
+    db,
+    "agent-1",
+    checkpointScope,
+    { reset: Boolean(config.forceRefresh) }
+  );
+  if (checkpoints.has("completed")) {
+    console.log("[Agent 1] Reusing completed checkpoint for this candidate set");
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Checkpoint hit", detail: "Completed", timestamp: Date.now() });
+    return;
+  }
 
   console.log(`[Agent 1] Starting keyword research for ${config.niche}`);
   eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Starting", detail: config.niche, timestamp: Date.now() });
@@ -607,7 +726,14 @@ export async function runAgent1(
   // Step 1: Load cached templates or generate them once per niche
   console.log("[Agent 1] Step 1: Loading keyword templates...");
   eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Loading templates", detail: "Cache lookup", timestamp: Date.now() });
-  const templates = await getKeywordTemplates(config.niche, llm, db, config.forceRefresh);
+  const templates = await getKeywordTemplates(
+    config.niche,
+    llm,
+    db,
+    config.forceRefresh,
+    config.offerProfile,
+    config.verticalProfile
+  );
   console.log(`[Agent 1] Using ${templates.length} keyword templates`);
   for (const [index, template] of templates.slice(0, 8).entries()) {
     console.log(`[Agent 1] Template ${index + 1}/${templates.length}: ${template}`);
@@ -620,8 +746,12 @@ export async function runAgent1(
   console.log(`[Agent 1] Expanded to ${expandedKeywords.length} keywords across ${cityNames.length} cities`);
 
   // Step 3: Pull metrics from Google Autocomplete + Google Trends
+  console.log("[Agent 1] Step 3: Fetching keyword metrics...");
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Fetching metrics", detail: `${expandedKeywords.length} keywords`, timestamp: Date.now() });
   const kpClient = createGoogleKpClient(db, { forceRefresh: config.forceRefresh });
   const metrics = await kpClient.getKeywordIdeas(expandedKeywords);
+  console.log(`[Agent 1] Keyword metrics ready for ${metrics.length} keywords`);
+  eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Metrics ready", detail: `${metrics.length} keywords`, timestamp: Date.now() });
 
   // Step 4: Score cities via LLM
   console.log("[Agent 1] Step 4: Scoring cities...");
@@ -636,54 +766,81 @@ export async function runAgent1(
   );
 
   if (config.offerId) {
-    for (const scoredCity of scored_cities) {
-      const existing = await db.query<{ pre_keyword_score: number | string }>(
-        `SELECT pre_keyword_score
-         FROM deployment_candidates
-         WHERE offer_id = $1
-           AND city = $2
-           AND state = $3
-         LIMIT 1`,
-        [config.offerId, scoredCity.city, scoredCity.state]
-      );
-
-      const preKeywordScore = Number(existing.rows[0]?.pre_keyword_score ?? 0);
+    console.log(
+      `[Agent 1] Applying keyword scores to deployment candidates for ${scored_cities.length} cities...`
+    );
+    for (const [index, scoredCity] of scored_cities.entries()) {
+      const scoreCheckpointKey = `deployment_score:${slugify(scoredCity.city)}:${scoredCity.state.toLowerCase()}`;
+      if (checkpoints.has(scoreCheckpointKey)) {
+        console.log(
+          `[Agent 1] Reusing checkpointed deployment candidate score for ${scoredCity.city}, ${scoredCity.state}`
+        );
+        continue;
+      }
       const payoutBoost = config.payoutPerQualifiedCall
         ? Math.min(10, Math.max(0, config.payoutPerQualifiedCall / 20))
         : 0;
-      const finalScore = Math.round((
-        (preKeywordScore * 0.45) +
-        (scoredCity.priority_score * 0.45) +
-        payoutBoost
-      ) * 100) / 100;
-      await db.query(
-        `UPDATE deployment_candidates
-         SET keyword_score = $1,
-             final_score = $2,
-             status = $3,
-             reasoning = COALESCE(reasoning, '{}'::jsonb) ||
-               jsonb_build_object(
-                 'keyword_score', $1,
-                 'final_score', $2,
-                 'keyword_reasoning', $4,
-                 'payout_boost', $5
-               ),
-             updated_at = now()
-         WHERE offer_id = $6
-           AND city = $7
-           AND state = $8`,
-        [
-          scoredCity.priority_score,
-          finalScore,
-          scoredCity.priority_score > 50 ? "researched" : "rejected",
-          scoredCity.reasoning ?? "",
-          payoutBoost,
-          config.offerId,
-          scoredCity.city,
-          scoredCity.state,
-        ]
+      console.log(
+        `[Agent 1] Writing deployment candidate ${index + 1}/${scored_cities.length}: ${scoredCity.city}, ${scoredCity.state}`
       );
+      let updateResult;
+      try {
+        updateResult = await db.query<{ final_score: number | string }>(
+          `UPDATE deployment_candidates
+           SET keyword_score = $1,
+               final_score = ROUND((COALESCE(pre_keyword_score, 0) * 0.45) + ($1 * 0.45) + $2, 2),
+               status = $3,
+               reasoning = COALESCE(reasoning, '{}'::jsonb) ||
+                 jsonb_build_object(
+                   'keyword_score', $1,
+                   'final_score', ROUND((COALESCE(pre_keyword_score, 0) * 0.45) + ($1 * 0.45) + $2, 2),
+                   'keyword_reasoning', $4::text,
+                   'payout_boost', $5::numeric
+                 ),
+               updated_at = now()
+           WHERE id IN (
+             SELECT id
+             FROM deployment_candidates
+             WHERE offer_id = $6
+               AND city = $7
+               AND state = $8
+             FOR UPDATE SKIP LOCKED
+           )
+           RETURNING final_score`,
+          [
+            scoredCity.priority_score,
+            payoutBoost,
+            scoredCity.priority_score > 50 ? "researched" : "rejected",
+            scoredCity.reasoning ?? "",
+            payoutBoost,
+            config.offerId,
+            scoredCity.city,
+            scoredCity.state,
+          ]
+        );
+      } catch (error) {
+        console.warn(
+          `[Agent 1] Failed to update deployment candidate ${scoredCity.city}, ${scoredCity.state}: ${formatDbErrorDetails(error)}`
+        );
+        continue;
+      }
+      const finalScore = Number(updateResult.rows[0]?.final_score ?? Number.NaN);
+      if (updateResult.rowCount === 0) {
+        console.warn(
+          `[Agent 1] Skipped locked or missing deployment candidate: ${scoredCity.city}, ${scoredCity.state}`
+        );
+        continue;
+      }
+      console.log(
+        `[Agent 1] Updated deployment candidate: ${scoredCity.city}, ${scoredCity.state} -> ${finalScore}`
+      );
+      await checkpoints.mark(scoreCheckpointKey, {
+        city: scoredCity.city,
+        state: scoredCity.state,
+        finalScore,
+      });
     }
+    console.log("[Agent 1] Deployment candidate scores updated");
   }
 
   // Filter to top cities (score > 50)
@@ -699,7 +856,18 @@ export async function runAgent1(
 
   // Step 5: Cluster keywords per city
   for (const city of selectedCities) {
+    const cityCheckpointKey = `city_clusters:${slugify(city.city)}:${city.state.toLowerCase()}`;
+    if (checkpoints.has(cityCheckpointKey)) {
+      console.log(`[Agent 1] Reusing checkpointed keyword clusters for ${city.city}, ${city.state}`);
+      continue;
+    }
+    console.log(`[Agent 1] Checking whether ${city.city}, ${city.state} can reuse cached research...`);
     if (await getCachedCityResearch(config, city, templates, db)) {
+      await checkpoints.mark(cityCheckpointKey, {
+        city: city.city,
+        state: city.state,
+        source: "cache",
+      });
       continue;
     }
 
@@ -709,10 +877,20 @@ export async function runAgent1(
       kw.toLowerCase().includes(city.city.toLowerCase())
     );
 
-    const clusterPrompt = KEYWORD_CLUSTERING_PROMPT
-      .replace("{city}", city.city)
-      .replace("{state}", city.state)
-      .replace("{keywords}", JSON.stringify(cityKeywords));
+    const strategy = resolveVerticalStrategy(
+      config.verticalProfile?.vertical_key ?? config.offerProfile?.vertical
+    );
+    const clusterPrompt = strategy.getKeywordClusteringPrompt(
+      {
+        city: city.city,
+        state: city.state,
+        keywordsJson: JSON.stringify(cityKeywords),
+      },
+      {
+        offerProfile: config.offerProfile,
+        verticalProfile: config.verticalProfile,
+      }
+    );
 
     const clusterResponse = await llm.call({
       prompt: clusterPrompt,
@@ -720,7 +898,7 @@ export async function runAgent1(
       model: "haiku",
       logLabel: `[Agent 1][Step 5][${city.city} clustering]`,
     });
-    const clusters = clusterResponse.clusters.map((c) =>
+    const parsedClusters = clusterResponse.clusters.map((c) =>
       KeywordClusterSchema.parse({
         cluster_name: c.cluster_name,
         primary_keyword: c.primary_keyword,
@@ -732,6 +910,15 @@ export async function runAgent1(
           : "transactional",
       })
     );
+    const serviceClusters = parsedClusters.filter((cluster, index) =>
+      index === 0 ||
+      isServiceAllowed(
+        `${cluster.cluster_name} ${cluster.primary_keyword}`,
+        config.offerProfile,
+        config.verticalProfile
+      )
+    );
+    const clusters = serviceClusters.length > 0 ? serviceClusters : parsedClusters;
     const citySlug = slugify(city.city);
     const url_mapping = buildUrlMapping(clusters, citySlug);
     const researchFingerprint = getCityResearchFingerprint(
@@ -748,6 +935,7 @@ export async function runAgent1(
     );
 
     // Step 6: Write to DB
+    console.log(`[Agent 1] Loading existing keyword cluster map for ${city.city}, ${city.state}...`);
     const existingMapResult = await db.query<{ keyword_cluster_ids: string[] }>(
       `SELECT keyword_cluster_ids
        FROM city_keyword_map
@@ -761,7 +949,10 @@ export async function runAgent1(
       ? existingMapResult.rows[0].keyword_cluster_ids
       : [];
     const clusterIds: string[] = [];
-    for (const cluster of clusters) {
+    for (const [clusterIndex, cluster] of clusters.entries()) {
+      console.log(
+        `[Agent 1] Upserting cluster ${clusterIndex + 1}/${clusters.length} for ${city.city}: ${cluster.primary_keyword}`
+      );
       const result = await db.query(
         `INSERT INTO keyword_clusters
          (cluster_name, primary_keyword, secondary_keywords, search_volume, difficulty, intent, city, state, niche)
@@ -788,6 +979,7 @@ export async function runAgent1(
       clusterIds.push(result.rows[0].id);
     }
 
+    console.log(`[Agent 1] Saving city keyword map for ${city.city}, ${city.state}...`);
     await db.query(
       `INSERT INTO city_keyword_map
        (city, state, population, priority_score, keyword_cluster_ids, url_mapping, niche, research_fingerprint, updated_at)
@@ -810,20 +1002,33 @@ export async function runAgent1(
         researchFingerprint,
       ]
     );
+    console.log(`[Agent 1] City keyword map saved for ${city.city}, ${city.state}`);
 
     const staleClusterIds = previousClusterIds.filter(
       (clusterId) => !clusterIds.includes(clusterId)
     );
     if (staleClusterIds.length > 0) {
+      console.log(
+        `[Agent 1] Deleting ${staleClusterIds.length} stale keyword clusters for ${city.city}, ${city.state}...`
+      );
       await db.query(
         "DELETE FROM keyword_clusters WHERE id = ANY($1::uuid[])",
         [staleClusterIds]
       );
+      console.log(`[Agent 1] Deleted stale keyword clusters for ${city.city}, ${city.state}`);
     }
 
     console.log(`[Agent 1] Saved ${clusters.length} clusters for ${city.city}`);
     eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Clusters saved", detail: `${clusters.length} for ${city.city}`, timestamp: Date.now() });
+    await checkpoints.mark(cityCheckpointKey, {
+      city: city.city,
+      state: city.state,
+      clusterCount: clusters.length,
+    });
   }
 
+  await checkpoints.mark("completed", {
+    selectedCities: selectedCities.length,
+  });
   console.log("[Agent 1] Keyword research complete");
 }

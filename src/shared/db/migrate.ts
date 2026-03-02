@@ -43,16 +43,23 @@ async function migrate() {
 
       const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), "utf-8");
       console.log(`  applying: ${file}`);
-      await db.query("BEGIN");
-      try {
-        await db.query(sql);
-        await db.query("INSERT INTO _migrations (name) VALUES ($1)", [file]);
-        await db.query("COMMIT");
-        console.log(`  applied: ${file}`);
-      } catch (err) {
-        await db.query("ROLLBACK");
-        throw err;
+      if (db.withTransaction) {
+        await db.withTransaction(async (tx) => {
+          await tx.query(sql);
+          await tx.query("INSERT INTO _migrations (name) VALUES ($1)", [file]);
+        });
+      } else {
+        await db.query("BEGIN");
+        try {
+          await db.query(sql);
+          await db.query("INSERT INTO _migrations (name) VALUES ($1)", [file]);
+          await db.query("COMMIT");
+        } catch (err) {
+          await db.query("ROLLBACK");
+          throw err;
+        }
       }
+      console.log(`  applied: ${file}`);
     }
 
     console.log("Migrations complete.");

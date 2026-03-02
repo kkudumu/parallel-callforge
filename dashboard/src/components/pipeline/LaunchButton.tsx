@@ -12,6 +12,7 @@ interface LaunchButtonProps {
 export function LaunchButton({ status, message, connected }: LaunchButtonProps) {
   const [launching, setLaunching] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [resumeFromFailure, setResumeFromFailure] = useState(false);
   const [forceKeywordRefresh, setForceKeywordRefresh] = useState(false);
   const [forceDesignRefresh, setForceDesignRefresh] = useState(false);
   const [enableAgent7, setEnableAgent7] = useState(false);
@@ -89,6 +90,7 @@ export function LaunchButton({ status, message, connected }: LaunchButtonProps) 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          resumeFromFailure,
           forceKeywordRefresh,
           forceDesignRefresh,
           enableAgent7,
@@ -155,10 +157,21 @@ export function LaunchButton({ status, message, connected }: LaunchButtonProps) 
   const isRunning = status === "running" || launching;
   const isDone = status === "completed";
   const isError = status === "error";
+  const canResumeFromFailure = isError;
 
   return (
     <div className="flex flex-col items-center gap-1.5">
       <div className="flex flex-col items-start gap-1 text-[11px] font-semibold text-kawaii-text-muted dark:text-[#9a8ab0]">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={resumeFromFailure}
+            onChange={(event) => setResumeFromFailure(event.target.checked)}
+            disabled={isRunning || !connected || !canResumeFromFailure}
+            className="h-3.5 w-3.5 rounded border-white/40"
+          />
+          <span>Resume from failure point</span>
+        </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -255,6 +268,11 @@ export function LaunchButton({ status, message, connected }: LaunchButtonProps) 
             className="rounded-md border border-white/30 bg-white/80 px-2 py-1 text-[11px] text-slate-700"
           />
         </label>
+        {canResumeFromFailure && (
+          <div className="w-full rounded-md border border-white/25 bg-white/60 px-2 py-2 text-[10px] leading-4 text-slate-700">
+            Resume mode reuses cached outputs from completed upstream agents and restarts at the failed stage.
+          </div>
+        )}
         <div className="w-full rounded-md border border-white/25 bg-white/60 px-2 py-2 text-[10px] leading-4 text-slate-700">
           <div className="font-bold uppercase tracking-[0.08em] text-slate-500">
             Runtime Defaults
@@ -404,7 +422,7 @@ export function LaunchButton({ status, message, connected }: LaunchButtonProps) 
             : isDone
               ? "Run Again"
               : isError
-                ? "Retry"
+                ? (resumeFromFailure ? "Resume From Failure" : "Retry")
                 : "Launch Pipeline"
           }
         </span>

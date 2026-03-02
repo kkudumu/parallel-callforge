@@ -52,13 +52,21 @@ import {
   MockDataProvider,
 } from "./agents/agent-7-monitor/index.js";
 import { SearchConsoleDataProvider } from "./agents/agent-7-monitor/search-console-provider.js";
+import {
+  loadOfferProfile,
+  parseAndSaveOfferProfile,
+} from "./shared/offer-profiles.js";
+import {
+  loadVerticalProfile,
+  mergeOfferConstraints,
+} from "./shared/vertical-profiles.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.DASHBOARD_PORT ?? 3847);
 const STATS_POLL_MS = 3000;
 const MAX_LOG_BUFFER = 300;
 
-const NICHE = "pest-control";
+const DEFAULT_NICHE = "pest-control";
 const HUGO_SITE_PATH = path.resolve("hugo-site");
 
 function getAgentFromSource(source?: string): AgentName | null {
@@ -85,25 +93,64 @@ function buildAgent1Config(
   offerId: string | undefined,
   forceRefresh: boolean,
   candidateCities = CANDIDATE_CITIES,
-  payoutPerQualifiedCall?: number
+  payoutPerQualifiedCall?: number,
+  offerProfile?: Awaited<ReturnType<typeof loadOfferProfile>> | null,
+  verticalProfile?: Awaited<ReturnType<typeof loadVerticalProfile>> | null
 ) {
+  const niche = offerProfile?.niche ?? DEFAULT_NICHE;
   if (citySource === "deployment_candidates" && offerId) {
     return {
-      niche: NICHE,
+      niche,
       citySource,
       offerId,
       topCandidateLimit: 5,
+      offerProfile,
+      verticalProfile,
       payoutPerQualifiedCall,
       forceRefresh,
     };
   }
 
   return {
-    niche: NICHE,
+    niche,
     citySource: "hardcoded" as CitySourceMode,
     candidateCities,
+    offerProfile,
+    verticalProfile,
     payoutPerQualifiedCall,
     forceRefresh,
+  };
+}
+
+async function getOfferContext(
+  db: DbClient,
+  offerId?: string
+): Promise<{
+  offerProfile: Awaited<ReturnType<typeof loadOfferProfile>>;
+  verticalProfile: Awaited<ReturnType<typeof loadVerticalProfile>> | null;
+  niche: string;
+}> {
+  if (!offerId) {
+    return { offerProfile: null, verticalProfile: null, niche: DEFAULT_NICHE };
+  }
+
+  const storedOfferProfile = await loadOfferProfile(db, offerId);
+  if (!storedOfferProfile) {
+    return { offerProfile: null, verticalProfile: null, niche: DEFAULT_NICHE };
+  }
+
+  const verticalProfile = await loadVerticalProfile(db, storedOfferProfile.vertical);
+  const offerProfile = {
+    ...storedOfferProfile,
+    constraints: mergeOfferConstraints(
+      verticalProfile.definition,
+      storedOfferProfile.constraints
+    ),
+  };
+  return {
+    offerProfile,
+    verticalProfile,
+    niche: offerProfile.niche,
   };
 }
 
@@ -376,10 +423,38 @@ export function createDashboardServer(db?: DbClient) {
   let lastHealthScore: HealthScoreEvent | null = null;
   let lastPipelineRun: PipelineRunEvent | null = null;
   const logBuffer: DashboardEvent[] = [];
+  const pipelineSequence: AgentName[] = ["agent-0.5", "agent-1", "agent-2", "agent-3", "agent-7"];
 
   function resetAgentStates() {
     for (const agent of Object.keys(agentStates) as AgentName[]) {
       agentStates[agent] = createAgentStatus(agent);
+      try { broadcast(agentStates[agent]); } catch { /* server not ready yet */ }
+    }
+  }
+
+  function getResumeAgent(snapshot: Record<AgentName, AgentStatusEvent>): AgentName | null {
+    for (const agent of pipelineSequence) {
+      if (snapshot[agent].status === "error") {
+        return agent;
+      }
+    }
+
+    return null;
+  }
+
+  function restoreCompletedAgentStates(
+    snapshot: Record<AgentName, AgentStatusEvent>,
+    agentsToKeep: AgentName[]
+  ) {
+    for (const agent of agentsToKeep) {
+      if (snapshot[agent].status !== "completed") {
+        continue;
+      }
+
+      agentStates[agent] = {
+        ...snapshot[agent],
+        timestamp: Date.now(),
+      };
       try { broadcast(agentStates[agent]); } catch { /* server not ready yet */ }
     }
   }
@@ -496,6 +571,31 @@ export function createDashboardServer(db?: DbClient) {
     }
   });
 
+  app.post("/api/offers/profile", async (req, res) => {
+    if (!db) {
+      res.status(503).json({ error: "No database connection" });
+      return;
+    }
+
+    const offerId =
+      typeof req.body?.offerId === "string" ? req.body.offerId.trim() : "";
+    const rawOfferText =
+      typeof req.body?.rawOfferText === "string" ? req.body.rawOfferText.trim() : "";
+
+    if (!offerId || !rawOfferText) {
+      res.status(400).json({ error: "offerId and rawOfferText are required" });
+      return;
+    }
+
+    try {
+      await runMigrations(db);
+      const profile = await parseAndSaveOfferProfile(db, offerId, rawOfferText);
+      res.json({ profile });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/agent-0.5/scan", async (req, res) => {
     if (!db) {
       res.status(503).json({ error: "No database connection" });
@@ -532,9 +632,12 @@ export function createDashboardServer(db?: DbClient) {
         const codexCli = createCodexCli(env.CODEX_CLI_PATH);
         const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
         const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
+        const offerContext = await getOfferContext(db, offerId);
 
         await runAgent1({
-          niche: NICHE,
+          niche: offerContext.niche,
+          offerProfile: offerContext.offerProfile,
+          verticalProfile: offerContext.verticalProfile,
           offerId,
           topCandidateLimit: topN,
           forceRefresh,
@@ -582,6 +685,11 @@ export function createDashboardServer(db?: DbClient) {
       typeof req.body?.offerId === "string" && req.body.offerId.trim().length > 0
         ? req.body.offerId.trim()
         : undefined;
+    const rawOfferText =
+      typeof req.body?.rawOfferText === "string" ? req.body.rawOfferText.trim() : "";
+    if (!offerId && rawOfferText) {
+      offerId = `offer-${randomUUID()}`;
+    }
     const offerZipCodes = typeof req.body?.offerZipCodes === "string"
       ? parseZipInput(req.body.offerZipCodes)
       : [];
@@ -589,14 +697,40 @@ export function createDashboardServer(db?: DbClient) {
     const payoutPerQualifiedCall = typeof req.body?.payoutPerQualifiedCall === "number"
       ? req.body.payoutPerQualifiedCall
       : undefined;
+    const resumeFromFailure = req.body?.resumeFromFailure === true && pipelineStatus === "error";
+    const priorAgentStates: Record<AgentName, AgentStatusEvent> = {
+      "agent-0.5": { ...agentStates["agent-0.5"] },
+      "agent-1": { ...agentStates["agent-1"] },
+      "agent-2": { ...agentStates["agent-2"] },
+      "agent-3": { ...agentStates["agent-3"] },
+      "agent-7": { ...agentStates["agent-7"] },
+    };
+    const resumeAgent = resumeFromFailure ? getResumeAgent(priorAgentStates) : null;
+    const resumeIndex = resumeAgent ? pipelineSequence.indexOf(resumeAgent) : -1;
+    const shouldRunAgent = (agent: AgentName): boolean => {
+      if (!resumeAgent) {
+        return true;
+      }
+      const index = pipelineSequence.indexOf(agent);
+      return index >= resumeIndex;
+    };
 
     // Respond immediately — pipeline runs in background
     res.json({ status: "started" });
     resetAgentStates();
+    if (resumeAgent) {
+      restoreCompletedAgentStates(priorAgentStates, pipelineSequence.slice(0, resumeIndex));
+      emitPipelineRun("running", `Resuming from ${resumeAgent} using cached upstream data...`);
+    }
 
     // Run migrations first
     try {
-      emitPipelineRun("running", "Running migrations...");
+      emitPipelineRun(
+        "running",
+        resumeAgent
+          ? `Resuming from ${resumeAgent} — running migrations...`
+          : "Running migrations..."
+      );
       await runMigrations(db);
     } catch (err: any) {
       console.error("[dashboard] Migration error:", err.message);
@@ -611,6 +745,16 @@ export function createDashboardServer(db?: DbClient) {
       }
     }
 
+    if (offerId && rawOfferText) {
+      try {
+        await parseAndSaveOfferProfile(db, offerId, rawOfferText);
+      } catch (err: any) {
+        console.error("[dashboard] Offer profile parse error:", err.message);
+        emitPipelineRun("error", `Offer profile parsing failed: ${err.message}`);
+        return;
+      }
+    }
+
     // Build pipeline orchestrator in same process so events flow through the bus
     const env = envDefaults;
     const limiters = createRateLimiters();
@@ -619,7 +763,11 @@ export function createDashboardServer(db?: DbClient) {
     const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
     const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
 
-    if (citySource === "deployment_candidates" && (offerId || offerZipCodes.length > 0)) {
+    if (
+      shouldRunAgent("agent-0.5") &&
+      citySource === "deployment_candidates" &&
+      (offerId || offerZipCodes.length > 0)
+    ) {
       try {
         const resolvedOfferId = offerId ?? `offer-${randomUUID()}`;
         offerId = resolvedOfferId;
@@ -635,6 +783,8 @@ export function createDashboardServer(db?: DbClient) {
         emitPipelineRun("error", `Agent 0.5 failed: ${err.message}`);
         return;
       }
+    } else if (!shouldRunAgent("agent-0.5") && resumeAgent) {
+      console.log("[dashboard] Resuming past Agent 0.5 using cached deployment candidates");
     }
 
     const agentHandlers = new Map<string, AgentHandler>();
@@ -642,6 +792,11 @@ export function createDashboardServer(db?: DbClient) {
     agentHandlers.set("agent-1", {
       name: "agent-1",
       async execute(payload) {
+        const effectiveOfferId =
+          typeof payload?.offerId === "string" ? payload.offerId : offerId;
+        const offerContext = effectiveOfferId
+          ? await getOfferContext(db, effectiveOfferId)
+          : { offerProfile: null, verticalProfile: null, niche: DEFAULT_NICHE };
         const payloadCity = typeof payload?.city === "string" ? payload.city : null;
         const payloadState = typeof payload?.state === "string" ? payload.state : null;
         const candidateCities = payloadCity
@@ -654,12 +809,14 @@ export function createDashboardServer(db?: DbClient) {
         await runAgent1(
           buildAgent1Config(
             payloadCitySource,
-            typeof payload?.offerId === "string" ? payload.offerId : offerId,
+            effectiveOfferId,
             payload?.forceRefresh === true,
             candidateCities.length > 0 ? candidateCities : CANDIDATE_CITIES,
             typeof payload?.payoutPerQualifiedCall === "number"
               ? payload.payoutPerQualifiedCall
-              : payoutPerQualifiedCall
+              : payoutPerQualifiedCall,
+            offerContext.offerProfile,
+            offerContext.verticalProfile
           ),
           llm,
           db
@@ -671,8 +828,15 @@ export function createDashboardServer(db?: DbClient) {
     agentHandlers.set("agent-2", {
       name: "agent-2",
       async execute(payload) {
+        const effectiveOfferId =
+          typeof payload?.offerId === "string" ? payload.offerId : offerId;
+        const offerContext = effectiveOfferId
+          ? await getOfferContext(db, effectiveOfferId)
+          : { offerProfile: null, verticalProfile: null, niche: DEFAULT_NICHE };
         await runAgent2({
-          niche: NICHE,
+          niche: offerContext.niche,
+          offerProfile: offerContext.offerProfile,
+          verticalProfile: offerContext.verticalProfile,
           forceRefresh: payload?.forceRefresh === true,
         }, llm, db);
         return {};
@@ -682,8 +846,15 @@ export function createDashboardServer(db?: DbClient) {
     agentHandlers.set("agent-3", {
       name: "agent-3",
       async execute(payload) {
+        const effectiveOfferId =
+          typeof payload?.offerId === "string" ? payload.offerId : offerId;
+        const offerContext = effectiveOfferId
+          ? await getOfferContext(db, effectiveOfferId)
+          : { offerProfile: null, verticalProfile: null, niche: DEFAULT_NICHE };
         await runAgent3({
-          niche: NICHE,
+          niche: offerContext.niche,
+          offerProfile: offerContext.offerProfile,
+          verticalProfile: offerContext.verticalProfile,
           hugoSitePath: HUGO_SITE_PATH,
           phone: env.BUSINESS_PHONE,
           minWordCountHub: 800,
@@ -708,8 +879,11 @@ export function createDashboardServer(db?: DbClient) {
     agentHandlers.set("agent-7", {
       name: "agent-7",
       async execute() {
+        const offerContext = offerId
+          ? await getOfferContext(db, offerId)
+          : { offerProfile: null, verticalProfile: null, niche: DEFAULT_NICHE };
         await runAgent7(
-          { niche: NICHE },
+          { niche: offerContext.niche },
           db,
           env.AGENT7_PROVIDER === "mock"
             ? new MockDataProvider()
@@ -724,6 +898,9 @@ export function createDashboardServer(db?: DbClient) {
     emitPipelineRun("running", "Creating task queue...");
 
     try {
+      const offerContext = offerId
+        ? await getOfferContext(db, offerId)
+        : { offerProfile: null, verticalProfile: null, niche: DEFAULT_NICHE };
       const orchestrator = await createOrchestrator({
         agentHandlers,
         pollIntervalMs: 3000,
@@ -734,12 +911,14 @@ export function createDashboardServer(db?: DbClient) {
         citySource === "deployment_candidates" && offerId
           ? await loadCandidateCitiesFromDeploymentCandidates(offerId, db, 5)
           : CANDIDATE_CITIES;
-      const [agent1Warm, agent2Warm] = await Promise.all([
+      const [agent1WarmBase, agent2WarmBase] = await Promise.all([
         forceKeywordRefresh
           ? Promise.resolve(false)
-          : hasFreshAgent1Cache(db, NICHE, cacheCandidateCities.length > 0 ? cacheCandidateCities : CANDIDATE_CITIES),
-        forceDesignRefresh ? Promise.resolve(false) : hasFreshAgent2Cache(db, NICHE),
+          : hasFreshAgent1Cache(db, offerContext.niche, cacheCandidateCities.length > 0 ? cacheCandidateCities : CANDIDATE_CITIES),
+        forceDesignRefresh ? Promise.resolve(false) : hasFreshAgent2Cache(db, offerContext.niche),
       ]);
+      const agent1Warm = !shouldRunAgent("agent-1") || agent1WarmBase;
+      const agent2Warm = !shouldRunAgent("agent-2") || agent2WarmBase;
 
       const currentRunTaskIds = new Set<string>();
       let previousTaskId: string | undefined;
@@ -749,7 +928,7 @@ export function createDashboardServer(db?: DbClient) {
           "keyword_research",
           "agent-1",
           {
-            niche: NICHE,
+            niche: offerContext.niche,
             forceRefresh: forceKeywordRefresh,
             citySource,
             offerId,
@@ -759,39 +938,60 @@ export function createDashboardServer(db?: DbClient) {
         currentRunTaskIds.add(t1);
         previousTaskId = t1;
       } else {
-        console.log("[dashboard] Skipping Agent 1, keyword research cache is fresh");
+        console.log(
+          !shouldRunAgent("agent-1") && resumeAgent
+            ? "[dashboard] Resuming past Agent 1 using cached keyword research"
+            : "[dashboard] Skipping Agent 1, keyword research cache is fresh"
+        );
       }
 
       if (!agent2Warm) {
         const t2 = await orchestrator.scheduler.createTask(
           "design_research",
           "agent-2",
-          { niche: NICHE, forceRefresh: forceDesignRefresh },
+          { niche: offerContext.niche, forceRefresh: forceDesignRefresh, offerId },
           previousTaskId ? [previousTaskId] : []
         );
         currentRunTaskIds.add(t2);
         previousTaskId = t2;
       } else {
-        console.log("[dashboard] Skipping Agent 2, design research cache is fresh");
+        console.log(
+          !shouldRunAgent("agent-2") && resumeAgent
+            ? "[dashboard] Resuming past Agent 2 using cached design research"
+            : "[dashboard] Skipping Agent 2, design research cache is fresh"
+        );
       }
 
-      const t3 = await orchestrator.scheduler.createTask(
+      if (shouldRunAgent("agent-3")) {
+        const t3 = await orchestrator.scheduler.createTask(
           "site_build",
-        "agent-3",
-        { niche: NICHE, ignoreIndexationKillSwitch },
-        previousTaskId ? [previousTaskId] : []
-      );
-      currentRunTaskIds.add(t3);
-      if (enableAgent7) {
+          "agent-3",
+          { niche: offerContext.niche, offerId, ignoreIndexationKillSwitch },
+          previousTaskId ? [previousTaskId] : []
+        );
+        currentRunTaskIds.add(t3);
+        previousTaskId = t3;
+      } else if (resumeAgent) {
+        console.log("[dashboard] Resuming past Agent 3 using cached site build inputs");
+      }
+
+      if (enableAgent7 && shouldRunAgent("agent-7")) {
         const t4 = await orchestrator.scheduler.createTask(
           "performance_monitor",
           "agent-7",
-          { niche: NICHE },
-          [t3]
+          { niche: offerContext.niche, offerId },
+          previousTaskId ? [previousTaskId] : []
         );
         currentRunTaskIds.add(t4);
-      } else {
+      } else if (!enableAgent7) {
         console.log("[dashboard] Agent 7 disabled for this run");
+      } else if (resumeAgent) {
+        console.log("[dashboard] Resuming past Agent 7");
+      }
+
+      if (currentRunTaskIds.size === 0) {
+        emitPipelineRun("completed", "Nothing to resume; all selected stages are already complete.");
+        return;
       }
 
       emitPipelineRun("running", "Pipeline started — processing tasks...");
