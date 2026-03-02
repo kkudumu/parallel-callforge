@@ -112,6 +112,14 @@ function Accessory({ type, color }: { type: string; color: string }) {
           <line x1={4} y1={4} x2={10} y2={10} stroke={color} strokeWidth={2} strokeLinecap="round" />
         </g>
       );
+    case "compass":
+      return (
+        <g transform="translate(48, 9)">
+          <circle cx="0" cy="0" r="6" fill="none" stroke={color} strokeWidth={2} />
+          <path d="M0 -5 L2 0 L0 5 L-2 0 Z" fill={color} opacity={0.85} />
+          <circle cx="0" cy="0" r="1.5" fill="#fff" />
+        </g>
+      );
     case "paintbrush":
       return (
         <g transform="translate(48, 5) rotate(-30)">

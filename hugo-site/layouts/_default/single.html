@@ -1,84 +1,469 @@
 {{ define "main" }}
-<article class="service-page service-page-premium">
-  <section class="hero hero-split service-hero">
-    <div class="container hero-grid">
-      <div class="hero-copy">
-        <p class="eyebrow">{{ .Params.city }} {{ .Params.state }} Service</p>
-        <h1>{{ .Title }}</h1>
-        {{ if .Params.city }}
-        <p class="hero-subtitle">{{ .Params.pest_type | default "Pest" }} control built around the keyword target <strong>{{ .Params.target_keyword }}</strong> and the same conversion pattern defined in design research.</p>
-        {{ end }}
-        <div class="hero-actions">
-          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call Now - Free Inspection</a>
-          <a href="#service-content" class="cta-button cta-secondary">See Treatment Details</a>
-        </div>
-        {{ partial "cta-badge.html" . }}
-      </div>
-      <div class="hero-visual">
-        <img src="{{ .Params.feature_image }}" alt="{{ .Title }}">
-      </div>
+<section class="service-hero">
+  <div class="container">
+    <h1>{{ .Title }} Control in {{ .Params.city }}</h1>
+    <p class="service-subheading">Professional treatment by licensed technicians | Satisfaction guaranteed</p>
+    <div class="service-call-actions">
+      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-primary">📞 Call Now For Inspection</a>
+      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-secondary">Talk To A Local Specialist</a>
     </div>
-  </section>
+    <p class="service-microcopy">No forms. No obligation. Fast local routing.</p>
+  </div>
+</section>
 
-  <section class="trust-ribbon">
-    <div class="container">
-      <ul class="trust-points">
-        <li>Licensed &amp; Insured Since [Year]</li>
-<li>4.9★ Rating on Google ([Count]+ Reviews)</li>
-<li>Locally Owned &amp; Operated in {city}</li>
-      </ul>
-    </div>
-  </section>
+<style scoped>
+.service-hero {
+  background: linear-gradient(135deg, rgba(29, 53, 87, 0.95) 0%, rgba(42, 157, 143, 0.1) 100%);
+  color: white;
+  padding: 2rem 0;
+  text-align: center;
+}
+@media (min-width: 768px) {
+  .service-hero {
+    padding: 3rem 0;
+  }
+}
+.service-hero h1 {
+  color: white;
+  margin-bottom: 0.5rem;
+}
+.service-subheading {
+  font-size: 1.125rem;
+  color: #E5E7EB;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+}
+.service-call-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}
+@media (min-width: 768px) {
+  .service-call-actions {
+    flex-direction: row;
+    justify-content: center;
+    max-width: none;
+  }
+}
+.service-call-actions .btn {
+  min-height: 60px;
+}
+.service-microcopy {
+  margin-top: 1rem;
+  color: #E5E7EB;
+  font-size: 0.95rem;
+}
+</style>
 
-  <section id="service-content" class="content-body">
-    <div class="container content-grid">
-      <div class="content-main">
+<section class="service-overview">
+  <div class="container">
+    <div class="grid-2">
+      {{ if .Params.serviceImage }}
+      <img src="{{ .Params.serviceImage }}" alt="{{ .Title }}" class="service-image" loading="lazy">
+      {{ end }}
+      <div>
+        <h2>About {{ .Title }} Problems</h2>
         {{ .Content }}
-      </div>
-      <aside class="content-side">
-        <div class="side-card">
-          <h2>Keyword-Driven Page Focus</h2>
-          <p>This service page exists because Agent 1 identified <strong>{{ .Params.target_keyword }}</strong> as a standalone search theme with its own treatment intent and URL path.</p>
-        </div>
-        <div class="side-card">
-          <h2>Design System Components</h2>
-          <ul class="mini-list">
-            <li>navigation</li>
-            <li>hero section</li>
-            <li>trust strip</li>
+        <div class="service-features">
+          <h3>Our {{ .Title }} Control Process</h3>
+          <ul>
+            {{ range .Params.processSteps | default (slice) }}
+            <li>{{ . }}</li>
+            {{ end }}
           </ul>
         </div>
-      </aside>
+      </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  {{ if .Params.faq }}
-  <section class="faq-section">
-    <div class="container">
-      <h2>Frequently Asked Questions</h2>
-      {{ partial "faq.html" . }}
-    </div>
-  </section>
-  {{ end }}
+<style scoped>
+.service-overview {
+  background: var(--bg-primary);
+}
+.service-image {
+  border-radius: 8px;
+  width: 100%;
+  height: auto;
+}
+.service-overview h2 {
+  margin-bottom: 1.5rem;
+  color: var(--trust-blue);
+}
+.service-overview p {
+  color: var(--text-muted);
+  line-height: 1.8;
+  margin-bottom: 1rem;
+}
+.service-features h3 {
+  color: var(--trust-blue);
+  margin-bottom: 1rem;
+  margin-top: 1.5rem;
+}
+.service-features ul {
+  list-style: none;
+  padding: 0;
+}
+.service-features li {
+  padding: 0.75rem 0;
+  padding-left: 2rem;
+  position: relative;
+  color: var(--text-dark);
+}
+.service-features li:before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--eco-green);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+</style>
 
-  <section class="cta-section cta-section-premium">
-    <div class="container">
-      <p class="eyebrow">Same-Day Scheduling</p>
-      <h2>Get ahead of the infestation before it spreads.</h2>
-      <p>Call now for a fast inspection, practical treatment options, and a plan that fits your home or commercial property.</p>
-      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call {{ .Site.Params.phone }}</a>
-      {{ partial "cta-badge.html" . }}
-    </div>
-  </section>
-
-  <nav class="breadcrumb">
-    <div class="container">
-      <a href="/">Home</a> &rsaquo;
-      {{ if .Parent }}
-      <a href="{{ .Parent.Permalink }}">{{ .Parent.Title }}</a> &rsaquo;
+<section class="service-why">
+  <div class="container">
+    <h2>Why Choose Our {{ .Title }} Control</h2>
+    <div class="grid-3">
+      {{ range .Params.whyChoosePoints | default (slice) }}
+      <div class="why-card">
+        <div class="why-icon">🏆</div>
+        <h3>{{ .title }}</h3>
+        <p>{{ .description }}</p>
+      </div>
       {{ end }}
-      <span>{{ .Title }}</span>
     </div>
-  </nav>
-</article>
+  </div>
+</section>
+
+<style scoped>
+.service-why {
+  background: var(--bg-secondary);
+}
+.service-why h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.why-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px solid var(--border-light);
+}
+.why-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+.why-card h3 {
+  color: var(--trust-blue);
+  margin-bottom: 0.75rem;
+}
+.why-card p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+</style>
+
+<section class="service-testimonials">
+  <div class="container">
+    <h2>{{ .Title }} Control Success Stories</h2>
+    <div class="testimonials-slider">
+      {{ range where .Site.RegularPages "Type" "testimonial" }}
+      {{ if in .Params.services .Title }}
+      <div class="testimonial-card">
+        <div class="stars">⭐⭐⭐⭐⭐</div>
+        <p class="testimonial-quote">"{{ .Content }}"</p>
+        <p class="testimonial-author">— {{ .Params.author }}</p>
+        <p class="testimonial-date">{{ .Params.date }}</p>
+      </div>
+      {{ end }}
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.service-testimonials h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.testimonials-slider {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+@media (min-width: 768px) {
+  .testimonials-slider {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+  }
+}
+@media (min-width: 1024px) {
+  .testimonials-slider {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.testimonial-card {
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+.testimonial-card .stars {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.testimonial-quote {
+  font-style: italic;
+  color: var(--text-dark);
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+}
+.testimonial-author {
+  font-weight: 600;
+  color: var(--trust-blue);
+  margin-bottom: 0.25rem;
+}
+.testimonial-date {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+</style>
+
+<section class="service-faq">
+  <div class="container">
+    <h2>{{ .Title }} Control Questions</h2>
+    <div class="accordion">
+      {{ range .Params.serviceFaq | default (slice) }}
+      <div class="accordion-item" id="faq-{{ .question | slugify }}">
+        <button class="accordion-header" onclick="toggleAccordion('faq-{{ .question | slugify }}')">
+          {{ .question }}
+          <span class="accordion-icon">+</span>
+        </button>
+        <div class="accordion-content">
+          <p>{{ .answer }}</p>
+        </div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.service-faq {
+  background: var(--bg-secondary);
+}
+.service-faq h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.accordion {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.accordion-item {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+.accordion-header {
+  width: 100%;
+  padding: 1.25rem;
+  background: white;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.3s;
+}
+.accordion-header:hover {
+  background: var(--bg-secondary);
+}
+.accordion-icon {
+  font-size: 1.5rem;
+  color: var(--trust-blue);
+  transition: transform 0.3s;
+}
+.accordion-item.open .accordion-icon {
+  transform: rotate(45deg);
+}
+.accordion-content {
+  display: none;
+  padding: 1.25rem;
+  background: white;
+  color: var(--text-dark);
+  border-top: 1px solid var(--border-light);
+}
+.accordion-item.open .accordion-content {
+  display: block;
+}
+.accordion-content p {
+  margin: 0;
+  line-height: 1.8;
+}
+</style>
+
+<section class="service-guarantee">
+  <div class="container">
+    <div class="guarantee-section">
+      <h2>Our {{ .Title }} Control Guarantee</h2>
+      <p>{{ .Params.guaranteeDescription | default "We stand behind our work with a 100% satisfaction guarantee." }}</p>
+      <div class="guarantee-terms">
+        <div class="term">
+          <h4>Results Guaranteed</h4>
+          <p>Or we'll retreat at no charge</p>
+        </div>
+        <div class="term">
+          <h4>30-Day Window</h4>
+          <p>Full guarantee for 30 days after service</p>
+        </div>
+        <div class="term">
+          <h4>No Hassle</h4>
+          <p>Simple process with no questions asked</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.service-guarantee {
+  background: linear-gradient(135deg, var(--eco-green), var(--trust-blue));
+  color: white;
+  text-align: center;
+}
+.guarantee-section {
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+.guarantee-section h2 {
+  color: white;
+  margin-bottom: 1rem;
+}
+.guarantee-section p {
+  color: #E5E7EB;
+  margin-bottom: 1.5rem;
+  font-size: 1.125rem;
+}
+.guarantee-terms {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+@media (min-width: 768px) {
+  .guarantee-terms {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.term {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1.5rem;
+  border-radius: 6px;
+}
+.term h4 {
+  color: white;
+  margin-bottom: 0.5rem;
+  font-size: 1.125rem;
+}
+.term p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+</style>
+
+<section class="service-cta-final">
+  <div class="container">
+    <h2>Ready to Eliminate Your {{ .Title }} Problem?</h2>
+    <p>Call us now for immediate assistance or schedule your free inspection online</p>
+    <div class="final-cta-buttons">
+      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-primary">📞 Call Now</a>
+      <button class="btn btn-secondary" onclick="scrollToForm()">Schedule Inspection</button>
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.service-cta-final {
+  background: linear-gradient(135deg, var(--urgency-red), var(--action-orange));
+  color: white;
+  text-align: center;
+}
+.service-cta-final h2 {
+  color: white;
+  margin-bottom: 0.75rem;
+}
+.service-cta-final p {
+  font-size: 1.125rem;
+  margin-bottom: 1.5rem;
+}
+.final-cta-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+@media (min-width: 768px) {
+  .final-cta-buttons {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
+.final-cta-buttons .btn {
+  min-height: 60px;
+}
+</style>
+
+{{ end }}
+
+{{ define "schema" }}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": "{{ .Title }} Control Service",
+  "description": "{{ .Summary }}",
+  "provider": {
+    "@type": "LocalBusiness",
+    "name": "{{ .Site.Params.companyName }}",
+    "telephone": "{{ .Site.Params.phone }}",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "{{ .Site.Params.streetAddress }}",
+      "addressLocality": "{{ .Site.Params.city }}",
+      "addressRegion": "{{ .Site.Params.state }}",
+      "postalCode": "{{ .Site.Params.zipCode }}"
+    }
+  },
+  "areaServed": "{{ .Params.city }}",
+  "availableLanguage": "en-US"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {{ range $index, $item := .Params.serviceFaq }}
+    {
+      "@type": "Question",
+      "name": "{{ $item.question }}",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "{{ $item.answer }}"
+      }
+    }{{ if not (eq $index (sub (len $.Params.serviceFaq) 1)) }},{{ end }}
+    {{ end }}
+  ]
+}
+</script>
 {{ end }}

@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { feedEntryVariants } from "../../lib/animations";
 import { AGENTS } from "../../lib/constants";
 import type { FeedEntry } from "../../lib/types";
-import { Search, Palette, Hammer, Stethoscope, AlertCircle, CheckCircle2, Zap, BarChart3 } from "lucide-react";
+import { Search, Palette, Hammer, Stethoscope, Compass, AlertCircle, CheckCircle2, Zap, BarChart3 } from "lucide-react";
 
 interface ActivityFeedProps {
   entries: FeedEntry[];
@@ -11,6 +11,7 @@ interface ActivityFeedProps {
 function getIcon(entry: FeedEntry) {
   if (entry.agent) {
     switch (entry.agent) {
+      case "agent-0.5": return <Compass size={12} />;
       case "agent-1": return <Search size={12} />;
       case "agent-2": return <Palette size={12} />;
       case "agent-3": return <Hammer size={12} />;

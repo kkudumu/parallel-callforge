@@ -54,6 +54,8 @@ Requirements:
 - Sticky click-to-call footer on mobile
 - Phone number visible above fold
 - CTA buttons: min 60px height, full-width on mobile, high-contrast
+- No user-facing forms
+- Use call-only CTAs throughout the page
 - JSON-LD structured data injection point
 - FAQ accordion component
 - Fast-loading (no external JS dependencies)

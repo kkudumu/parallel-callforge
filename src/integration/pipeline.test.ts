@@ -65,12 +65,26 @@ function createMockLlmClient(): LlmClient {
         prompt.includes("expert pest control content writer") ||
         prompt.includes("target keyword:")
       ) {
-        const words = Array(900).fill("quality").join(" ");
+        const cityMentions = [
+          "Santa Cruz homeowners need fast inspections.",
+          "Santa Cruz properties face seasonal pest pressure.",
+          "Santa Cruz crews can usually schedule same-day callbacks.",
+          "Santa Cruz neighborhoods benefit from local treatment plans.",
+        ].join(" ");
+        const words = Array.from({ length: 900 }, (_, index) => `quality${index}`).join(" ");
         return {
           title: "Santa Cruz Pest Control Services",
           meta_description: "Professional pest control in Santa Cruz, CA. Same-day service available.",
-          content: `Professional pest control services in Santa Cruz. ${words} Call us for Santa Cruz pest control today.`,
+          content: `Professional pest control services in Santa Cruz. ${cityMentions} ${words}`,
           headings: ["Why Choose Us", "Our Services", "Service Area"],
+        } as z.infer<T>;
+      }
+
+      if (prompt.includes("hugo static site generator expert")) {
+        return {
+          baseof: "<!DOCTYPE html><html><head><title>{{ .Title }}</title></head><body>{{ block \"main\" . }}{{ end }}</body></html>",
+          city_hub: "{{ define \"main\" }}<main><h1>{{ .Title }}</h1>{{ .Content }}</main>{{ end }}",
+          service_subpage: "{{ define \"main\" }}<main><h1>{{ .Title }}</h1>{{ .Content }}</main>{{ end }}",
         } as z.infer<T>;
       }
 
@@ -165,11 +179,16 @@ function createMockLlmClient(): LlmClient {
           jsonld_templates: {
             city_hub: {
               "@context": "https://schema.org",
-              "@type": "PestControlService",
+              "@type": "LocalBusiness",
+              additionalType: "https://www.productontology.org/id/Pest_control",
             },
             service_subpage: {
               "@context": "https://schema.org",
               "@type": "Service",
+              provider: {
+                "@type": "LocalBusiness",
+                additionalType: "https://www.productontology.org/id/Pest_control",
+              },
             },
           },
         } as z.infer<T>;
@@ -247,6 +266,7 @@ describe("Integration: Pipeline", () => {
       await db.query("DELETE FROM performance_snapshots");
       await db.query("DELETE FROM ranking_snapshots");
       await db.query("DELETE FROM content_items");
+      await db.query("DELETE FROM site_builds");
       await db.query("DELETE FROM pages");
       await db.query("DELETE FROM keyword_clusters");
       await db.query("DELETE FROM city_keyword_map");
@@ -343,8 +363,19 @@ describe("Integration: Pipeline", () => {
       [
         niche,
         JSON.stringify({
-          city_hub: { "@context": "https://schema.org", "@type": "PestControlService" },
-          service_subpage: { "@context": "https://schema.org", "@type": "Service" },
+          city_hub: {
+            "@context": "https://schema.org",
+            "@type": "LocalBusiness",
+            additionalType: "https://www.productontology.org/id/Pest_control",
+          },
+          service_subpage: {
+            "@context": "https://schema.org",
+            "@type": "Service",
+            provider: {
+              "@type": "LocalBusiness",
+              additionalType: "https://www.productontology.org/id/Pest_control",
+            },
+          },
         }),
       ]
     );
@@ -449,6 +480,13 @@ describe("Integration: Pipeline", () => {
       [niche]
     );
     expect(pages.rows.length).toBeGreaterThan(0);
+
+    const builds = await db.query(
+      "SELECT * FROM site_builds WHERE niche = $1 ORDER BY created_at DESC",
+      [niche]
+    );
+    expect(builds.rows.length).toBeGreaterThan(0);
+    expect(builds.rows[0].status).toBe("LIVE");
   }, 30000);
 
   it("evaluates Agent 7 thresholds against mock performance data", () => {

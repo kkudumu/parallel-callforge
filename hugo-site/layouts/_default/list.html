@@ -1,90 +1,757 @@
 {{ define "main" }}
-<article class="city-hub city-hub-premium">
-  <section class="hero hero-split">
-    <div class="container hero-grid">
-      <div class="hero-copy">
-        <p class="eyebrow">{{ .Params.city }} {{ .Params.state }} Pest Coverage</p>
-        <h1>{{ .Title }}</h1>
-        <p class="hero-subtitle">{{ .Params.description | default "{city}&#39;s #1 {service} - Fast Relief From {pest}" }}</p>
-        <p class="hero-support">Same-Day {service} in {city} - Call Now</p>
-        <div class="hero-actions">
-          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call Now - Free Inspection</a>
-          <a href="#service-grid" class="cta-button cta-secondary">Get Your Free Quote: {phone}</a>
-        </div>
-        {{ partial "cta-badge.html" . }}
-      </div>
-      <div class="hero-visual">
-        <img src="{{ .Params.hero_image }}" alt="{{ .Title }}">
-      </div>
+<section class="hero">
+  <div class="container">
+    <h1>{{ .Params.heroHeadline | default "Get Professional Pest Control in Your Area Today" }}</h1>
+    <p class="subheading">{{ .Params.heroSubheading | default "30-Day Satisfaction Guarantee | Same-Day Service Available" }}</p>
+    <ul class="value-props">
+      {{ range .Params.valueProps | default (slice "Licensed & Insured Professionals" "Eco-Friendly Solutions" "Rapid Response Team") }}
+      <li>✓ {{ . }}</li>
+      {{ end }}
+    </ul>
+    <div class="hero-call-actions">
+      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-primary">📞 Call Now For A Free Inspection</a>
+      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-secondary">Talk To A Local Specialist</a>
     </div>
-  </section>
+    <p class="hero-microcopy">No forms. No obligation. Fast local routing.</p>
+  </div>
+</section>
 
-  <section class="trust-ribbon">
-    <div class="container">
-      <ul class="trust-points">
-        <li>Licensed &amp; Insured Since [Year]</li>
-<li>4.9★ Rating on Google ([Count]+ Reviews)</li>
-<li>Locally Owned &amp; Operated in {city}</li>
-      </ul>
-    </div>
-  </section>
+<style scoped>
+.hero {
+  background: linear-gradient(135deg, rgba(29, 53, 87, 0.95) 0%, rgba(42, 157, 143, 0.1) 100%);
+  color: white;
+  padding: 2rem 0;
+  text-align: center;
+}
+@media (min-width: 768px) {
+  .hero {
+    padding: 4rem 0;
+  }
+}
+.hero h1 {
+  color: white;
+  margin-bottom: 0.5rem;
+}
+.subheading {
+  font-size: 1.25rem;
+  color: #E5E7EB;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+}
+@media (min-width: 768px) {
+  .subheading {
+    font-size: 1.5rem;
+  }
+}
+.value-props {
+  list-style: none;
+  margin: 2rem 0;
+  padding: 0;
+}
+.value-props li {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: #E5E7EB;
+}
+@media (min-width: 768px) {
+  .value-props li {
+    font-size: 1.125rem;
+  }
+}
+.hero-call-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 2rem;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}
+@media (min-width: 768px) {
+  .hero-call-actions {
+    flex-direction: row;
+    justify-content: center;
+    max-width: none;
+  }
+}
+.hero-call-actions .btn {
+  min-height: 60px;
+}
+.hero-microcopy {
+  margin-top: 1rem;
+  color: #E5E7EB;
+  font-size: 0.95rem;
+}
+</style>
 
-  <section class="content-body">
-    <div class="container content-grid">
-      <div class="content-main">
-        {{ .Content }}
+<section class="trust-bar">
+  <div class="container">
+    <div class="trust-badges">
+      {{ range .Params.trustBadges | default (slice "Google Rating" "BBB Accredited" "NPMA Member" "QualityPro Certified") }}
+      <div class="badge">
+        <div class="badge-icon">⭐</div>
+        <div class="badge-text">{{ . }}</div>
       </div>
-      <aside class="content-side">
-        <div class="side-card">
-          <h2>{{ .Params.city }} Search Intent Snapshot</h2>
-          <p>The city hub is assembled around the primary keyword <strong>{{ .Params.target_keyword }}</strong> and uses the researched layout order to move visitors from local problem awareness into the strongest conversion action.</p>
-        </div>
-        <div class="side-card side-image">
-          <img src="{{ .Params.feature_image }}" alt="{{ .Title }}">
-        </div>
-      </aside>
+      {{ end }}
     </div>
-  </section>
+  </div>
+</section>
 
-  {{ if .Pages }}
-  <section id="service-grid" class="services-grid services-grid-premium">
-    <div class="container">
-      <div class="section-intro">
-        <p class="eyebrow">Popular Treatments</p>
-        <h2>Targeted Services{{ if .Params.city }} in {{ .Params.city }}{{ end }}</h2>
-      </div>
-      <div class="grid">
-        {{ range .Pages }}
-        <a href="{{ .Permalink }}" class="service-card premium-card">
-          <p class="service-label">Fast Response</p>
-          <h3>{{ .Title }}</h3>
-          <p>{{ .Params.description }}</p>
-          <span class="card-cta">View Service Plan &rarr;</span>
-        </a>
+<style scoped>
+.trust-bar {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+}
+.trust-badges {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+@media (min-width: 768px) {
+  .trust-badges {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+  }
+}
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  text-align: center;
+}
+@media (min-width: 768px) {
+  .badge {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+.badge-icon {
+  font-size: 1.75rem;
+}
+.badge-text {
+  font-family: 'Open Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+</style>
+
+<section class="services">
+  <div class="container">
+    <h2>Pest Control Services</h2>
+    <p class="section-subtitle">Expert treatment for all common pests in {{ .Params.city }}</p>
+    <div class="grid-3">
+      {{ range first 6 (where .Site.RegularPages "Type" "service") }}
+      <div class="service-card">
+        {{ if .Params.image }}
+        <img src="{{ .Params.image }}" alt="{{ .Title }}" loading="lazy">
         {{ end }}
+        <h3>{{ .Title }}</h3>
+        <p>{{ .Summary | truncate 120 }}</p>
+        <ul>
+          {{ range .Params.features | default (slice) }}
+          <li>{{ . }}</li>
+          {{ end }}
+        </ul>
+        <a href="{{ .RelPermalink }}" class="btn btn-secondary">Schedule Now</a>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.services {
+  background: var(--bg-primary);
+}
+.services h2 {
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+.section-subtitle {
+  text-align: center;
+  font-size: 1.125rem;
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+}
+.service-card {
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+  display: flex;
+  flex-direction: column;
+}
+.service-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+.service-card img {
+  width: 100%;
+  height: 300px;
+  object-fit: cover;
+}
+.service-card h3 {
+  padding: 1.5rem 1.5rem 0.75rem;
+  color: var(--trust-blue);
+}
+.service-card p {
+  padding: 0 1.5rem;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+.service-card ul {
+  padding: 0.75rem 1.5rem;
+  list-style: none;
+  flex-grow: 1;
+}
+.service-card li {
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-dark);
+}
+.service-card li:before {
+  content: "✓ ";
+  color: var(--eco-green);
+  font-weight: 700;
+  margin-right: 0.5rem;
+}
+.service-card .btn {
+  margin: 1rem 1.5rem;
+}
+</style>
+
+<section class="how-it-works">
+  <div class="container">
+    <h2>How We Work</h2>
+    <div class="process-steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3>Inspect</h3>
+        <p>We conduct a thorough inspection of your property to identify pest issues and entry points</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3>Treat</h3>
+        <p>Our licensed technicians apply targeted, eco-friendly treatments specific to your pests</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>Protect</h3>
+        <p>We provide ongoing monitoring and prevention to ensure pests don't return</p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
+
+<style scoped>
+.how-it-works {
+  background: var(--bg-secondary);
+}
+.how-it-works h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.process-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  align-items: center;
+}
+@media (min-width: 768px) {
+  .process-steps {
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
+.step {
+  background: white;
+  border: 2px solid var(--eco-green);
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  flex: 1;
+  max-width: 280px;
+}
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  background: var(--eco-green);
+  color: white;
+  border-radius: 50%;
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+.step h3 {
+  margin-bottom: 0.75rem;
+  color: var(--trust-blue);
+}
+.step p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+.step-arrow {
+  display: none;
+  font-size: 2rem;
+  color: var(--eco-green);
+}
+@media (min-width: 768px) {
+  .step-arrow {
+    display: block;
+  }
+}
+</style>
+
+<section class="social-proof">
+  <div class="container">
+    <h2>Trusted by Thousands</h2>
+    <div class="rating-summary">
+      <div class="rating-badge">
+        <div class="stars">⭐⭐⭐⭐⭐</div>
+        <div class="rating-number">4.9 out of 5</div>
+        <div class="review-count">Based on {{ .Params.reviewCount | default "2,847" }} verified reviews</div>
+      </div>
+    </div>
+    <div class="testimonials-grid">
+      {{ range first 4 (where .Site.RegularPages "Type" "testimonial") }}
+      <div class="testimonial">
+        <div class="stars">{{ .Params.rating }}</div>
+        <p class="testimonial-text">"{{ .Content }}"</p>
+        <p class="testimonial-author">— {{ .Params.author }}</p>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.social-proof h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.rating-summary {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.rating-badge {
+  display: inline-block;
+  background: var(--bg-secondary);
+  padding: 2rem 3rem;
+  border-radius: 12px;
+  border: 2px solid var(--border-light);
+}
+.rating-badge .stars {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+.rating-number {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--trust-blue);
+  margin-bottom: 0.25rem;
+}
+.review-count {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+@media (min-width: 768px) {
+  .testimonials-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+  }
+}
+.testimonial {
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+.testimonial .stars {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.testimonial-text {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-dark);
+  margin-bottom: 0.75rem;
+  font-style: italic;
+}
+.testimonial-author {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+</style>
+
+<section class="about-authority">
+  <div class="container">
+    <div class="grid-2">
+      {{ if .Params.teamImage }}
+      <img src="{{ .Params.teamImage }}" alt="Team Photo" class="about-image" loading="lazy">
+      {{ end }}
+      <div>
+        <h2>{{ .Params.companyName | default "Why Choose Us" }}</h2>
+        <p>{{ .Params.aboutDescription }}</p>
+        <ul class="authority-list">
+          <li>{{ .Params.yearsInBusiness | default "20+ Years" }} serving the community</li>
+          <li>Licensed & Insured Professionals</li>
+          <li>{{ .Params.license1 }}</li>
+          <li>{{ .Params.license2 }}</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.about-authority {
+  background: var(--bg-secondary);
+}
+.about-image {
+  border-radius: 8px;
+  width: 100%;
+  height: auto;
+}
+.about-authority h2 {
+  margin-bottom: 1rem;
+  color: var(--trust-blue);
+}
+.about-authority p {
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+  line-height: 1.8;
+}
+.authority-list {
+  list-style: none;
+  padding: 0;
+}
+.authority-list li {
+  padding: 0.75rem 0;
+  padding-left: 2rem;
+  position: relative;
+  color: var(--text-dark);
+}
+.authority-list li:before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--eco-green);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+</style>
+
+<section class="guarantee">
+  <div class="container">
+    <div class="guarantee-box">
+      <h2>30-Day Satisfaction Guarantee</h2>
+      <p>We're confident in our work. If you're not completely satisfied, we'll re-treat at no charge.</p>
+      <div class="guarantee-badge">100% Money-Back Guarantee</div>
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.guarantee {
+  background: linear-gradient(135deg, var(--eco-green), var(--trust-blue));
+  color: white;
+  text-align: center;
+}
+.guarantee-box {
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+.guarantee h2 {
+  color: white;
+  margin-bottom: 1rem;
+}
+.guarantee p {
+  font-size: 1.125rem;
+  margin-bottom: 1.5rem;
+}
+.guarantee-badge {
+  display: inline-block;
+  background: var(--urgency-red);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: 6px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+</style>
+
+<section class="faq">
+  <div class="container">
+    <h2>Frequently Asked Questions</h2>
+    <div class="accordion">
+      {{ range .Params.faqItems | default (slice) }}
+      <div class="accordion-item" id="faq-{{ .question | slugify }}">
+        <button class="accordion-header" onclick="toggleAccordion('faq-{{ .question | slugify }}')">
+          {{ .question }}
+          <span class="accordion-icon">+</span>
+        </button>
+        <div class="accordion-content">
+          <p>{{ .answer }}</p>
+        </div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.faq h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.accordion {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.accordion-item {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+.accordion-header {
+  width: 100%;
+  padding: 1.25rem;
+  background: var(--bg-secondary);
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.3s;
+}
+.accordion-header:hover {
+  background: var(--border-light);
+}
+.accordion-icon {
+  font-size: 1.5rem;
+  transition: transform 0.3s;
+}
+.accordion-item.open .accordion-icon {
+  transform: rotate(45deg);
+}
+.accordion-content {
+  display: none;
+  padding: 1.25rem;
+  background: white;
+  color: var(--text-dark);
+}
+.accordion-item.open .accordion-content {
+  display: block;
+}
+.accordion-content p {
+  margin: 0;
+  line-height: 1.8;
+}
+</style>
+
+<section class="service-area">
+  <div class="container">
+    <h2>Service Areas</h2>
+    <p class="section-subtitle">We proudly serve communities throughout the region</p>
+    <div class="city-grid">
+      {{ range .Params.serviceAreas | default (slice) }}
+      <a href="/{{ . | slugify }}/" class="city-link">{{ . }}</a>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.service-area {
+  background: var(--bg-secondary);
+}
+.service-area h2 {
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+.section-subtitle {
+  text-align: center;
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+}
+.city-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+@media (min-width: 768px) {
+  .city-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .city-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.city-link {
+  display: block;
+  padding: 1rem;
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  text-align: center;
+  color: var(--trust-blue);
+  font-weight: 600;
+  transition: all 0.3s;
+}
+.city-link:hover {
+  background: var(--trust-blue);
+  color: white;
+  border-color: var(--trust-blue);
+}
+</style>
+
+<section class="secondary-cta">
+  <div class="container">
+    <h2>Schedule Your Free Inspection Today</h2>
+    <p>Same-day service available. Call now to speak with a local routing specialist.</p>
+    <div class="cta-buttons">
+      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-primary">📞 Call Now</a>
+      <a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}" class="btn btn-secondary">Call For Same-Day Help</a>
+    </div>
+  </div>
+</section>
+
+<style scoped>
+.secondary-cta {
+  background: linear-gradient(135deg, var(--urgency-red), var(--action-orange));
+  color: white;
+  text-align: center;
+}
+.secondary-cta h2 {
+  color: white;
+  margin-bottom: 0.75rem;
+}
+.secondary-cta p {
+  font-size: 1.125rem;
+  margin-bottom: 1.5rem;
+}
+.cta-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+@media (min-width: 768px) {
+  .cta-buttons {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
+.cta-buttons .btn {
+  min-height: 60px;
+}
+.cta-buttons .btn-primary {
+  background: white;
+  color: var(--urgency-red);
+}
+.cta-buttons .btn-primary:hover {
+  background: #F3F4F6;
+}
+</style>
+
+{{ end }}
+
+{{ define "footer-sections" }}
+<div class="footer-section">
+  <div class="nap-block">
+    <p><strong>{{ .Site.Params.companyName }}</strong></p>
+    <p>{{ .Site.Params.address }}</p>
+    <p><a href="tel:{{ .Site.Params.phone | replaceRE "[^0-9]" "" }}">{{ .Site.Params.phone }}</a></p>
+  </div>
+  <div class="license-info">
+    <p>{{ .Site.Params.license1 }}</p>
+    <p>{{ .Site.Params.license2 }}</p>
+  </div>
+</div>
+<div class="footer-section">
+  <h3>Services</h3>
+  {{ range first 5 (where .Site.RegularPages "Type" "service") }}
+  <a href="{{ .RelPermalink }}">{{ .Title }}</a>
   {{ end }}
+</div>
+<div class="footer-section">
+  <h3>Company</h3>
+  <a href="/about/">About Us</a>
+  <a href="/reviews/">Reviews</a>
+  <a href="/blog/">Blog</a>
+  <a href="/contact/">Contact</a>
+</div>
+<div class="footer-section">
+  <h3>Follow Us</h3>
+  <div class="social-links">
+    {{ range .Site.Params.socialLinks | default (slice) }}
+    <a href="{{ .url }}" target="_blank" rel="noopener noreferrer" title="{{ .name }}">{{ .icon }}</a>
+    {{ end }}
+  </div>
+</div>
+{{ end }}
 
-  <section class="faq-section spotlight-faq">
-    <div class="container">
-      <div class="faq-highlight">
-        <p class="eyebrow">Common Question</p>
-        <h2>How quickly can you provide {service} in {city}?</h2>
-        <p>We offer prompt scheduling for {service} in {city}, including same-day availability when openings permit. Call {phone} and we can confirm the earliest appointment for your {pest} issue.</p>
-      </div>
-    </div>
-  </section>
+{{ define "footer-links" }}
+<div>
+  <a href="/privacy/">Privacy Policy</a> | <a href="/terms/">Terms of Service</a> | <a href="/sitemap.xml">Sitemap</a>
+</div>
+{{ end }}
 
-  <section class="cta-section cta-section-premium">
-    <div class="container">
-      <p class="eyebrow">Need Help Today?</p>
-      <h2>Talk to a local team that moves fast.</h2>
-      <p>Call for same-day scheduling, property-specific recommendations, and clear next steps before we start treatment.</p>
-      <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call {{ .Site.Params.phone }}</a>
-      {{ partial "cta-badge.html" . }}
-    </div>
-  </section>
-</article>
+{{ define "schema" }}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "{{ .Site.Params.companyName }}",
+  "image": "{{ .Site.Params.logo }}",
+  "description": "{{ .Site.Params.description }}",
+  "telephone": "{{ .Site.Params.phone }}",
+  "email": "{{ .Site.Params.email }}",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "{{ .Site.Params.streetAddress }}",
+    "addressLocality": "{{ .Site.Params.city }}",
+    "addressRegion": "{{ .Site.Params.state }}",
+    "postalCode": "{{ .Site.Params.zipCode }}"
+  },
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": {{ .Site.Params.latitude }},
+    "longitude": {{ .Site.Params.longitude }}
+  },
+  "priceRange": "{{ .Site.Params.priceRange }}",
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "{{ .Site.Params.rating }}",
+    "ratingCount": "{{ .Site.Params.reviewCount }}"
+  },
+  "sameAs": [
+    "{{ .Site.Params.googleBusinessUrl }}"
+  ]
+}
+</script>
 {{ end }}

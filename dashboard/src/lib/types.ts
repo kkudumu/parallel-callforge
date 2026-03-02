@@ -1,4 +1,4 @@
-export type AgentName = "agent-1" | "agent-2" | "agent-3" | "agent-7";
+export type AgentName = "agent-0.5" | "agent-1" | "agent-2" | "agent-3" | "agent-7";
 export type AgentStatus = "idle" | "running" | "completed" | "error";
 
 export interface AgentStartEvent {

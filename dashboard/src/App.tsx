@@ -71,6 +71,7 @@ export default function App() {
 
 function logMatchesAgent(log: LogEntry, agent: AgentName): boolean {
   const source = log.source?.toLowerCase() ?? "";
+  if (source.includes("agent 0.5")) return agent === "agent-0.5";
   if (source.includes("agent 1") || source === "googlekp") return agent === "agent-1";
   if (source.includes("agent 2")) return agent === "agent-2";
   if (source.includes("agent 3")) return agent === "agent-3";

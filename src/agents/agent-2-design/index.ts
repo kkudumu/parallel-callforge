@@ -5,6 +5,11 @@ import { DesignSpecSchema } from "../../shared/schemas/design-specs.js";
 import { CopyFrameworkSchema } from "../../shared/schemas/copy-frameworks.js";
 import { eventBus } from "../../shared/events/event-bus.js";
 import {
+  DESIGN_RESEARCH_TTL_MS,
+  isFreshTimestamp,
+  normalizeNiche,
+} from "../../shared/cache-policy.js";
+import {
   COMPETITOR_ANALYSIS_PROMPT,
   DESIGN_SPEC_PROMPT,
   COPY_FRAMEWORK_PROMPT,
@@ -38,11 +43,50 @@ const SeasonalCalendarSchema = z.object({
     content_topics: z.array(z.string()),
     messaging_priority: z.string(),
     seasonal_keywords: z.array(z.string()),
+    region_overrides: z.array(z.object({
+      region: z.string(),
+      notes: z.array(z.string()),
+    })).optional(),
   })),
 });
 
 export interface Agent2Config {
   niche: string;
+  forceRefresh?: boolean;
+}
+
+async function hasFreshDesignResearch(niche: string, db: DbClient): Promise<boolean> {
+  const cacheKey = normalizeNiche(niche);
+  const [designResult, copyResult, schemaResult, seasonalResult] = await Promise.all([
+    db.query<{ updated_at: Date; created_at: Date }>(
+      "SELECT updated_at, created_at FROM design_specs WHERE niche = $1 LIMIT 1",
+      [cacheKey]
+    ),
+    db.query<{ updated_at: Date; created_at: Date }>(
+      "SELECT updated_at, created_at FROM copy_frameworks WHERE niche = $1 LIMIT 1",
+      [cacheKey]
+    ),
+    db.query<{ updated_at: Date | null; created_at: Date }>(
+      "SELECT updated_at, created_at FROM schema_templates WHERE niche = $1 LIMIT 1",
+      [cacheKey]
+    ),
+    db.query<{ updated_at: Date | null; created_at: Date }>(
+      "SELECT updated_at, created_at FROM seasonal_calendars WHERE niche = $1 LIMIT 1",
+      [cacheKey]
+    ),
+  ]);
+
+  const rows = [
+    designResult.rows[0],
+    copyResult.rows[0],
+    schemaResult.rows[0],
+    seasonalResult.rows[0],
+  ];
+
+  return rows.every((row) =>
+    row &&
+    isFreshTimestamp(row.updated_at ?? row.created_at, DESIGN_RESEARCH_TTL_MS)
+  );
 }
 
 export async function runAgent2(
@@ -50,10 +94,21 @@ export async function runAgent2(
   llm: LlmClient,
   db: DbClient
 ): Promise<void> {
+  const cacheKey = normalizeNiche(config.niche);
   console.log(`[Agent 2] Starting design research for ${config.niche}`);
   eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Starting", detail: config.niche, timestamp: Date.now() });
 
-  console.log(`[Agent 2] Refreshing design research for ${config.niche}`);
+  if (config.forceRefresh) {
+    console.log("[Agent 2] Force refresh enabled, bypassing design research cache");
+  }
+
+  if (!config.forceRefresh && await hasFreshDesignResearch(config.niche, db)) {
+    console.log(`[Agent 2] Reusing cached design research for ${config.niche}`);
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Cache hit", detail: `${config.niche} still fresh`, timestamp: Date.now() });
+    return;
+  }
+
+  console.log(`[Agent 2] Design research missing or stale for ${config.niche}, refreshing`);
 
   // Step 1: Competitor analysis
   console.log("[Agent 2] Step 1: Running competitor analysis...");
@@ -63,6 +118,7 @@ export async function runAgent2(
     prompt: competitorPrompt,
     schema: CompetitorAnalysisSchema,
     model: "sonnet",
+    logLabel: "[Agent 2][Step 1][Competitor analysis]",
   });
   console.log(`[Agent 2] Found ${competitorAnalysis.patterns.length} CRO patterns`);
   console.log(
@@ -72,6 +128,14 @@ export async function runAgent2(
       .join(" | ")}`
   );
   eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Patterns found", detail: `${competitorAnalysis.patterns.length} CRO patterns`, timestamp: Date.now() });
+  await db.query(
+    `INSERT INTO competitor_analyses (niche, analysis)
+     VALUES ($1, $2)
+     ON CONFLICT (niche) DO UPDATE SET
+       analysis = EXCLUDED.analysis,
+       updated_at = now()`,
+    [cacheKey, JSON.stringify(competitorAnalysis)]
+  );
 
   // Step 2: Design specification
   console.log("[Agent 2] Step 2: Generating design specification...");
@@ -83,6 +147,7 @@ export async function runAgent2(
     prompt: designPrompt,
     schema: DesignSpecSchema,
     model: "sonnet",
+    logLabel: "[Agent 2][Step 2][Design specification]",
   });
   console.log(`[Agent 2] Design archetype: ${designSpec.archetype}`);
   console.log(
@@ -101,7 +166,7 @@ export async function runAgent2(
        responsive_breakpoints = EXCLUDED.responsive_breakpoints,
        updated_at = now()`,
     [
-      designSpec.niche,
+      cacheKey,
       designSpec.archetype,
       JSON.stringify(designSpec.layout),
       JSON.stringify(designSpec.components),
@@ -121,6 +186,7 @@ export async function runAgent2(
     prompt: copyPrompt,
     schema: CopyFrameworkSchema,
     model: "sonnet",
+    logLabel: "[Agent 2][Step 3][Copy framework]",
   });
   console.log(
     `[Agent 2] Headline directions: ${copyFramework.headlines.slice(0, 4).join(" | ")}`
@@ -128,20 +194,30 @@ export async function runAgent2(
   console.log(`[Agent 2] CTA variants: ${copyFramework.ctas.slice(0, 4).join(" | ")}`);
 
   await db.query(
-    `INSERT INTO copy_frameworks (niche, headlines, ctas, trust_signals, faq_templates, pas_scripts)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO copy_frameworks (
+       niche, headlines, ctas, cta_microcopy, trust_signals, guarantees, reading_level, vertical_angles, faq_templates, pas_scripts
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      ON CONFLICT (niche) DO UPDATE SET
        headlines = EXCLUDED.headlines,
        ctas = EXCLUDED.ctas,
+       cta_microcopy = EXCLUDED.cta_microcopy,
        trust_signals = EXCLUDED.trust_signals,
+       guarantees = EXCLUDED.guarantees,
+       reading_level = EXCLUDED.reading_level,
+       vertical_angles = EXCLUDED.vertical_angles,
        faq_templates = EXCLUDED.faq_templates,
        pas_scripts = EXCLUDED.pas_scripts,
        updated_at = now()`,
     [
-      copyFramework.niche,
+      cacheKey,
       JSON.stringify(copyFramework.headlines),
       JSON.stringify(copyFramework.ctas),
+      JSON.stringify(copyFramework.cta_microcopy),
       JSON.stringify(copyFramework.trust_signals),
+      JSON.stringify(copyFramework.guarantees),
+      JSON.stringify(copyFramework.reading_level),
+      JSON.stringify(copyFramework.vertical_angles),
       JSON.stringify(copyFramework.faq_templates),
       JSON.stringify(copyFramework.pas_scripts),
     ]
@@ -157,6 +233,7 @@ export async function runAgent2(
     prompt: schemaPrompt,
     schema: SchemaTemplateSchema,
     model: "haiku",
+    logLabel: "[Agent 2][Step 4][Schema templates]",
   });
   console.log(
     `[Agent 2] Schema template types: ${Object.keys(schemaTemplates.jsonld_templates)
@@ -168,8 +245,9 @@ export async function runAgent2(
     `INSERT INTO schema_templates (niche, jsonld_templates)
      VALUES ($1, $2)
      ON CONFLICT (niche) DO UPDATE SET
-       jsonld_templates = EXCLUDED.jsonld_templates`,
-    [schemaTemplates.niche, JSON.stringify(schemaTemplates.jsonld_templates)]
+       jsonld_templates = EXCLUDED.jsonld_templates,
+       updated_at = now()`,
+    [cacheKey, JSON.stringify(schemaTemplates.jsonld_templates)]
   );
   console.log("[Agent 2] Saved schema templates");
   eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Schemas saved", detail: "JSON-LD templates stored", timestamp: Date.now() });
@@ -182,6 +260,7 @@ export async function runAgent2(
     prompt: seasonalPrompt,
     schema: SeasonalCalendarSchema,
     model: "sonnet",
+    logLabel: "[Agent 2][Step 5][Seasonal calendar]",
   });
   console.log(
     `[Agent 2] Seasonal focus: ${seasonalCalendar.months
@@ -194,8 +273,9 @@ export async function runAgent2(
     `INSERT INTO seasonal_calendars (niche, months)
      VALUES ($1, $2)
      ON CONFLICT (niche) DO UPDATE SET
-       months = EXCLUDED.months`,
-    [seasonalCalendar.niche, JSON.stringify(seasonalCalendar.months)]
+       months = EXCLUDED.months,
+       updated_at = now()`,
+    [cacheKey, JSON.stringify(seasonalCalendar.months)]
   );
   console.log("[Agent 2] Saved seasonal calendar");
 

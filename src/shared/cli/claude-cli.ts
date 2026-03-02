@@ -1,6 +1,6 @@
-import { execFile } from "node:child_process";
 import type { CliProvider, CliInvokeOptions, CliResult } from "./types.js";
 import { extractJson, detectRateLimit } from "./types.js";
+import { runCliCommand } from "./run-command.js";
 
 function shouldRetryWithoutDangerousPermissions(output: string): boolean {
   return /--dangerously-skip-permissions cannot be used with root\/sudo privileges/i.test(output);
@@ -40,39 +40,6 @@ export function isClaudeSchemaCompatible(schema: unknown): boolean {
   }
 
   return true;
-}
-
-function execFileWithClosedStdin(
-  file: string,
-  args: string[],
-  options: {
-    timeout: number;
-    maxBuffer: number;
-    env: Record<string, string | undefined>;
-  }
-): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = execFile(
-      file,
-      args,
-      {
-        ...options,
-        encoding: "utf8",
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          (error as any).stdout = stdout;
-          (error as any).stderr = stderr;
-          reject(error);
-          return;
-        }
-
-        resolve({ stdout, stderr });
-      }
-    );
-
-    child.stdin?.end();
-  });
 }
 
 export function createClaudeCli(cliPath: string): CliProvider {
@@ -117,16 +84,17 @@ export function createClaudeCli(cliPath: string): CliProvider {
 
       try {
         // Remove CLAUDECODE to avoid "cannot launch inside another session" error
-        const childEnv: Record<string, string | undefined> = { ...process.env, IS_SANDBOX: "1" };
+        const childEnv: Record<string, string | undefined> = { ...process.env, IS_SANDBOX: "1", CALLFORGE_PIPELINE: "1" };
         delete childEnv.CLAUDECODE;
         let stdout = "";
         let stderr = "";
 
         try {
-          const result = await execFileWithClosedStdin(cliPath, privilegedArgs, {
-            timeout: options.timeoutMs ?? 120_000,
+          const result = await runCliCommand(cliPath, privilegedArgs, {
+            timeoutMs: options.timeoutMs ?? 120_000,
             maxBuffer: 10 * 1024 * 1024,
             env: childEnv,
+            onOutput: options.onOutput,
           });
           stdout = result.stdout;
           stderr = result.stderr;
@@ -139,10 +107,11 @@ export function createClaudeCli(cliPath: string): CliProvider {
             throw err;
           }
 
-          const retryResult = await execFileWithClosedStdin(cliPath, bypassPermissionArgs, {
-            timeout: options.timeoutMs ?? 120_000,
+          const retryResult = await runCliCommand(cliPath, bypassPermissionArgs, {
+            timeoutMs: options.timeoutMs ?? 120_000,
             maxBuffer: 10 * 1024 * 1024,
             env: childEnv,
+            onOutput: options.onOutput,
           });
           stdout = retryResult.stdout;
           stderr = retryResult.stderr;

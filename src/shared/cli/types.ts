@@ -8,6 +8,7 @@ export interface CliInvokeOptions {
   maxTurns?: number;
   timeoutMs?: number;
   model?: ModelTier;
+  onOutput?: (chunk: string, stream: "stdout" | "stderr") => void;
 }
 
 export interface CliResult {

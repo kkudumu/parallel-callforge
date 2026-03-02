@@ -5,7 +5,8 @@
 {{ else }}
 {
   "@context": "https://schema.org",
-  "@type": "PestControlService",
+  "@type": "LocalBusiness",
+  "additionalType": "https://www.productontology.org/id/Pest_control",
   "name": "{{ .Site.Params.business_name }}{{ if .Params.city }} - {{ .Params.city }}{{ end }}",
   "description": "{{ .Params.description | default .Site.Params.tagline }}",
   "url": "{{ .Permalink }}",

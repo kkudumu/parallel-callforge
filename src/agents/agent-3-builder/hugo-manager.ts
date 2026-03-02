@@ -15,9 +15,10 @@ export interface HugoManager {
   ensureProject(): void;
   writeContentFile(filePath: string, frontmatter: Record<string, unknown>, content: string): void;
   writeTemplate(filePath: string, html: string): void;
-  writeStaticFile(filePath: string, content: string): void;
+  writeStaticFile(filePath: string, content: string | Buffer): void;
   buildSite(): Promise<{ success: boolean; output: string }>;
-  deploySite(siteId: string): Promise<DeployResult>;
+  deployDraftSite(siteId: string): Promise<DeployResult>;
+  publishSite(siteId: string): Promise<DeployResult>;
 }
 
 export function createHugoManager(hugoSitePath: string): HugoManager {
@@ -162,7 +163,10 @@ title = "Extermanation - Professional Pest Control"
         `<header class="site-header">
   <div class="container header-inner">
     <a href="/" class="site-logo">{{ .Site.Title }}</a>
-    <a href="tel:{{ .Site.Params.phone_raw }}" class="header-phone">Call {{ .Site.Params.phone }}</a>
+    <div class="header-cta">
+      <a href="tel:{{ .Site.Params.phone_raw }}" class="header-phone">Call {{ .Site.Params.phone }}</a>
+      <p class="call-recording-note">Calls may be recorded for quality assurance.</p>
+    </div>
   </div>
 </header>
 `
@@ -172,7 +176,8 @@ title = "Extermanation - Professional Pest Control"
         `<footer class="site-footer">
   <div class="container">
     <p><strong>{{ .Site.Params.business_name }}</strong> connects consumers with local pest control professionals.</p>
-    <p>DISCLAIMER: {{ .Site.Params.business_name }} is a free referral service connecting consumers with pest control professionals. We are not a pest control company. Calls may be recorded for quality assurance and routing purposes.</p>
+    <p>DISCLAIMER: {{ .Site.Params.business_name }} is a free referral service connecting consumers with pest control professionals. We are not a pest control company. Calls may be recorded for quality assurance. By calling the number on this page, you consent to potential call recording and acknowledge your call may be directed to a third-party service provider.</p>
+    <p><a href="/privacy-policy/">Privacy Policy</a> | <a href="/terms-of-service/">Terms of Service</a> | <a href="/do-not-sell/">Do Not Sell My Personal Information</a></p>
   </div>
 </footer>
 `
@@ -186,6 +191,7 @@ title = "Extermanation - Professional Pest Control"
         path.join(hugoSitePath, "layouts/partials/cta-sticky.html"),
         `<div class="cta-sticky">
   <a href="tel:{{ .Site.Params.phone_raw }}">Call {{ .Site.Params.phone }}</a>
+  <p class="call-recording-note">Calls may be recorded for quality assurance.</p>
 </div>
 `
       );
@@ -214,6 +220,42 @@ title = "Extermanation - Professional Pest Control"
 }
 {{ end }}
 </script>
+`
+      );
+      writeIfMissing(
+        path.join(hugoSitePath, "content/privacy-policy.md"),
+        `---
+title: "Privacy Policy"
+draft: false
+---
+
+This site uses call tracking and referral routing to connect consumers with independent service providers. We may collect phone numbers, call duration, IP address, browsing data, and attribution parameters needed for routing, analytics, compliance, and quality assurance.
+
+Calls placed through this site may be shared with referral partners, call tracking vendors, analytics tools, and independent service providers participating in our network.
+
+If you need to request deletion, correction, or additional disclosure regarding personal data handling, contact the number listed on this site.
+`
+      );
+      writeIfMissing(
+        path.join(hugoSitePath, "content/terms-of-service.md"),
+        `---
+title: "Terms of Service"
+draft: false
+---
+
+This website is a referral and lead generation service. We are not the direct service provider. Calls may be routed to independent third-party businesses. We do not guarantee service quality, pricing, scheduling, or availability from any provider reached through this site.
+
+By using this site or calling the phone numbers shown here, you agree that calls may be recorded or monitored for quality assurance and routing purposes.
+`
+      );
+      writeIfMissing(
+        path.join(hugoSitePath, "content/do-not-sell.md"),
+        `---
+title: "Do Not Sell My Personal Information"
+draft: false
+---
+
+If you are requesting that your personal information not be sold or shared beyond what is necessary for compliance and call routing, contact the phone number listed on this site and request a privacy review.
 `
       );
       writeIfMissing(
@@ -322,7 +364,11 @@ title = "Extermanation - Professional Pest Control"
     writeStaticFile(filePath, content) {
       const fullPath = path.join(hugoSitePath, "static", filePath);
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-      fs.writeFileSync(fullPath, content, "utf-8");
+      if (typeof content === "string") {
+        fs.writeFileSync(fullPath, content, "utf-8");
+        return;
+      }
+      fs.writeFileSync(fullPath, content);
     },
 
     async buildSite() {
@@ -337,12 +383,12 @@ title = "Extermanation - Professional Pest Control"
       }
     },
 
-    async deploySite(siteId: string): Promise<DeployResult> {
+    async deployDraftSite(siteId: string): Promise<DeployResult> {
       const publicDir = path.join(hugoSitePath, "public");
       try {
         const { stdout, stderr } = await execFileAsync(
           "netlify",
-          ["deploy", "--prod", "--dir", publicDir, "--site", siteId, "--json"],
+          ["deploy", "--dir", publicDir, "--site", siteId, "--json"],
           { cwd: hugoSitePath, timeout: 120_000 }
         );
 
@@ -353,6 +399,30 @@ title = "Extermanation - Professional Pest Control"
           return { success: true, url, output: stdout + stderr };
         } catch {
           // Fallback: parse URL from text output
+          const urlMatch = stdout.match(/Website URL:\s+(https?:\/\/\S+)/i)
+            || stdout.match(/(https:\/\/[^\s]+\.netlify\.app\S*)/);
+          const url = urlMatch?.[1] || "";
+          return { success: true, url, output: stdout + stderr };
+        }
+      } catch (err: any) {
+        return { success: false, url: "", output: formatExecFailure(err) };
+      }
+    },
+
+    async publishSite(siteId: string): Promise<DeployResult> {
+      const publicDir = path.join(hugoSitePath, "public");
+      try {
+        const { stdout, stderr } = await execFileAsync(
+          "netlify",
+          ["deploy", "--prod", "--dir", publicDir, "--site", siteId, "--json"],
+          { cwd: hugoSitePath, timeout: 120_000 }
+        );
+
+        try {
+          const result = JSON.parse(stdout);
+          const url = result.url || result.deploy_url || "";
+          return { success: true, url, output: stdout + stderr };
+        } catch {
           const urlMatch = stdout.match(/Website URL:\s+(https?:\/\/\S+)/i)
             || stdout.match(/(https:\/\/[^\s]+\.netlify\.app\S*)/);
           const url = urlMatch?.[1] || "";

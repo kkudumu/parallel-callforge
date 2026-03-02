@@ -1,14 +1,21 @@
 import { z } from "zod/v4";
+import fs from "node:fs";
 import path from "node:path";
+import type Bottleneck from "bottleneck";
 import type { LlmClient } from "../../shared/cli/llm-client.js";
 import type { DbClient } from "../../shared/db/client.js";
 import { createHugoManager } from "./hugo-manager.js";
-import { runQualityGate } from "./quality-gate.js";
+import { findPlaceholderTokens, runQualityGate } from "./quality-gate.js";
+import { fetchStockImageAsset } from "./image-sourcing.js";
 import { slugify } from "../agent-1-keywords/index.js";
 import { eventBus } from "../../shared/events/event-bus.js";
 import { CITY_HUB_PROMPT, SERVICE_SUBPAGE_PROMPT, HUGO_TEMPLATE_PROMPT } from "./prompts.js";
 import type { DesignSpec } from "../../shared/schemas/design-specs.js";
 import type { CopyFramework } from "../../shared/schemas/copy-frameworks.js";
+import {
+  computeCacheFingerprint,
+  normalizeNiche,
+} from "../../shared/cache-policy.js";
 
 const ContentResponseSchema = z.object({
   title: z.string(),
@@ -33,12 +40,27 @@ export interface Agent3Config {
   phone: string;
   minWordCountHub: number;
   minWordCountSubpage: number;
+  deployLimiter?: Bottleneck;
+  maxNewCitiesPerWeek?: number;
+  targetCities?: string[];
+  indexationKillSwitchEnabled?: boolean;
+  searchConsoleIntegrationEnabled?: boolean;
+  indexationMinPageAgeDays?: number;
+  indexationLookbackDays?: number;
+  minIndexationRatio?: number;
+  ignoreIndexationKillSwitch?: boolean;
 }
 
 const DEFAULT_CONFIG: Partial<Agent3Config> = {
   phone: process.env.BUSINESS_PHONE ?? "(555) 123-4567",
   minWordCountHub: 800,
   minWordCountSubpage: 1200,
+  maxNewCitiesPerWeek: 3,
+  indexationKillSwitchEnabled: false,
+  searchConsoleIntegrationEnabled: false,
+  indexationMinPageAgeDays: 21,
+  indexationLookbackDays: 30,
+  minIndexationRatio: 0.5,
 };
 
 interface DesignSystemContext {
@@ -63,8 +85,161 @@ interface DesignSystemContext {
   secondaryHeadline: string;
   primaryCta: string;
   secondaryCta: string;
+  ctaMicrocopy: string[];
+  guarantees: string[];
+  readingLevel: {
+    target_grade_min: number;
+    target_grade_max: number;
+    tone: string;
+    banned_phrases: string[];
+  };
+  verticalAngles: {
+    general_pest: string;
+    termites: string;
+    bed_bugs: string;
+    wildlife_rodents: string;
+  };
   trustSignals: string[];
   faqLead: { question: string; answer_template: string } | null;
+}
+
+type SiteBuildStatus =
+  | "QUEUED"
+  | "GENERATING_CONTENT"
+  | "BUILDING"
+  | "QA_CHECK"
+  | "DEPLOYING_DRAFT"
+  | "DEPLOYING_LIVE"
+  | "LIVE"
+  | "FAILED";
+
+async function createSiteBuildRecord(
+  db: DbClient,
+  config: Agent3Config
+): Promise<{ id: string; siteKey: string; buildNumber: number }> {
+  const siteKey = normalizeNiche(config.niche);
+  const nextBuildNumberResult = await db.query<{ next_build_number: string }>(
+    `SELECT (COALESCE(MAX(build_number), 0) + 1)::text AS next_build_number
+     FROM site_builds
+     WHERE site_key = $1`,
+    [siteKey]
+  );
+  const buildNumber = Number(nextBuildNumberResult.rows[0]?.next_build_number ?? "1");
+  const insertResult = await db.query<{ id: string }>(
+    `INSERT INTO site_builds (site_key, niche, build_number, status, target_cities)
+     VALUES ($1, $2, $3, 'QUEUED', $4::jsonb)
+     RETURNING id`,
+    [
+      siteKey,
+      config.niche,
+      buildNumber,
+      JSON.stringify(config.targetCities ?? []),
+    ]
+  );
+
+  return {
+    id: insertResult.rows[0].id,
+    siteKey,
+    buildNumber,
+  };
+}
+
+async function updateSiteBuildRecord(
+  db: DbClient,
+  buildId: string,
+  status: SiteBuildStatus,
+  options: {
+    error?: string;
+    buildOutput?: Record<string, unknown>;
+    draftUrl?: string;
+    liveUrl?: string;
+    completed?: boolean;
+  } = {}
+): Promise<void> {
+  await db.query(
+    `UPDATE site_builds
+     SET status = $2,
+         errors = CASE
+           WHEN $3::jsonb IS NULL THEN errors
+           ELSE errors || $3::jsonb
+         END,
+         build_output = COALESCE(build_output, '{}'::jsonb) || COALESCE($4::jsonb, '{}'::jsonb),
+         draft_url = COALESCE($5, draft_url),
+         live_url = COALESCE($6, live_url),
+         updated_at = now(),
+         completed_at = CASE
+           WHEN $7::boolean THEN now()
+           ELSE completed_at
+         END
+     WHERE id = $1`,
+    [
+      buildId,
+      status,
+      options.error ? JSON.stringify([options.error]) : null,
+      options.buildOutput ? JSON.stringify(options.buildOutput) : null,
+      options.draftUrl ?? null,
+      options.liveUrl ?? null,
+      options.completed ?? false,
+    ]
+  );
+}
+
+function collectFilesRecursive(root: string, matcher: (filePath: string) => boolean): string[] {
+  if (!fs.existsSync(root)) {
+    return [];
+  }
+
+  const entries = fs.readdirSync(root, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectFilesRecursive(fullPath, matcher));
+      continue;
+    }
+    if (matcher(fullPath)) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function runBuiltArtifactQa(hugoSitePath: string): { passed: boolean; failures: string[] } {
+  const publicDir = path.join(hugoSitePath, "public");
+  const htmlFiles = collectFilesRecursive(publicDir, (filePath) => filePath.endsWith(".html"));
+  const failures: string[] = [];
+
+  if (htmlFiles.length === 0) {
+    failures.push("no_built_html");
+    return { passed: false, failures };
+  }
+
+  const placeholdersFound = findPlaceholderTokens(
+    htmlFiles.map((filePath) => fs.readFileSync(filePath, "utf-8"))
+  );
+  if (placeholdersFound.length > 0) {
+    failures.push(`placeholder_tokens:${placeholdersFound.join(",")}`);
+  }
+
+  return {
+    passed: failures.length === 0,
+    failures,
+  };
+}
+
+async function runDraftPreviewQa(draftUrl: string): Promise<void> {
+  const response = await fetch(draftUrl);
+  if (!response.ok) {
+    throw new Error(`Draft preview QA failed with HTTP ${response.status}`);
+  }
+
+  const html = await response.text();
+  const placeholdersFound = findPlaceholderTokens([html]);
+  if (placeholdersFound.length > 0) {
+    throw new Error(`Draft preview contains placeholder tokens: ${placeholdersFound.join(", ")}`);
+  }
 }
 
 function asObject<T>(value: unknown, fallback: T): T {
@@ -255,16 +430,30 @@ interface RouteAssignment {
   keywordHint: string;
 }
 
-function writeGeneratedVisual(
+async function writePageVisual(
   hugo: ReturnType<typeof createHugoManager>,
   parts: string[],
   title: string,
   subtitle: string,
-  design: DesignSystemContext
-): string {
-  const assetPath = `images/generated/${createAssetSlug(parts)}.svg`;
+  design: DesignSystemContext,
+  pageType: "city_hub" | "service_subpage",
+  city: string,
+  pestType?: string
+): Promise<string> {
+  const stockAsset = await fetchStockImageAsset({
+    pageType,
+    city,
+    pestType,
+  });
+  if (stockAsset) {
+    const assetPath = `images/sourced/${createAssetSlug(parts)}.${stockAsset.ext}`;
+    hugo.writeStaticFile(assetPath, stockAsset.bytes);
+    return `/${assetPath}`;
+  }
+
+  const fallbackPath = `images/generated/${createAssetSlug(parts)}.svg`;
   hugo.writeStaticFile(
-    assetPath,
+    fallbackPath,
     createDeterministicImageSvg(
       title,
       subtitle,
@@ -274,7 +463,7 @@ function writeGeneratedVisual(
       design.highlight
     )
   );
-  return `/${assetPath}`;
+  return `/${fallbackPath}`;
 }
 
 function normalizeRoutePath(candidate: string, citySlug: string): string {
@@ -395,14 +584,103 @@ function resolveServiceSlug(
 }
 
 function normalizeDesignSpec(row: Record<string, unknown>, niche: string): DesignSpec {
+  const fallbackLayout: DesignSpec["layout"] = {
+    primary_archetype: "local-authority",
+    supported_archetypes: [
+      {
+        name: "local-authority",
+        intent: "trust-first local research",
+        cvr_range: "5-10%",
+        best_for: ["city pages", "organic traffic"],
+        section_order: ["header", "hero", "trust", "services", "faq", "cta"],
+      },
+    ],
+    section_order: ["header", "hero", "trust", "services", "faq", "cta"],
+    section_rules: [
+      {
+        section: "hero",
+        purpose: "Drive immediate calls",
+        required_elements: ["headline", "phone", "call button"],
+        repeats_primary_cta: true,
+      },
+      {
+        section: "trust",
+        purpose: "Reduce skepticism",
+        required_elements: ["review signal", "license", "insured"],
+        repeats_primary_cta: false,
+      },
+      {
+        section: "cta",
+        purpose: "Close late-stage visitors",
+        required_elements: ["call button", "microcopy"],
+        repeats_primary_cta: true,
+      },
+    ],
+    conversion_strategy: {
+      primary_cta_type: "call",
+      no_forms: true,
+      cta_labels: ["Call Now", "Call For Help Today", "Call For A Free Inspection"],
+      cta_placements: ["header", "hero", "mid-page", "sticky-footer", "final-cta"],
+      sticky_mobile_call_cta: true,
+      phone_mentions_min: 4,
+    },
+    trust_strategy: {
+      above_fold: ["rating", "licensed and insured"],
+      mid_page: ["testimonials", "guarantee"],
+      near_cta: ["call recording note"],
+      footer: ["disclaimer", "privacy links"],
+    },
+    content_rules: {
+      city_hub_words: { min: 400, max: 700 },
+      service_page_words: { min: 500, max: 900 },
+      reading_grade_target: "5th-7th grade",
+      sentence_style: "short, direct, concrete",
+    },
+  };
+  const fallbackComponents: DesignSpec["components"] = [
+    {
+      name: "sticky-call-bar",
+      type: "mobile-footer",
+      purpose: "Persistent click-to-call",
+      mobile_behavior: "fixed bottom",
+      required: true,
+    },
+  ];
+  const fallbackColors: DesignSpec["colors"] = {
+    primary: "#FF6B00",
+    secondary: "#14213D",
+    background: "#FFFFFF",
+    surface: "#F4EFE6",
+    cta_primary: "#FF6B00",
+    cta_primary_hover: "#E85D04",
+    urgency: "#C1121F",
+    text: "#14213D",
+    text_muted: "#5C677D",
+    trust: "#2A9D8F",
+  };
+  const fallbackTypography: DesignSpec["typography"] = {
+    heading: "\"Avenir Next\", \"Segoe UI\", sans-serif",
+    body: "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
+    body_size_desktop: "18px",
+    body_size_mobile: "16px",
+    cta_size: "18px",
+  };
+  const fallbackBreakpoints: DesignSpec["responsive_breakpoints"] = {
+    mobile: 0,
+    phablet: 480,
+    tablet: 768,
+    laptop: 1024,
+    desktop: 1280,
+  };
+
   return {
     niche,
     archetype: typeof row.archetype === "string" ? row.archetype : "local-service",
-    layout: asObject<Record<string, unknown>>(row.layout, {}),
-    components: asObject<Array<Record<string, unknown>>>(row.components, []),
-    colors: asObject<Record<string, string>>(row.colors, {}),
-    typography: asObject<Record<string, string>>(row.typography, {}),
-    responsive_breakpoints: asObject<Record<string, number>>(row.responsive_breakpoints, {}),
+    layout: asObject<DesignSpec["layout"]>(row.layout, fallbackLayout),
+    components: asObject<DesignSpec["components"]>(row.components, fallbackComponents),
+    colors: asObject<DesignSpec["colors"]>(row.colors, fallbackColors),
+    typography: asObject<DesignSpec["typography"]>(row.typography, fallbackTypography),
+    responsive_breakpoints: asObject<DesignSpec["responsive_breakpoints"]>(row.responsive_breakpoints, fallbackBreakpoints),
   };
 }
 
@@ -411,7 +689,31 @@ function normalizeCopyFramework(row: Record<string, unknown>, niche: string): Co
     niche,
     headlines: asStringArray(row.headlines),
     ctas: asStringArray(row.ctas),
+    cta_microcopy: asStringArray(row.cta_microcopy),
     trust_signals: asStringArray(row.trust_signals),
+    guarantees: asStringArray(row.guarantees),
+    reading_level: asObject<{
+      target_grade_min: number;
+      target_grade_max: number;
+      tone: string;
+      banned_phrases: string[];
+    }>(row.reading_level, {
+      target_grade_min: 5,
+      target_grade_max: 7,
+      tone: "direct and reassuring",
+      banned_phrases: [],
+    }),
+    vertical_angles: asObject<{
+      general_pest: string;
+      termites: string;
+      bed_bugs: string;
+      wildlife_rodents: string;
+    }>(row.vertical_angles, {
+      general_pest: "Fast relief and safer living spaces.",
+      termites: "Protect your home from expensive structural damage.",
+      bed_bugs: "Stop bites and sleep disruption quickly.",
+      wildlife_rodents: "Remove health risks and prevent property damage.",
+    }),
     faq_templates: asFaqArray(row.faq_templates),
     pas_scripts: asObject<Array<{ problem: string; agitate: string; solve: string }>>(row.pas_scripts, []),
   };
@@ -425,6 +727,51 @@ function resolveSchemaTemplate(
   title: string,
   description: string
 ): Record<string, unknown> {
+  const normalizeSchemaRecord = (input: Record<string, unknown>): Record<string, unknown> => {
+    const normalized = { ...input };
+    const localBusinessType = "LocalBusiness";
+    const pestControlCategory = "https://www.productontology.org/id/Pest_control";
+
+    if (normalized["@type"] === "PestControlService") {
+      normalized["@type"] = pageType === "city_hub" ? localBusinessType : "Service";
+    }
+
+    if (pageType === "city_hub") {
+      if (normalized["@type"] !== "Service") {
+        normalized["@type"] = localBusinessType;
+      }
+      if (typeof normalized.additionalType !== "string") {
+        normalized.additionalType = pestControlCategory;
+      }
+    } else {
+      normalized["@type"] = "Service";
+
+      const providerValue = normalized.provider;
+      const provider =
+        providerValue && typeof providerValue === "object" && !Array.isArray(providerValue)
+          ? { ...(providerValue as Record<string, unknown>) }
+          : {};
+
+      if (provider["@type"] === "PestControlService" || typeof provider["@type"] !== "string") {
+        provider["@type"] = localBusinessType;
+      }
+      if (typeof provider.additionalType !== "string") {
+        provider.additionalType = pestControlCategory;
+      }
+      provider.areaServed = {
+        "@type": "City",
+        name: city,
+        containedInPlace: {
+          "@type": "State",
+          name: state,
+        },
+      };
+      normalized.provider = provider;
+    }
+
+    return normalized;
+  };
+
   const candidates =
     pageType === "city_hub"
       ? ["city_hub", "cityHub", "local_business", "localBusiness", "hub"]
@@ -433,7 +780,7 @@ function resolveSchemaTemplate(
   for (const key of candidates) {
     const template = schemaTemplates[key];
     if (template && typeof template === "object" && !Array.isArray(template)) {
-      return {
+      return normalizeSchemaRecord({
         ...(template as Record<string, unknown>),
         name: title,
         description,
@@ -445,13 +792,14 @@ function resolveSchemaTemplate(
             name: state,
           },
         },
-      };
+      });
     }
   }
 
-  return {
+  return normalizeSchemaRecord({
     "@context": "https://schema.org",
-    "@type": pageType === "city_hub" ? "PestControlService" : "Service",
+    "@type": pageType === "city_hub" ? "LocalBusiness" : "Service",
+    additionalType: "https://www.productontology.org/id/Pest_control",
     name: title,
     description,
     areaServed: {
@@ -462,7 +810,7 @@ function resolveSchemaTemplate(
         name: state,
       },
     },
-  };
+  });
 }
 
 function summarizeSeasonalResearch(
@@ -529,8 +877,8 @@ async function applyDesignSystem(
   const secondary = selectColor(designSpec.colors, ["secondary", "ink", "dark"], "#14213D");
   const tertiary = selectColor(designSpec.colors, ["tertiary", "surface", "muted"], "#F4EFE6");
   const highlight = selectColor(designSpec.colors, ["highlight", "success"], "#2A9D8F");
-  const headingFont = designSpec.typography.heading || designSpec.typography.display || "\"Avenir Next\", \"Segoe UI\", sans-serif";
-  const bodyFont = designSpec.typography.body || designSpec.typography.copy || "\"Trebuchet MS\", \"Segoe UI\", sans-serif";
+  const headingFont = designSpec.typography.heading || "\"Avenir Next\", \"Segoe UI\", sans-serif";
+  const bodyFont = designSpec.typography.body || "\"Trebuchet MS\", \"Segoe UI\", sans-serif";
   const heroHeadline =
     copyFramework.headlines[0] ||
     `${designSpec.archetype.replace(/[_-]+/g, " ")} ${layoutLabels[0] || "service"} flow`;
@@ -538,11 +886,21 @@ async function applyDesignSystem(
     copyFramework.headlines[1] ||
     `${componentLabels.slice(0, 2).join(" and ") || "High-converting service"} sections shaped by design research`;
   const primaryCta = copyFramework.ctas[0] || `Call for ${designSpec.archetype.replace(/[_-]+/g, " ")}`;
-  const secondaryCta = copyFramework.ctas[1] || `Review ${layoutLabels[1] || "service"} details`;
+  const secondaryCta = copyFramework.ctas[1] || primaryCta;
+  const ctaMicrocopy = copyFramework.cta_microcopy.slice(0, 2);
+  const guarantees = copyFramework.guarantees.slice(0, 3);
+  const readingLevel = copyFramework.reading_level;
+  const verticalAngles = copyFramework.vertical_angles;
   const trustSignals = copyFramework.trust_signals.slice(0, 3);
   const trustMarkup = trustSignals
     .map((signal) => `<li>${escapeHtml(signal)}</li>`)
     .join("\n");
+  const ctaMicrocopyText =
+    ctaMicrocopy[0] ||
+    "No obligation. Fast local routing. Same-day scheduling available.";
+  const guaranteeLead =
+    guarantees[0] ||
+    "If pests come back between visits, call again and we will help you next.";
   const faqLead = copyFramework.faq_templates[0] ?? null;
   const faqQuestion = faqLead?.question || `How is the ${designSpec.archetype.replace(/[_-]+/g, " ")} process structured?`;
   const faqAnswer = faqLead?.answer_template || `The page layout follows ${layoutLabels.join(", ") || "the researched service sequence"} so visitors can move from urgency to proof to action without friction.`;
@@ -558,12 +916,68 @@ async function applyDesignSystem(
       typography: designSpec.typography,
       responsive_breakpoints: designSpec.responsive_breakpoints,
     }, null, 2);
-    const hugoPrompt = HUGO_TEMPLATE_PROMPT.replace("{design_spec}", designSpecSummary);
-    const hugoTemplates = await llm.call({
-      prompt: hugoPrompt,
-      schema: HugoTemplateResponseSchema,
-      model: "haiku",
-    });
+    const designFingerprint = computeCacheFingerprint(designSpecSummary);
+    const templateCache = await db.query<{
+      design_fingerprint: string;
+      baseof: string;
+      city_hub: string;
+      service_subpage: string;
+    }>(
+      `SELECT design_fingerprint, baseof, city_hub, service_subpage
+       FROM hugo_template_cache
+       WHERE niche = $1
+       LIMIT 1`,
+      [normalizeNiche(niche)]
+    );
+
+    let hugoTemplates = templateCache.rows[0];
+    if (!hugoTemplates || hugoTemplates.design_fingerprint !== designFingerprint) {
+      const hugoPrompt = HUGO_TEMPLATE_PROMPT.replace("{design_spec}", designSpecSummary);
+      const generatedTemplates = await llm.call({
+        prompt: hugoPrompt,
+        schema: HugoTemplateResponseSchema,
+        model: "haiku",
+        logLabel: "[Agent 3][Design system][Hugo templates]",
+      });
+      const generatedMarkup = [
+        generatedTemplates.baseof,
+        generatedTemplates.city_hub,
+        generatedTemplates.service_subpage,
+      ].join("\n");
+      if (/<form\b/i.test(generatedMarkup)) {
+        throw new Error("LLM template generation violated pay-per-call rules by emitting a user-facing form");
+      }
+      await db.query(
+        `INSERT INTO hugo_template_cache
+         (niche, design_fingerprint, baseof, city_hub, service_subpage,
+          cache_provider, cache_version, retrieval_method, confidence_score, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'llm', 'v1', 'generated', 0.7, now())
+         ON CONFLICT (niche) DO UPDATE SET
+           design_fingerprint = EXCLUDED.design_fingerprint,
+           baseof = EXCLUDED.baseof,
+           city_hub = EXCLUDED.city_hub,
+           service_subpage = EXCLUDED.service_subpage,
+           cache_provider = EXCLUDED.cache_provider,
+           cache_version = EXCLUDED.cache_version,
+           retrieval_method = EXCLUDED.retrieval_method,
+           confidence_score = EXCLUDED.confidence_score,
+           updated_at = now()`,
+        [
+          normalizeNiche(niche),
+          designFingerprint,
+          generatedTemplates.baseof,
+          generatedTemplates.city_hub,
+          generatedTemplates.service_subpage,
+        ]
+      );
+      hugoTemplates = {
+        design_fingerprint: designFingerprint,
+        ...generatedTemplates,
+      };
+    } else {
+      console.log("[Agent 3] Reusing cached Hugo templates");
+    }
+
     hugo.writeTemplate("_default/baseof.html", hugoTemplates.baseof);
     hugo.writeTemplate("_default/list.html", hugoTemplates.city_hub);
     hugo.writeTemplate("_default/single.html", hugoTemplates.service_subpage);
@@ -610,8 +1024,9 @@ async function applyDesignSystem(
         <p class="hero-support">${escapeHtml(secondaryHeadline)}</p>
         <div class="hero-actions">
           <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">${escapeHtml(primaryCta)}</a>
-          <a href="#service-grid" class="cta-button cta-secondary">${escapeHtml(secondaryCta)}</a>
+          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-secondary">${escapeHtml(secondaryCta)}</a>
         </div>
+        <p class="cta-microcopy">${escapeHtml(ctaMicrocopyText)}</p>
         {{ partial "cta-badge.html" . }}
       </div>
       <div class="hero-visual">
@@ -672,6 +1087,7 @@ async function applyDesignSystem(
         <p class="eyebrow">Common Question</p>
         <h2>${escapeHtml(faqQuestion)}</h2>
         <p>${escapeHtml(faqAnswer)}</p>
+        <p class="faq-guarantee">${escapeHtml(guaranteeLead)}</p>
       </div>
     </div>
   </section>
@@ -682,6 +1098,7 @@ async function applyDesignSystem(
       <h2>Talk to a local team that moves fast.</h2>
       <p>Call for same-day scheduling, property-specific recommendations, and clear next steps before we start treatment.</p>
       <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call {{ .Site.Params.phone }}</a>
+      <p class="cta-microcopy">${escapeHtml(ctaMicrocopyText)}</p>
       {{ partial "cta-badge.html" . }}
     </div>
   </section>
@@ -700,8 +1117,9 @@ async function applyDesignSystem(
         {{ end }}
         <div class="hero-actions">
           <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">${escapeHtml(primaryCta)}</a>
-          <a href="#service-content" class="cta-button cta-secondary">See Treatment Details</a>
+          <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-secondary">${escapeHtml(secondaryCta)}</a>
         </div>
+        <p class="cta-microcopy">${escapeHtml(ctaMicrocopyText)}</p>
         {{ partial "cta-badge.html" . }}
       </div>
       <div class="hero-visual">
@@ -755,6 +1173,7 @@ async function applyDesignSystem(
       <h2>Get ahead of the infestation before it spreads.</h2>
       <p>Call now for a fast inspection, practical treatment options, and a plan that fits your home or commercial property.</p>
       <a href="tel:{{ .Site.Params.phone_raw }}" class="cta-button cta-primary">Call {{ .Site.Params.phone }}</a>
+      <p class="cta-microcopy">${escapeHtml(ctaMicrocopyText)}</p>
       {{ partial "cta-badge.html" . }}
     </div>
   </section>
@@ -819,6 +1238,12 @@ async function applyDesignSystem(
 .hero-support {
   margin-bottom: 24px;
   opacity: 0.85;
+}
+
+.cta-microcopy {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  opacity: 0.82;
 }
 
 .hero-actions {
@@ -940,6 +1365,11 @@ async function applyDesignSystem(
   margin-top: 0;
 }
 
+.faq-guarantee {
+  margin-top: 16px;
+  font-weight: 700;
+}
+
 .cta-section-premium {
   background: linear-gradient(135deg, ${secondary} 0%, ${primary} 100%);
 }
@@ -1001,6 +1431,10 @@ async function applyDesignSystem(
     secondaryHeadline,
     primaryCta,
     secondaryCta,
+    ctaMicrocopy,
+    guarantees,
+    readingLevel,
+    verticalAngles,
     trustSignals,
     faqLead,
   };
@@ -1049,70 +1483,151 @@ export async function runAgent3(
   db: DbClient
 ): Promise<void> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
+  const buildRecord = await createSiteBuildRecord(db, cfg);
   const hugo = createHugoManager(cfg.hugoSitePath);
-  hugo.ensureProject();
-  const designSystem = await applyDesignSystem(cfg.niche, db, hugo, llm);
+  let cityRows: any[] = [];
 
-  console.log(`[Agent 3] Starting site build for ${cfg.niche}`);
-  eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Starting", detail: cfg.niche, timestamp: Date.now() });
+  try {
+    hugo.ensureProject();
+    const designSystem = await applyDesignSystem(cfg.niche, db, hugo, llm);
 
-  // Get cities from city_keyword_map
-  const citiesResult = await db.query(
-    "SELECT city, state, url_mapping, keyword_cluster_ids FROM city_keyword_map WHERE niche = $1",
-    [cfg.niche]
-  );
+    console.log(`[Agent 3] Starting site build for ${cfg.niche}`);
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Starting", detail: cfg.niche, timestamp: Date.now() });
+    await updateSiteBuildRecord(db, buildRecord.id, "GENERATING_CONTENT");
 
-  if (citiesResult.rows.length === 0) {
-    console.log("[Agent 3] No cities found in keyword map. Run Agent 1 first.");
-    return;
-  }
-
-  for (const cityRow of citiesResult.rows) {
-    const { city, state } = cityRow;
-    const citySlug = slugify(city);
-    const routeAssignments = deriveRouteAssignments(cityRow.url_mapping, citySlug);
-    const approvedRoutes = routeAssignments.map((assignment) => assignment.routePath);
-    console.log(`[Agent 3] Building pages for ${city}, ${state}`);
-    eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Building city", detail: `${city}, ${state}`, timestamp: Date.now() });
-
-    // Get the exact keyword clusters approved by Agent 1 for this city.
-    const clusterIds = Array.isArray(cityRow.keyword_cluster_ids)
-      ? cityRow.keyword_cluster_ids
-      : [];
-    const clustersResult = await db.query(
-      "SELECT * FROM keyword_clusters WHERE id = ANY($1::uuid[])",
-      [clusterIds]
+    const citiesResult = await db.query(
+      "SELECT city, state, url_mapping, keyword_cluster_ids FROM city_keyword_map WHERE niche = $1",
+      [cfg.niche]
     );
-    const clusterOrder = new Map(clusterIds.map((id: string, index: number) => [id, index]));
-    const orderedClusters = [...clustersResult.rows].sort(
-      (a: any, b: any) => {
-        const aIndex = clusterOrder.has(String(a.id))
-          ? Number(clusterOrder.get(String(a.id)))
-          : Number.MAX_SAFE_INTEGER;
-        const bIndex = clusterOrder.has(String(b.id))
-          ? Number(clusterOrder.get(String(b.id)))
-          : Number.MAX_SAFE_INTEGER;
-        return aIndex - bIndex;
+    const requestedCities = new Set(
+      (cfg.targetCities ?? []).map((city) => city.trim().toLowerCase()).filter(Boolean)
+    );
+    cityRows = requestedCities.size > 0
+      ? citiesResult.rows.filter((row: any) =>
+          requestedCities.has(String(row.city ?? "").trim().toLowerCase())
+        )
+      : citiesResult.rows;
+
+    if (cityRows.length === 0) {
+      console.log("[Agent 3] No cities found in keyword map. Run Agent 1 first.");
+      await updateSiteBuildRecord(db, buildRecord.id, "FAILED", {
+        error: "No cities found in city_keyword_map for the requested build.",
+        completed: true,
+      });
+      return;
+    }
+
+    const recentDeploysResult = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM pages
+       WHERE niche = $1
+         AND created_at >= now() - interval '7 days'`,
+      [cfg.niche]
+    );
+    let newCitySlotsRemaining = Math.max(
+      0,
+      Number(cfg.maxNewCitiesPerWeek ?? 3) - Number(recentDeploysResult.rows[0]?.count ?? "0")
+    );
+    if (newCitySlotsRemaining === 0) {
+      console.warn("[Agent 3] Weekly new-city deployment cap reached. Skipping new city launches.");
+    }
+
+    if (
+      cfg.indexationKillSwitchEnabled &&
+      cfg.searchConsoleIntegrationEnabled &&
+      !cfg.ignoreIndexationKillSwitch
+    ) {
+      const indexationResult = await db.query<{ eligible_pages: string; indexed_pages: string }>(
+        `SELECT
+           COUNT(*)::text AS eligible_pages,
+           COUNT(*) FILTER (
+             WHERE p.indexation_status = 'indexed'
+                OR EXISTS (
+                  SELECT 1
+                  FROM ranking_snapshots rs
+                  WHERE rs.page_id = p.id
+                )
+           )::text AS indexed_pages
+         FROM pages p
+         WHERE p.niche = $1
+           AND p.created_at <= now() - (($2::text || ' days')::interval)
+           AND p.created_at >= now() - (($3::text || ' days')::interval)`,
+        [
+          cfg.niche,
+          String(cfg.indexationMinPageAgeDays ?? 21),
+          String(cfg.indexationLookbackDays ?? 30),
+        ]
+      );
+      const eligiblePages = Number(indexationResult.rows[0]?.eligible_pages ?? "0");
+      const indexedPages = Number(indexationResult.rows[0]?.indexed_pages ?? "0");
+      const indexationRatio = eligiblePages > 0 ? indexedPages / eligiblePages : 1;
+
+      if (eligiblePages > 0 && indexationRatio < Number(cfg.minIndexationRatio ?? 0.5)) {
+        console.warn(
+          `[Agent 3] Indexation kill switch active. Ratio ${indexationRatio.toFixed(2)} is below ${(cfg.minIndexationRatio ?? 0.5).toFixed(2)}.`
+        );
+        newCitySlotsRemaining = 0;
       }
-    );
-    console.log(`[Agent 3] Loaded ${orderedClusters.length} keyword clusters for ${city} from Agent 1 map`);
+    }
 
-    // Generate city hub page
-    const hubKeyword = orderedClusters.find(
-      (c: any) => c.intent === "transactional"
-    )?.primary_keyword ?? `${city} ${cfg.niche}`;
-    const hubSeasonalSummary = summarizeSeasonalResearch(
-      designSystem.seasonalCalendar,
-      hubKeyword
-    );
+    for (const cityRow of cityRows) {
+      const processCity = async () => {
+        const { city, state } = cityRow;
+        const citySlug = slugify(city);
+        const existingPageResult = await db.query<{ id: string }>(
+          "SELECT id FROM pages WHERE slug = $1 AND niche = $2 LIMIT 1",
+          [citySlug, cfg.niche]
+        );
+        const isExistingCity = existingPageResult.rows.length > 0;
+        if (!isExistingCity) {
+          if (newCitySlotsRemaining <= 0) {
+            console.warn(`[Agent 3] Skipping ${city}, ${state}; weekly new-city cap reached.`);
+            return;
+          }
+          newCitySlotsRemaining -= 1;
+        }
 
-    console.log(`[Agent 3] Generating hub page for ${city}...`);
-    eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hub page", detail: city, timestamp: Date.now() });
-    const hubPrompt = `${CITY_HUB_PROMPT
-      .replace(/\{city\}/g, city)
-      .replace(/\{state\}/g, state)
-      .replace(/\{keyword\}/g, hubKeyword)
-      .replace(/\{phone\}/g, cfg.phone!)}
+        const routeAssignments = deriveRouteAssignments(cityRow.url_mapping, citySlug);
+        const approvedRoutes = routeAssignments.map((assignment) => assignment.routePath);
+        console.log(`[Agent 3] Building pages for ${city}, ${state}`);
+        eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Building city", detail: `${city}, ${state}`, timestamp: Date.now() });
+
+        const clusterIds = Array.isArray(cityRow.keyword_cluster_ids)
+          ? cityRow.keyword_cluster_ids
+          : [];
+        const clustersResult = await db.query(
+          "SELECT * FROM keyword_clusters WHERE id = ANY($1::uuid[])",
+          [clusterIds]
+        );
+        const clusterOrder = new Map(clusterIds.map((id: string, index: number) => [id, index]));
+        const orderedClusters = [...clustersResult.rows].sort(
+          (a: any, b: any) => {
+            const aIndex = clusterOrder.has(String(a.id))
+              ? Number(clusterOrder.get(String(a.id)))
+              : Number.MAX_SAFE_INTEGER;
+            const bIndex = clusterOrder.has(String(b.id))
+              ? Number(clusterOrder.get(String(b.id)))
+              : Number.MAX_SAFE_INTEGER;
+            return aIndex - bIndex;
+          }
+        );
+        console.log(`[Agent 3] Loaded ${orderedClusters.length} keyword clusters for ${city} from Agent 1 map`);
+
+        const hubKeyword = orderedClusters.find(
+          (c: any) => c.intent === "transactional"
+        )?.primary_keyword ?? `${city} ${cfg.niche}`;
+        const hubSeasonalSummary = summarizeSeasonalResearch(
+          designSystem.seasonalCalendar,
+          hubKeyword
+        );
+
+        console.log(`[Agent 3] Generating hub page for ${city}...`);
+        eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hub page", detail: city, timestamp: Date.now() });
+        const hubPrompt = `${CITY_HUB_PROMPT
+          .replace(/\{city\}/g, city)
+          .replace(/\{state\}/g, state)
+          .replace(/\{keyword\}/g, hubKeyword)
+          .replace(/\{phone\}/g, cfg.phone!)}
 
 Agent 1 city keyword map (authoritative):
 - Approved hub keyword: ${hubKeyword}
@@ -1126,99 +1641,110 @@ Agent 2 design research (authoritative):
 - Trust signals: ${designSystem.copyFramework.trust_signals.join(" | ")}
 - Seasonal guidance: ${hubSeasonalSummary}`;
 
-    const hubContent = await llm.call({
-      prompt: hubPrompt,
-      schema: ContentResponseSchema,
-      model: "sonnet",
-    });
-    console.log(`[Agent 3] Hub page title: ${hubContent.title}`);
-    console.log(
-      `[Agent 3] Hub headings: ${(hubContent.headings ?? []).slice(0, 4).join(" | ") || "none"}`
-    );
+        const hubContent = await llm.call({
+          prompt: hubPrompt,
+          schema: ContentResponseSchema,
+          model: "sonnet",
+          logLabel: `[Agent 3][Hub page][${city}]`,
+        });
+        const hubSchemaTemplate = resolveSchemaTemplate(
+          designSystem.schemaTemplates,
+          "city_hub",
+          city,
+          state,
+          hubContent.title,
+          hubContent.meta_description
+        );
+        console.log(`[Agent 3] Hub page title: ${hubContent.title}`);
+        console.log(
+          `[Agent 3] Hub headings: ${(hubContent.headings ?? []).slice(0, 4).join(" | ") || "none"}`
+        );
 
-    // Quality gate
-    const hubQuality = runQualityGate(hubContent.content, city, cfg.minWordCountHub!);
-    if (!hubQuality.passed) {
-      console.warn(`[Agent 3] Hub page quality gate failed for ${city}: ${hubQuality.failures.join(", ")}`);
-    }
+        const hubQuality = runQualityGate(
+          hubContent.content,
+          city,
+          cfg.minWordCountHub!,
+          [
+            hubContent.title,
+            hubContent.meta_description,
+            JSON.stringify(hubSchemaTemplate),
+          ]
+        );
+        if (!hubQuality.passed) {
+          throw new Error(`Hub page QA failed for ${city}: ${hubQuality.failures.join(", ")}`);
+        }
 
-    // Write hub page
-    const hubSlug = `${citySlug}/_index.md`;
-    const hubHeroImage = writeGeneratedVisual(
-      hugo,
-      [city, "hub", "hero"],
-      city,
-      hubKeyword,
-      designSystem
-    );
-    const hubFeatureImage = writeGeneratedVisual(
-      hugo,
-      [city, "hub", "feature"],
-      `${city} Coverage`,
-      designSystem.heroHeadline,
-      designSystem
-    );
-    hugo.writeContentFile(hubSlug, {
-      title: hubContent.title,
-      description: hubContent.meta_description,
-      city: city,
-      state: state,
-      type: "city_hub",
-      target_keyword: hubKeyword,
-      hero_image: hubHeroImage,
-      feature_image: hubFeatureImage,
-      schema_template: resolveSchemaTemplate(
-        designSystem.schemaTemplates,
-        "city_hub",
-        city,
-        state,
-        hubContent.title,
-        hubContent.meta_description
-      ),
-      seasonal_focus: hubSeasonalSummary,
-      approved_routes: approvedRoutes,
-      draft: false,
-    }, hubContent.content);
+        const hubSlug = `${citySlug}/_index.md`;
+        const hubHeroImage = await writePageVisual(
+          hugo,
+          [city, "hub", "hero"],
+          city,
+          hubKeyword,
+          designSystem,
+          "city_hub",
+          city
+        );
+        const hubFeatureImage = await writePageVisual(
+          hugo,
+          [city, "hub", "feature"],
+          `${city} Coverage`,
+          designSystem.heroHeadline,
+          designSystem,
+          "city_hub",
+          city
+        );
+        hugo.writeContentFile(hubSlug, {
+          title: hubContent.title,
+          description: hubContent.meta_description,
+          city: city,
+          state: state,
+          type: "city_hub",
+          target_keyword: hubKeyword,
+          hero_image: hubHeroImage,
+          feature_image: hubFeatureImage,
+          schema_template: hubSchemaTemplate,
+          seasonal_focus: hubSeasonalSummary,
+          approved_routes: approvedRoutes,
+          draft: false,
+        }, hubContent.content);
 
-    // Record in DB
-    await db.query(
-      `INSERT INTO content_items (title, slug, content_type, target_keyword, city, niche, word_count, quality_score)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (slug) DO UPDATE SET word_count = $7, quality_score = $8`,
-      [
-        hubContent.title,
-        `${citySlug}`,
-        "city_hub",
-        hubKeyword,
-        city,
-        cfg.niche,
-        hubQuality.metrics.wordCount,
-        JSON.stringify(hubQuality.metrics),
-      ]
-    );
+        await db.query(
+          `INSERT INTO content_items (title, slug, content_type, target_keyword, city, niche, word_count, quality_score)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (slug) DO UPDATE SET word_count = $7, quality_score = $8`,
+          [
+            hubContent.title,
+            `${citySlug}`,
+            "city_hub",
+            hubKeyword,
+            city,
+            cfg.niche,
+            hubQuality.metrics.wordCount,
+            JSON.stringify(hubQuality.metrics),
+          ]
+        );
 
-    // Generate service subpages for pest-specific clusters
-    const serviceClusterTypes = orderedClusters.filter(
-      (c: any) => isServiceCluster(c, city, hubKeyword) && findRouteAssignment(c, routeAssignments)
-    );
+        const serviceClusterTypes = orderedClusters.filter(
+          (c: any) => isServiceCluster(c, city, hubKeyword) && findRouteAssignment(c, routeAssignments)
+        );
 
-    for (const cluster of serviceClusterTypes.slice(0, 5)) {
-      const pestType = cluster.cluster_name;
-      const pestSlug = resolveServiceSlug(cluster, routeAssignments);
-      const serviceSeasonalSummary = summarizeSeasonalResearch(
-        designSystem.seasonalCalendar,
-        cluster.primary_keyword,
-        pestType
-      );
-      console.log(`[Agent 3] Generating subpage: ${city}/${pestType}...`);
-      eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Subpage", detail: `${city}/${pestType}`, timestamp: Date.now() });
+        for (const cluster of serviceClusterTypes.slice(0, 5)) {
+          const pestType = cluster.cluster_name;
+          const pestSlug = resolveServiceSlug(cluster, routeAssignments);
+          const serviceSeasonalSummary = summarizeSeasonalResearch(
+            designSystem.seasonalCalendar,
+            cluster.primary_keyword,
+            pestType
+          );
+          console.log(`[Agent 3] Generating subpage: ${city}/${pestType}...`);
+          eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Subpage", detail: `${city}/${pestType}`, timestamp: Date.now() });
 
-      const subPrompt = `${SERVICE_SUBPAGE_PROMPT
-        .replace(/\{city\}/g, city)
-        .replace(/\{state\}/g, state)
-        .replace(/\{pest_type\}/g, pestType)
-        .replace(/\{keyword\}/g, cluster.primary_keyword)
-        .replace(/\{phone\}/g, cfg.phone!)}
+          const subPrompt = `${SERVICE_SUBPAGE_PROMPT
+            .replace(/\{city\}/g, city)
+            .replace(/\{state\}/g, state)
+            .replace(/\{pest_type\}/g, pestType)
+            .replace(/\{keyword\}/g, cluster.primary_keyword)
+            .replace(/\{phone\}/g, cfg.phone!)}
 
 Agent 1 city keyword map (authoritative):
 - Approved service keyword: ${cluster.primary_keyword}
@@ -1230,128 +1756,199 @@ Agent 2 design research (authoritative):
 - CTA variants: ${designSystem.copyFramework.ctas.join(" | ")}
 - Seasonal guidance: ${serviceSeasonalSummary}`;
 
-      const subContent = await llm.call({
-        prompt: subPrompt,
-        schema: ContentResponseSchema,
-        model: "sonnet",
-      });
-      console.log(`[Agent 3] Subpage title for ${city}/${pestType}: ${subContent.title}`);
+          const subContent = await llm.call({
+            prompt: subPrompt,
+            schema: ContentResponseSchema,
+            model: "sonnet",
+            logLabel: `[Agent 3][Subpage][${city}/${pestType}]`,
+          });
+          const subSchemaTemplate = resolveSchemaTemplate(
+            designSystem.schemaTemplates,
+            "service_subpage",
+            city,
+            state,
+            subContent.title,
+            subContent.meta_description
+          );
+          console.log(`[Agent 3] Subpage title for ${city}/${pestType}: ${subContent.title}`);
 
-      const subQuality = runQualityGate(subContent.content, city, cfg.minWordCountSubpage!);
-      if (!subQuality.passed) {
-        console.warn(`[Agent 3] Subpage quality gate failed for ${city}/${pestType}: ${subQuality.failures.join(", ")}`);
+          const subQuality = runQualityGate(
+            subContent.content,
+            city,
+            cfg.minWordCountSubpage!,
+            [
+              subContent.title,
+              subContent.meta_description,
+              JSON.stringify(subSchemaTemplate),
+            ]
+          );
+          if (!subQuality.passed) {
+            throw new Error(`Subpage QA failed for ${city}/${pestType}: ${subQuality.failures.join(", ")}`);
+          }
+
+          const subHeroImage = await writePageVisual(
+            hugo,
+            [city, pestType, "hero"],
+            pestType,
+            cluster.primary_keyword,
+            designSystem,
+            "service_subpage",
+            city,
+            pestType
+          );
+          const subFeatureImage = await writePageVisual(
+            hugo,
+            [city, pestType, "feature"],
+            `${city} ${pestType}`,
+            designSystem.secondaryHeadline,
+            designSystem,
+            "service_subpage",
+            city,
+            pestType
+          );
+          hugo.writeContentFile(`${citySlug}/${pestSlug}.md`, {
+            title: subContent.title,
+            description: subContent.meta_description,
+            city: city,
+            state: state,
+            pest_type: pestType,
+            type: "service_subpage",
+            target_keyword: cluster.primary_keyword,
+            hero_image: subHeroImage,
+            feature_image: subFeatureImage,
+            schema_template: subSchemaTemplate,
+            seasonal_focus: serviceSeasonalSummary,
+            draft: false,
+          }, subContent.content);
+
+          await db.query(
+            `INSERT INTO content_items (title, slug, content_type, target_keyword, pest_type, city, niche, word_count, quality_score)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (slug) DO UPDATE SET word_count = $8, quality_score = $9`,
+            [
+              subContent.title,
+              `${citySlug}/${pestSlug}`,
+              "service_subpage",
+              cluster.primary_keyword,
+              pestType,
+              city,
+              cfg.niche,
+              subQuality.metrics.wordCount,
+              JSON.stringify(subQuality.metrics),
+            ]
+          );
+          console.log(`[Agent 3] Saved page ${citySlug}/${pestSlug} (${subQuality.metrics.wordCount} words)`);
+        }
+
+        const pageUrl = `https://extermanation.com/${citySlug}/`;
+        await db.query(
+          `INSERT INTO pages (url, slug, city, state, niche, target_keyword, published_at)
+           VALUES ($1, $2, $3, $4, $5, $6, now())
+           ON CONFLICT (slug) DO NOTHING`,
+          [pageUrl, citySlug, city, state, cfg.niche, hubKeyword]
+        );
+        console.log(`[Agent 3] Registered page ${pageUrl}`);
+      };
+
+      if (cfg.deployLimiter) {
+        await cfg.deployLimiter.schedule(processCity);
+      } else {
+        await processCity();
       }
-
-      const subHeroImage = writeGeneratedVisual(
-        hugo,
-        [city, pestType, "hero"],
-        pestType,
-        cluster.primary_keyword,
-        designSystem
-      );
-      const subFeatureImage = writeGeneratedVisual(
-        hugo,
-        [city, pestType, "feature"],
-        `${city} ${pestType}`,
-        designSystem.secondaryHeadline,
-        designSystem
-      );
-      hugo.writeContentFile(`${citySlug}/${pestSlug}.md`, {
-        title: subContent.title,
-        description: subContent.meta_description,
-        city: city,
-        state: state,
-        pest_type: pestType,
-        type: "service_subpage",
-        target_keyword: cluster.primary_keyword,
-        hero_image: subHeroImage,
-        feature_image: subFeatureImage,
-        schema_template: resolveSchemaTemplate(
-          designSystem.schemaTemplates,
-          "service_subpage",
-          city,
-          state,
-          subContent.title,
-          subContent.meta_description
-        ),
-        seasonal_focus: serviceSeasonalSummary,
-        draft: false,
-      }, subContent.content);
-
-      await db.query(
-        `INSERT INTO content_items (title, slug, content_type, target_keyword, pest_type, city, niche, word_count, quality_score)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         ON CONFLICT (slug) DO UPDATE SET word_count = $8, quality_score = $9`,
-        [
-          subContent.title,
-          `${citySlug}/${pestSlug}`,
-          "service_subpage",
-          cluster.primary_keyword,
-          pestType,
-          city,
-          cfg.niche,
-          subQuality.metrics.wordCount,
-          JSON.stringify(subQuality.metrics),
-        ]
-      );
-      console.log(`[Agent 3] Saved page ${citySlug}/${pestSlug} (${subQuality.metrics.wordCount} words)`);
     }
 
-    // Register pages
-    const pageUrl = `https://extermanation.com/${citySlug}/`;
-    await db.query(
-      `INSERT INTO pages (url, slug, city, state, niche, target_keyword, published_at)
-       VALUES ($1, $2, $3, $4, $5, $6, now())
-       ON CONFLICT (slug) DO NOTHING`,
-      [pageUrl, citySlug, city, state, cfg.niche, hubKeyword]
-    );
-    console.log(`[Agent 3] Registered page ${pageUrl}`);
-  }
-
-  // Build Hugo site
-  console.log("[Agent 3] Building Hugo site...");
-  eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hugo build", detail: "Compiling site", timestamp: Date.now() });
-  const buildResult = await hugo.buildSite();
-  if (buildResult.success) {
+    console.log("[Agent 3] Building Hugo site...");
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hugo build", detail: "Compiling site", timestamp: Date.now() });
+    await updateSiteBuildRecord(db, buildRecord.id, "BUILDING");
+    const buildResult = await hugo.buildSite();
+    if (!buildResult.success) {
+      throw new Error(`Hugo build failed: ${buildResult.output}`);
+    }
     console.log("[Agent 3] Hugo build successful");
-  } else {
-    console.warn(`[Agent 3] Hugo build failed: ${buildResult.output}`);
-  }
 
-  // Deploy to Netlify if site ID is configured
-  const netlifySiteId = process.env.NETLIFY_SITE_ID;
-  if (netlifySiteId && buildResult.success) {
-    console.log("[Agent 3] Deploying to Netlify...");
-    eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Deploying", detail: "Pushing to Netlify", timestamp: Date.now() });
+    await updateSiteBuildRecord(db, buildRecord.id, "QA_CHECK", {
+      buildOutput: {
+        build_success: true,
+        build_output_preview: buildResult.output.slice(0, 500),
+      },
+    });
+    const artifactQa = runBuiltArtifactQa(cfg.hugoSitePath);
+    if (!artifactQa.passed) {
+      throw new Error(`Built artifact QA failed: ${artifactQa.failures.join(", ")}`);
+    }
 
-    const deployResult = await hugo.deploySite(netlifySiteId);
-    if (deployResult.success && deployResult.url) {
-      console.log(`[Agent 3] Deployed to: ${deployResult.url}`);
+    const netlifySiteId = process.env.NETLIFY_SITE_ID;
+    if (netlifySiteId) {
+      console.log("[Agent 3] Creating Netlify draft deploy...");
+      eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Draft deploy", detail: "Creating preview deploy", timestamp: Date.now() });
+      await updateSiteBuildRecord(db, buildRecord.id, "DEPLOYING_DRAFT");
+      const draftResult = await hugo.deployDraftSite(netlifySiteId);
+      if (!draftResult.success || !draftResult.url) {
+        throw new Error(`Netlify draft deploy failed: ${draftResult.output}`);
+      }
+
+      await updateSiteBuildRecord(db, buildRecord.id, "QA_CHECK", {
+        draftUrl: draftResult.url,
+        buildOutput: {
+          draft_output_preview: draftResult.output.slice(0, 500),
+        },
+      });
+      await runDraftPreviewQa(draftResult.url);
+
+      console.log("[Agent 3] Publishing Netlify deploy...");
+      eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Publish deploy", detail: "Promoting preview to production", timestamp: Date.now() });
+      await updateSiteBuildRecord(db, buildRecord.id, "DEPLOYING_LIVE", {
+        draftUrl: draftResult.url,
+      });
+      const publishResult = await hugo.publishSite(netlifySiteId);
+      if (!publishResult.success || !publishResult.url) {
+        throw new Error(`Netlify publish failed: ${publishResult.output}`);
+      }
+
+      console.log(`[Agent 3] Deployed to: ${publishResult.url}`);
       eventBus.emitEvent({
         type: "site_deployed",
-        url: deployResult.url,
+        url: publishResult.url,
         siteId: netlifySiteId,
         city: "all",
         agent: "agent-3",
         timestamp: Date.now(),
       });
 
-      // Update page URLs in DB with actual deploy URL
-      const baseUrl = deployResult.url.replace(/\/$/, "");
-      for (const cityRow of citiesResult.rows) {
+      const baseUrl = publishResult.url.replace(/\/$/, "");
+      for (const cityRow of cityRows) {
         const citySlug = slugify(cityRow.city);
         await db.query(
           "UPDATE pages SET url = $1 WHERE slug = $2 AND niche = $3",
           [`${baseUrl}/${citySlug}/`, citySlug, cfg.niche]
         );
       }
-    } else {
-      console.warn(`[Agent 3] Netlify deploy failed: ${deployResult.output}`);
-      eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Deploy failed", detail: deployResult.output.slice(0, 100), timestamp: Date.now() });
-    }
-  } else if (!netlifySiteId) {
-    console.log("[Agent 3] NETLIFY_SITE_ID not set, skipping deploy");
-  }
 
-  console.log("[Agent 3] Site build complete");
+      await updateSiteBuildRecord(db, buildRecord.id, "LIVE", {
+        draftUrl: draftResult.url,
+        liveUrl: publishResult.url,
+        buildOutput: {
+          publish_output_preview: publishResult.output.slice(0, 500),
+        },
+        completed: true,
+      });
+    } else {
+      console.log("[Agent 3] NETLIFY_SITE_ID not set, skipping deploy");
+      await updateSiteBuildRecord(db, buildRecord.id, "LIVE", {
+        buildOutput: {
+          deploy_skipped: true,
+        },
+        completed: true,
+      });
+    }
+
+    console.log("[Agent 3] Site build complete");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await updateSiteBuildRecord(db, buildRecord.id, "FAILED", {
+      error: message,
+      completed: true,
+    });
+    throw err;
+  }
 }

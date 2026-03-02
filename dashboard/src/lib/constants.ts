@@ -12,6 +12,22 @@ export interface AgentMeta {
 }
 
 export const AGENTS: Record<AgentName, AgentMeta> = {
+  "agent-0.5": {
+    name: "agent-0.5",
+    label: "Mochi",
+    role: "Geo Scanner",
+    accessory: "compass",
+    steps: [
+      "Normalizing ZIPs",
+      "Mapping coverage",
+      "Clustering cities",
+      "Scoring shortlist",
+      "Saving candidates",
+    ],
+    color: "#FFE6A8",
+    colorLight: "#FFF1C9",
+    colorDark: "#F5B942",
+  },
   "agent-1": {
     name: "agent-1",
     label: "Scout",
@@ -78,7 +94,7 @@ export const AGENTS: Record<AgentName, AgentMeta> = {
   },
 };
 
-export const AGENT_ORDER: AgentName[] = ["agent-1", "agent-2", "agent-3", "agent-7"];
+export const AGENT_ORDER: AgentName[] = ["agent-0.5", "agent-1", "agent-2", "agent-3", "agent-7"];
 
 export const MAX_FEED_ENTRIES = 100;
 

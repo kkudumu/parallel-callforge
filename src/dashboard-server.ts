@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import path from "node:path";
 import fs from "node:fs";
@@ -12,12 +13,20 @@ import { createClaudeCli } from "./shared/cli/claude-cli.js";
 import { createCodexCli } from "./shared/cli/codex-cli.js";
 import { createGeminiCli } from "./shared/cli/gemini-cli.js";
 import { createLlmClient } from "./shared/cli/llm-client.js";
-import { runAgent1 } from "./agents/agent-1-keywords/index.js";
+import {
+  loadCandidateCitiesFromDeploymentCandidates,
+  runAgent1,
+} from "./agents/agent-1-keywords/index.js";
+import {
+  parseZipInput,
+  runAgent05,
+} from "./agents/agent-0.5-geo-scanner/index.js";
 import { runAgent2 } from "./agents/agent-2-design/index.js";
 import { runAgent3 } from "./agents/agent-3-builder/index.js";
 import { runAgent7 } from "./agents/agent-7-monitor/index.js";
 import { createOrchestrator } from "./orchestrator/index.js";
 import { getEnv } from "./config/env.js";
+import type { CitySourceMode } from "./config/env.js";
 import type { AgentHandler } from "./orchestrator/types.js";
 import type {
   AgentName,
@@ -28,6 +37,21 @@ import type {
   HealthScoreEvent,
   PipelineRunStatus,
 } from "./shared/events/event-types.js";
+import {
+  getCityResearchFingerprint,
+  getCityScoringFingerprint,
+  isFreshTimestamp,
+  KEYWORD_RESEARCH_TTL_MS,
+  DESIGN_RESEARCH_TTL_MS,
+  normalizeNiche,
+  selectTopCities,
+  type ScoredCity,
+} from "./shared/cache-policy.js";
+import {
+  DatabaseBackedDataProvider,
+  MockDataProvider,
+} from "./agents/agent-7-monitor/index.js";
+import { SearchConsoleDataProvider } from "./agents/agent-7-monitor/search-console-provider.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.DASHBOARD_PORT ?? 3847);
@@ -39,6 +63,7 @@ const HUGO_SITE_PATH = path.resolve("hugo-site");
 
 function getAgentFromSource(source?: string): AgentName | null {
   const normalized = source?.toLowerCase() ?? "";
+  if (normalized.includes("agent 0.5")) return "agent-0.5";
   if (normalized.includes("agent 1") || normalized === "googlekp") return "agent-1";
   if (normalized.includes("agent 2")) return "agent-2";
   if (normalized.includes("agent 3")) return "agent-3";
@@ -54,6 +79,269 @@ const CANDIDATE_CITIES = [
   { city: "Watsonville", state: "CA", population: 54000 },
   { city: "Capitola", state: "CA", population: 10000 },
 ];
+
+function buildAgent1Config(
+  citySource: CitySourceMode,
+  offerId: string | undefined,
+  forceRefresh: boolean,
+  candidateCities = CANDIDATE_CITIES,
+  payoutPerQualifiedCall?: number
+) {
+  if (citySource === "deployment_candidates" && offerId) {
+    return {
+      niche: NICHE,
+      citySource,
+      offerId,
+      topCandidateLimit: 5,
+      payoutPerQualifiedCall,
+      forceRefresh,
+    };
+  }
+
+  return {
+    niche: NICHE,
+    citySource: "hardcoded" as CitySourceMode,
+    candidateCities,
+    payoutPerQualifiedCall,
+    forceRefresh,
+  };
+}
+
+interface KillSwitchStatus {
+  configured: boolean;
+  supported: boolean;
+  armed: boolean;
+  ratio: number | null;
+  eligiblePages: number;
+  indexedPages: number;
+  reason: string;
+}
+
+async function getKillSwitchStatus(
+  db: DbClient | undefined,
+  env = getEnv(),
+  agent7Enabled = true
+): Promise<KillSwitchStatus> {
+  const configured = env.INDEXATION_KILL_SWITCH_ENABLED;
+  const supported = env.SEARCH_CONSOLE_INTEGRATION_ENABLED;
+
+  if (!configured) {
+    return {
+      configured,
+      supported,
+      armed: false,
+      ratio: null,
+      eligiblePages: 0,
+      indexedPages: 0,
+      reason: "Disabled in config",
+    };
+  }
+
+  if (!agent7Enabled) {
+    return {
+      configured,
+      supported,
+      armed: false,
+      ratio: null,
+      eligiblePages: 0,
+      indexedPages: 0,
+      reason: "Inactive while Agent 7 is off",
+    };
+  }
+
+  if (!supported) {
+    return {
+      configured,
+      supported,
+      armed: false,
+      ratio: null,
+      eligiblePages: 0,
+      indexedPages: 0,
+      reason: "Search Console integration is not enabled",
+    };
+  }
+
+  if (!db) {
+    return {
+      configured,
+      supported,
+      armed: false,
+      ratio: null,
+      eligiblePages: 0,
+      indexedPages: 0,
+      reason: "No database connection",
+    };
+  }
+
+  const result = await db.query<{ eligible_pages: string; indexed_pages: string }>(
+    `SELECT
+       COUNT(*)::text AS eligible_pages,
+       COUNT(*) FILTER (
+         WHERE p.indexation_status = 'indexed'
+            OR EXISTS (
+              SELECT 1
+              FROM ranking_snapshots rs
+              WHERE rs.page_id = p.id
+            )
+       )::text AS indexed_pages
+     FROM pages p
+     WHERE p.created_at <= now() - (($1::text || ' days')::interval)
+       AND p.created_at >= now() - (($2::text || ' days')::interval)`,
+    [
+      String(env.INDEXATION_MIN_PAGE_AGE_DAYS),
+      String(env.INDEXATION_LOOKBACK_DAYS),
+    ]
+  );
+
+  const eligiblePages = Number(result.rows[0]?.eligible_pages ?? "0");
+  const indexedPages = Number(result.rows[0]?.indexed_pages ?? "0");
+  const ratio = eligiblePages > 0 ? indexedPages / eligiblePages : null;
+  const armed = eligiblePages > 0 && ratio !== null && ratio < env.INDEXATION_RATIO_THRESHOLD;
+
+  return {
+    configured,
+    supported,
+    armed,
+    ratio,
+    eligiblePages,
+    indexedPages,
+    reason: armed
+      ? `Ratio ${ratio?.toFixed(2)} below threshold ${env.INDEXATION_RATIO_THRESHOLD.toFixed(2)}`
+      : eligiblePages === 0
+        ? "No eligible aged pages yet"
+        : "Threshold not breached",
+  };
+}
+
+async function hasFreshAgent1Cache(
+  db: DbClient,
+  niche: string,
+  candidateCities: Array<{ city: string; state: string; population: number }>
+): Promise<boolean> {
+  const normalizedNiche = normalizeNiche(niche);
+  const templateResult = await db.query<{ templates: string[]; updated_at: Date }>(
+    `SELECT templates, updated_at
+     FROM keyword_templates
+     WHERE niche = $1
+     LIMIT 1`,
+    [normalizedNiche]
+  );
+  const templateRow = templateResult.rows[0];
+  if (
+    !templateRow ||
+    !Array.isArray(templateRow.templates) ||
+    templateRow.templates.length === 0 ||
+    !isFreshTimestamp(templateRow.updated_at, KEYWORD_RESEARCH_TTL_MS)
+  ) {
+    return false;
+  }
+
+  const scoringFingerprint = getCityScoringFingerprint(candidateCities, templateRow.templates);
+  const scoringResult = await db.query<{ scored_cities: ScoredCity[]; updated_at: Date }>(
+    `SELECT scored_cities, updated_at
+     FROM city_scoring_cache
+     WHERE niche = $1
+       AND input_fingerprint = $2
+     LIMIT 1`,
+    [normalizedNiche, scoringFingerprint]
+  );
+  const scoringRow = scoringResult.rows[0];
+  if (
+    !scoringRow ||
+    !Array.isArray(scoringRow.scored_cities) ||
+    !isFreshTimestamp(scoringRow.updated_at, KEYWORD_RESEARCH_TTL_MS)
+  ) {
+    return false;
+  }
+
+  const selectedCities = selectTopCities(scoringRow.scored_cities);
+  if (selectedCities.length === 0) {
+    return false;
+  }
+
+  for (const city of selectedCities) {
+    const cityResult = await db.query<{
+      keyword_cluster_ids: string[];
+      research_fingerprint: string | null;
+      updated_at: Date;
+    }>(
+      `SELECT keyword_cluster_ids, research_fingerprint, updated_at
+       FROM city_keyword_map
+       WHERE city = $1
+         AND state = $2
+         AND niche = $3
+       LIMIT 1`,
+      [city.city, city.state, normalizedNiche]
+    );
+    const row = cityResult.rows[0];
+    if (
+      !row ||
+      row.research_fingerprint !==
+        getCityResearchFingerprint(niche, city.city, city.state, templateRow.templates) ||
+      !isFreshTimestamp(row.updated_at, KEYWORD_RESEARCH_TTL_MS) ||
+      !Array.isArray(row.keyword_cluster_ids) ||
+      row.keyword_cluster_ids.length === 0
+    ) {
+      return false;
+    }
+
+    const clusterResult = await db.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM keyword_clusters WHERE id = ANY($1::uuid[])",
+      [row.keyword_cluster_ids]
+    );
+    if (Number(clusterResult.rows[0]?.count ?? "0") !== row.keyword_cluster_ids.length) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function hasFreshAgent2Cache(db: DbClient, niche: string): Promise<boolean> {
+  const normalizedNiche = normalizeNiche(niche);
+  const [designResult, copyResult, schemaResult, seasonalResult] = await Promise.all([
+    db.query<{ updated_at: Date; created_at: Date }>(
+      "SELECT updated_at, created_at FROM design_specs WHERE niche = $1 LIMIT 1",
+      [normalizedNiche]
+    ),
+    db.query<{ updated_at: Date; created_at: Date }>(
+      "SELECT updated_at, created_at FROM copy_frameworks WHERE niche = $1 LIMIT 1",
+      [normalizedNiche]
+    ),
+    db.query<{ updated_at: Date | null; created_at: Date }>(
+      "SELECT updated_at, created_at FROM schema_templates WHERE niche = $1 LIMIT 1",
+      [normalizedNiche]
+    ),
+    db.query<{ updated_at: Date | null; created_at: Date }>(
+      "SELECT updated_at, created_at FROM seasonal_calendars WHERE niche = $1 LIMIT 1",
+      [normalizedNiche]
+    ),
+  ]);
+
+  return [
+    designResult.rows[0],
+    copyResult.rows[0],
+    schemaResult.rows[0],
+    seasonalResult.rows[0],
+  ].every((row) =>
+    row &&
+    isFreshTimestamp(row.updated_at ?? row.created_at, DESIGN_RESEARCH_TTL_MS)
+  );
+}
+
+async function getAvailableOfferIds(db: DbClient | undefined): Promise<string[]> {
+  if (!db) {
+    return [];
+  }
+
+  const result = await db.query<{ offer_id: string }>(
+    `SELECT DISTINCT offer_id
+     FROM offer_geo_coverage
+     ORDER BY offer_id ASC`
+  );
+
+  return result.rows.map((row) => row.offer_id);
+}
 
 export function createDashboardServer(db?: DbClient) {
   const app = express();
@@ -78,6 +366,7 @@ export function createDashboardServer(db?: DbClient) {
   }
 
   const agentStates: Record<AgentName, AgentStatusEvent> = {
+    "agent-0.5": createAgentStatus("agent-0.5"),
     "agent-1": createAgentStatus("agent-1"),
     "agent-2": createAgentStatus("agent-2"),
     "agent-3": createAgentStatus("agent-3"),
@@ -170,8 +459,25 @@ export function createDashboardServer(db?: DbClient) {
     broadcast(event);
   }
 
-  app.get("/api/pipeline/status", (_req, res) => {
-    res.json({ status: pipelineStatus });
+  app.get("/api/pipeline/status", async (_req, res) => {
+    try {
+      const killSwitch = await getKillSwitchStatus(db);
+      const availableOffers = await getAvailableOfferIds(db);
+      const env = getEnv();
+      res.json({
+        status: pipelineStatus,
+        killSwitch,
+        defaults: {
+          citySource: env.CITY_SOURCE_MODE,
+          defaultOfferId: env.DEFAULT_OFFER_ID ?? availableOffers[0] ?? null,
+          searchConsoleEnabled: env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
+          agent7Provider: env.AGENT7_PROVIDER,
+        },
+        availableOffers,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Deployed sites
@@ -190,7 +496,69 @@ export function createDashboardServer(db?: DbClient) {
     }
   });
 
-  app.post("/api/pipeline/start", async (_req, res) => {
+  app.post("/api/agent-0.5/scan", async (req, res) => {
+    if (!db) {
+      res.status(503).json({ error: "No database connection" });
+      return;
+    }
+
+    const rawOfferId =
+      typeof req.body?.offerId === "string" ? req.body.offerId.trim() : "";
+    const offerId = rawOfferId || `offer-${randomUUID()}`;
+    const zipCodes = typeof req.body?.zipCodes === "string" || Array.isArray(req.body?.zipCodes)
+      ? parseZipInput(req.body.zipCodes as string | string[])
+      : [];
+    const topN = typeof req.body?.topN === "number" ? req.body.topN : undefined;
+    const runAgent1AfterScan = req.body?.runAgent1 === true;
+    const forceRefresh = req.body?.forceRefresh === true;
+
+    try {
+      await runMigrations(db);
+
+      const candidates = await runAgent05(
+        {
+          offerId,
+          zipCodes: zipCodes.length > 0 ? zipCodes : undefined,
+          source: zipCodes.length > 0 ? "api" : "stored-offer",
+          topN,
+        },
+        db
+      );
+
+      if (runAgent1AfterScan) {
+        const env = getEnv();
+        const limiters = createRateLimiters();
+        const claudeCli = createClaudeCli(env.CLAUDE_CLI_PATH);
+        const codexCli = createCodexCli(env.CODEX_CLI_PATH);
+        const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
+        const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
+
+        await runAgent1({
+          niche: NICHE,
+          offerId,
+          topCandidateLimit: topN,
+          forceRefresh,
+        }, llm, db);
+      }
+
+      res.json({
+        offerId,
+        candidates: candidates.map((candidate) => ({
+          city: candidate.city,
+          state: candidate.state,
+          population: candidate.population,
+          eligible_zip_count: candidate.eligibleZipCount,
+          zip_codes: candidate.zipCodes,
+          pre_keyword_score: candidate.preKeywordScore,
+          reason_summary: candidate.reasonSummary,
+        })),
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/pipeline/start", async (req, res) => {
     if (pipelineStatus === "running") {
       res.status(409).json({ error: "Pipeline is already running" });
       return;
@@ -199,6 +567,28 @@ export function createDashboardServer(db?: DbClient) {
       res.status(503).json({ error: "No database connection" });
       return;
     }
+
+    const forceKeywordRefresh = req.body?.forceKeywordRefresh === true;
+    const forceDesignRefresh = req.body?.forceDesignRefresh === true;
+    const enableAgent7 = req.body?.enableAgent7 === true;
+    const envDefaults = getEnv();
+    const citySource: CitySourceMode =
+      req.body?.citySource === "deployment_candidates"
+        ? "deployment_candidates"
+        : req.body?.citySource === "hardcoded"
+          ? "hardcoded"
+          : envDefaults.CITY_SOURCE_MODE;
+    let offerId =
+      typeof req.body?.offerId === "string" && req.body.offerId.trim().length > 0
+        ? req.body.offerId.trim()
+        : undefined;
+    const offerZipCodes = typeof req.body?.offerZipCodes === "string"
+      ? parseZipInput(req.body.offerZipCodes)
+      : [];
+    const ignoreIndexationKillSwitch = req.body?.ignoreIndexationKillSwitch === true;
+    const payoutPerQualifiedCall = typeof req.body?.payoutPerQualifiedCall === "number"
+      ? req.body.payoutPerQualifiedCall
+      : undefined;
 
     // Respond immediately — pipeline runs in background
     res.json({ status: "started" });
@@ -214,41 +604,102 @@ export function createDashboardServer(db?: DbClient) {
       return;
     }
 
+    if (citySource === "deployment_candidates" && !offerId) {
+      const availableOffers = await getAvailableOfferIds(db);
+      if (availableOffers.length > 0) {
+        offerId = availableOffers[0];
+      }
+    }
+
     // Build pipeline orchestrator in same process so events flow through the bus
-    const env = getEnv();
+    const env = envDefaults;
     const limiters = createRateLimiters();
     const claudeCli = createClaudeCli(env.CLAUDE_CLI_PATH);
     const codexCli = createCodexCli(env.CODEX_CLI_PATH);
     const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
     const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
 
+    if (citySource === "deployment_candidates" && (offerId || offerZipCodes.length > 0)) {
+      try {
+        const resolvedOfferId = offerId ?? `offer-${randomUUID()}`;
+        offerId = resolvedOfferId;
+        await runAgent05(
+          {
+            offerId: resolvedOfferId,
+            zipCodes: offerZipCodes.length > 0 ? offerZipCodes : undefined,
+            source: offerZipCodes.length > 0 ? "dashboard-pipeline" : "stored-offer",
+          },
+          db
+        );
+      } catch (err: any) {
+        emitPipelineRun("error", `Agent 0.5 failed: ${err.message}`);
+        return;
+      }
+    }
+
     const agentHandlers = new Map<string, AgentHandler>();
 
     agentHandlers.set("agent-1", {
       name: "agent-1",
-      async execute() {
-        await runAgent1({ niche: NICHE, candidateCities: CANDIDATE_CITIES }, llm, db);
+      async execute(payload) {
+        const payloadCity = typeof payload?.city === "string" ? payload.city : null;
+        const payloadState = typeof payload?.state === "string" ? payload.state : null;
+        const candidateCities = payloadCity
+          ? CANDIDATE_CITIES.filter((entry) =>
+              entry.city === payloadCity && (!payloadState || entry.state === payloadState)
+            )
+          : CANDIDATE_CITIES;
+        const payloadCitySource: CitySourceMode =
+          payload?.citySource === "deployment_candidates" ? "deployment_candidates" : citySource;
+        await runAgent1(
+          buildAgent1Config(
+            payloadCitySource,
+            typeof payload?.offerId === "string" ? payload.offerId : offerId,
+            payload?.forceRefresh === true,
+            candidateCities.length > 0 ? candidateCities : CANDIDATE_CITIES,
+            typeof payload?.payoutPerQualifiedCall === "number"
+              ? payload.payoutPerQualifiedCall
+              : payoutPerQualifiedCall
+          ),
+          llm,
+          db
+        );
         return {};
       },
     });
 
     agentHandlers.set("agent-2", {
       name: "agent-2",
-      async execute() {
-        await runAgent2({ niche: NICHE }, llm, db);
+      async execute(payload) {
+        await runAgent2({
+          niche: NICHE,
+          forceRefresh: payload?.forceRefresh === true,
+        }, llm, db);
         return {};
       },
     });
 
     agentHandlers.set("agent-3", {
       name: "agent-3",
-      async execute() {
+      async execute(payload) {
         await runAgent3({
           niche: NICHE,
           hugoSitePath: HUGO_SITE_PATH,
           phone: env.BUSINESS_PHONE,
           minWordCountHub: 800,
           minWordCountSubpage: 1200,
+          deployLimiter: limiters.contentDeploy,
+          targetCities: typeof payload?.city === "string" ? [payload.city] : undefined,
+          indexationKillSwitchEnabled:
+            env.INDEXATION_KILL_SWITCH_ENABLED &&
+            env.SEARCH_CONSOLE_INTEGRATION_ENABLED &&
+            enableAgent7,
+          searchConsoleIntegrationEnabled: env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
+          indexationMinPageAgeDays: env.INDEXATION_MIN_PAGE_AGE_DAYS,
+          indexationLookbackDays: env.INDEXATION_LOOKBACK_DAYS,
+          minIndexationRatio: env.INDEXATION_RATIO_THRESHOLD,
+          ignoreIndexationKillSwitch:
+            payload?.ignoreIndexationKillSwitch === true || ignoreIndexationKillSwitch,
         }, llm, db);
         return {};
       },
@@ -257,7 +708,15 @@ export function createDashboardServer(db?: DbClient) {
     agentHandlers.set("agent-7", {
       name: "agent-7",
       async execute() {
-        await runAgent7({ niche: NICHE }, db);
+        await runAgent7(
+          { niche: NICHE },
+          db,
+          env.AGENT7_PROVIDER === "mock"
+            ? new MockDataProvider()
+            : env.SEARCH_CONSOLE_INTEGRATION_ENABLED
+              ? new SearchConsoleDataProvider(db)
+              : new DatabaseBackedDataProvider(db)
+        );
         return {};
       },
     });
@@ -271,12 +730,69 @@ export function createDashboardServer(db?: DbClient) {
         maxConcurrent: 1,
       });
 
-      // Seed initial tasks with dependency chain
-      const t1 = await orchestrator.scheduler.createTask("keyword_research", "agent-1", { niche: NICHE });
-      const t2 = await orchestrator.scheduler.createTask("design_research", "agent-2", { niche: NICHE }, [t1]);
-      const t3 = await orchestrator.scheduler.createTask("site_build", "agent-3", { niche: NICHE }, [t2]);
-      const t4 = await orchestrator.scheduler.createTask("performance_monitor", "agent-7", { niche: NICHE }, [t3]);
-      const currentRunTaskIds = new Set([t1, t2, t3, t4]);
+      const cacheCandidateCities =
+        citySource === "deployment_candidates" && offerId
+          ? await loadCandidateCitiesFromDeploymentCandidates(offerId, db, 5)
+          : CANDIDATE_CITIES;
+      const [agent1Warm, agent2Warm] = await Promise.all([
+        forceKeywordRefresh
+          ? Promise.resolve(false)
+          : hasFreshAgent1Cache(db, NICHE, cacheCandidateCities.length > 0 ? cacheCandidateCities : CANDIDATE_CITIES),
+        forceDesignRefresh ? Promise.resolve(false) : hasFreshAgent2Cache(db, NICHE),
+      ]);
+
+      const currentRunTaskIds = new Set<string>();
+      let previousTaskId: string | undefined;
+
+      if (!agent1Warm) {
+        const t1 = await orchestrator.scheduler.createTask(
+          "keyword_research",
+          "agent-1",
+          {
+            niche: NICHE,
+            forceRefresh: forceKeywordRefresh,
+            citySource,
+            offerId,
+            payoutPerQualifiedCall,
+          }
+        );
+        currentRunTaskIds.add(t1);
+        previousTaskId = t1;
+      } else {
+        console.log("[dashboard] Skipping Agent 1, keyword research cache is fresh");
+      }
+
+      if (!agent2Warm) {
+        const t2 = await orchestrator.scheduler.createTask(
+          "design_research",
+          "agent-2",
+          { niche: NICHE, forceRefresh: forceDesignRefresh },
+          previousTaskId ? [previousTaskId] : []
+        );
+        currentRunTaskIds.add(t2);
+        previousTaskId = t2;
+      } else {
+        console.log("[dashboard] Skipping Agent 2, design research cache is fresh");
+      }
+
+      const t3 = await orchestrator.scheduler.createTask(
+          "site_build",
+        "agent-3",
+        { niche: NICHE, ignoreIndexationKillSwitch },
+        previousTaskId ? [previousTaskId] : []
+      );
+      currentRunTaskIds.add(t3);
+      if (enableAgent7) {
+        const t4 = await orchestrator.scheduler.createTask(
+          "performance_monitor",
+          "agent-7",
+          { niche: NICHE },
+          [t3]
+        );
+        currentRunTaskIds.add(t4);
+      } else {
+        console.log("[dashboard] Agent 7 disabled for this run");
+      }
 
       emitPipelineRun("running", "Pipeline started — processing tasks...");
 

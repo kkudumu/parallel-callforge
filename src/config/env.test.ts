@@ -13,6 +13,10 @@ describe("parseEnv", () => {
     expect(env.DATABASE_URL).toBe("postgres://user:pass@localhost:5432/db");
     expect(env.CLAUDE_CLI_PATH).toBe("/usr/local/bin/claude");
     expect(env.GEMINI_CLI_PATH).toBe("/usr/local/bin/gemini");
+    expect(env.CITY_SOURCE_MODE).toBe("deployment_candidates");
+    expect(env.AGENT7_PROVIDER).toBe("database");
+    expect(env.SEARCH_CONSOLE_INTEGRATION_ENABLED).toBe(false);
+    expect(env.INDEXATION_KILL_SWITCH_ENABLED).toBe(false);
     expect(env.NODE_ENV).toBe("development");
   });
 
@@ -23,6 +27,10 @@ describe("parseEnv", () => {
     expect(env.CLAUDE_CLI_PATH).toBe("claude");
     expect(env.CODEX_CLI_PATH).toBe("codex");
     expect(env.GEMINI_CLI_PATH).toBe("gemini");
+    expect(env.CITY_SOURCE_MODE).toBe("deployment_candidates");
+    expect(env.AGENT7_PROVIDER).toBe("database");
+    expect(env.SEARCH_CONSOLE_INTEGRATION_ENABLED).toBe(false);
+    expect(env.INDEXATION_RATIO_THRESHOLD).toBe(0.5);
     expect(env.NODE_ENV).toBe("development");
   });
 

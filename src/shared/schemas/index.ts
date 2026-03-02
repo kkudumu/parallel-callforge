@@ -6,6 +6,15 @@ export { AgentTaskSchema, type AgentTask } from "./agent-tasks.js";
 export { DlqEntrySchema, type DlqEntry } from "./dead-letter-queue.js";
 export { PageSchema, type Page } from "./pages.js";
 export {
+  OfferGeoCoverageSchema,
+  type OfferGeoCoverage,
+} from "./offer-geo-coverage.js";
+export {
+  DeploymentCandidateSchema,
+  DeploymentCandidateStatusSchema,
+  type DeploymentCandidate,
+} from "./deployment-candidates.js";
+export {
   PerformanceSnapshotSchema,
   type PerformanceSnapshot,
 } from "./performance-snapshots.js";

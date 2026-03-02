@@ -11,6 +11,8 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "migrate": "tsx src/shared/db/migrate.ts",
+    "import:geo-zips": "tsx src/shared/db/import-geo-zip-reference.ts",
+    "import:pest-offers": "tsx src/shared/db/import-pest-control-offers.ts",
     "test": "jest",
     "agent:1": "tsx src/agents/agent-1-keywords/index.ts",
     "agent:2": "tsx src/agents/agent-2-design/index.ts",

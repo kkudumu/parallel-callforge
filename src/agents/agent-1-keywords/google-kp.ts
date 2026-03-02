@@ -1,4 +1,10 @@
 import googleTrends from "google-trends-api";
+import type { DbClient } from "../../shared/db/client.js";
+import {
+  isFreshTimestamp,
+  KEYWORD_RESEARCH_TTL_MS,
+  normalizeNiche,
+} from "../../shared/cache-policy.js";
 
 export interface KeywordMetrics {
   keyword: string;
@@ -35,6 +41,52 @@ async function getAutocompleteSuggestions(query: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+async function getAutocompleteSuggestionsCached(
+  query: string,
+  db?: DbClient,
+  forceRefresh = false
+): Promise<string[]> {
+  const cacheKey = query.trim().toLowerCase();
+  if (!db) {
+    return getAutocompleteSuggestions(cacheKey);
+  }
+
+  const cached = await db.query<{ suggestions: string[]; updated_at: Date }>(
+    `SELECT suggestions, updated_at
+     FROM autocomplete_cache
+     WHERE query = $1
+     LIMIT 1`,
+    [cacheKey]
+  );
+
+  const cachedSuggestions = cached.rows[0]?.suggestions;
+  if (
+    !forceRefresh &&
+    Array.isArray(cachedSuggestions) &&
+    isFreshTimestamp(cached.rows[0]?.updated_at, KEYWORD_RESEARCH_TTL_MS)
+  ) {
+    return cachedSuggestions;
+  }
+
+  const suggestions = await getAutocompleteSuggestions(cacheKey);
+  await db.query(
+    `INSERT INTO autocomplete_cache
+     (query, suggestions, cache_source, cache_provider, cache_version, retrieval_method, confidence_score, updated_at)
+     VALUES ($1, $2, 'estimated', 'google-autocomplete', 'v1', 'estimated', 0.7, now())
+     ON CONFLICT (query) DO UPDATE SET
+       suggestions = EXCLUDED.suggestions,
+       cache_source = EXCLUDED.cache_source,
+       cache_provider = EXCLUDED.cache_provider,
+       cache_version = EXCLUDED.cache_version,
+       retrieval_method = EXCLUDED.retrieval_method,
+       confidence_score = EXCLUDED.confidence_score,
+       updated_at = now()`,
+    [cacheKey, suggestions]
+  );
+
+  return suggestions;
 }
 
 interface TrendsData {
@@ -74,6 +126,82 @@ async function getTrendsData(niche: string, geo: string): Promise<TrendsData> {
   }
 
   return { topQueries, risingQueries };
+}
+
+function objectToMap(input: unknown): Map<string, number> {
+  const entries =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? Object.entries(input as Record<string, unknown>)
+      : [];
+  return new Map(
+    entries
+      .filter(([, value]) => typeof value === "number")
+      .map(([key, value]) => [key, value as number])
+  );
+}
+
+function mapToObject(map: Map<string, number>): Record<string, number> {
+  return Object.fromEntries(map.entries());
+}
+
+async function getTrendsDataCached(
+  niche: string,
+  geo: string,
+  db?: DbClient,
+  forceRefresh = false
+): Promise<TrendsData> {
+  const cacheKey = normalizeNiche(niche);
+  if (!db) {
+    return getTrendsData(cacheKey, geo);
+  }
+
+  const cached = await db.query<{
+    top_queries: Record<string, number>;
+    rising_queries: Record<string, number>;
+    updated_at: Date;
+  }>(
+    `SELECT top_queries, rising_queries, updated_at
+     FROM trends_cache
+     WHERE niche = $1
+       AND geo = $2
+     LIMIT 1`,
+    [cacheKey, geo]
+  );
+
+  if (
+    !forceRefresh &&
+    cached.rows[0] &&
+    isFreshTimestamp(cached.rows[0].updated_at, KEYWORD_RESEARCH_TTL_MS)
+  ) {
+    return {
+      topQueries: objectToMap(cached.rows[0].top_queries),
+      risingQueries: objectToMap(cached.rows[0].rising_queries),
+    };
+  }
+
+  const trends = await getTrendsData(cacheKey, geo);
+  await db.query(
+    `INSERT INTO trends_cache
+     (niche, geo, top_queries, rising_queries, cache_source, cache_provider, cache_version, retrieval_method, confidence_score, updated_at)
+     VALUES ($1, $2, $3, $4, 'estimated', 'google-trends', 'v1', 'estimated', 0.6, now())
+     ON CONFLICT (niche, geo) DO UPDATE SET
+       top_queries = EXCLUDED.top_queries,
+       rising_queries = EXCLUDED.rising_queries,
+       cache_source = EXCLUDED.cache_source,
+       cache_provider = EXCLUDED.cache_provider,
+       cache_version = EXCLUDED.cache_version,
+       retrieval_method = EXCLUDED.retrieval_method,
+       confidence_score = EXCLUDED.confidence_score,
+       updated_at = now()`,
+    [
+      cacheKey,
+      geo,
+      JSON.stringify(mapToObject(trends.topQueries)),
+      JSON.stringify(mapToObject(trends.risingQueries)),
+    ]
+  );
+
+  return trends;
 }
 
 /**
@@ -179,6 +307,58 @@ function scoreKeyword(
   };
 }
 
+async function getCachedMetrics(
+  keywords: string[],
+  db?: DbClient,
+  forceRefresh = false
+): Promise<Map<string, KeywordMetrics>> {
+  const metrics = new Map<string, KeywordMetrics>();
+  if (!db || keywords.length === 0 || forceRefresh) {
+    return metrics;
+  }
+
+  const result = await db.query<{ keyword: string; metrics: KeywordMetrics; updated_at: Date }>(
+    `SELECT keyword, metrics, updated_at
+     FROM keyword_metrics_cache
+     WHERE keyword = ANY($1::text[])`,
+    [keywords]
+  );
+
+  for (const row of result.rows) {
+    if (isFreshTimestamp(row.updated_at, KEYWORD_RESEARCH_TTL_MS)) {
+      metrics.set(row.keyword, row.metrics);
+    }
+  }
+
+  return metrics;
+}
+
+async function persistMetrics(
+  metrics: KeywordMetrics[],
+  db?: DbClient
+): Promise<void> {
+  if (!db || metrics.length === 0) {
+    return;
+  }
+
+  for (const metric of metrics) {
+    await db.query(
+      `INSERT INTO keyword_metrics_cache
+       (keyword, metrics, cache_source, cache_provider, cache_version, retrieval_method, confidence_score, updated_at)
+       VALUES ($1, $2, 'estimated', 'google-autocomplete+google-trends', 'v1', 'estimated', 0.58, now())
+       ON CONFLICT (keyword) DO UPDATE SET
+         metrics = EXCLUDED.metrics,
+         cache_source = EXCLUDED.cache_source,
+         cache_provider = EXCLUDED.cache_provider,
+         cache_version = EXCLUDED.cache_version,
+         retrieval_method = EXCLUDED.retrieval_method,
+         confidence_score = EXCLUDED.confidence_score,
+         updated_at = now()`,
+      [metric.keyword, JSON.stringify(metric)]
+    );
+  }
+}
+
 /**
  * Creates a keyword research client using Google Autocomplete + Google Trends.
  *
@@ -188,7 +368,12 @@ function scoreKeyword(
  * When Google Ads API Basic access is approved, replace with the real
  * google-ads-api KeywordPlanIdeaService for exact monthly search volumes.
  */
-export function createGoogleKpClient(_credentials?: {
+export function createGoogleKpClient(
+  db?: DbClient,
+  options?: {
+    forceRefresh?: boolean;
+  },
+  _credentials?: {
   developerToken: string;
   clientId: string;
   clientSecret: string;
@@ -197,20 +382,30 @@ export function createGoogleKpClient(_credentials?: {
   return {
     async getKeywordIdeas(keywords: string[]): Promise<KeywordMetrics[]> {
       console.log(`[GoogleKP] Fetching data for ${keywords.length} keywords...`);
+      const forceRefresh = options?.forceRefresh === true;
+      const cachedMetrics = await getCachedMetrics(keywords, db, forceRefresh);
+      const missingKeywords = keywords.filter((keyword) => !cachedMetrics.has(keyword));
+
+      if (missingKeywords.length === 0) {
+        console.log("[GoogleKP] Reusing cached keyword metrics");
+        return keywords.map((keyword) => cachedMetrics.get(keyword)!);
+      }
+
+      console.log(`[GoogleKP] Cache hit for ${cachedMetrics.size} keywords, refreshing ${missingKeywords.length}`);
 
       // Extract the niche from keywords (first word or two before city names)
-      const nicheGuess = keywords[0]?.split(/\s+/).slice(0, 2).join(" ") ?? "pest control";
+      const nicheGuess = missingKeywords[0]?.split(/\s+/).slice(0, 2).join(" ") ?? "pest control";
 
       // Fetch Trends data for the niche (single request, covers all keywords)
       console.log(`[GoogleKP] Fetching Google Trends for "${nicheGuess}"...`);
-      const trends = await getTrendsData(nicheGuess, "US-CA");
+      const trends = await getTrendsDataCached(nicheGuess, "US-CA", db, forceRefresh);
       console.log(
         `[GoogleKP] Trends: ${trends.topQueries.size} top queries, ${trends.risingQueries.size} rising queries`
       );
 
       // Deduplicate autocomplete queries
       const baseQueries = new Set<string>();
-      for (const kw of keywords) {
+      for (const kw of missingKeywords) {
         const words = kw.split(/\s+/).slice(0, 4).join(" ");
         baseQueries.add(words.toLowerCase());
       }
@@ -226,7 +421,7 @@ export function createGoogleKpClient(_credentials?: {
         const batch = queriesToFetch.slice(i, i + BATCH_SIZE);
         const results = await Promise.all(
           batch.map(async (q) => {
-            const suggestions = await getAutocompleteSuggestions(q);
+            const suggestions = await getAutocompleteSuggestionsCached(q, db, forceRefresh);
             return [q, suggestions] as const;
           })
         );
@@ -248,11 +443,18 @@ export function createGoogleKpClient(_credentials?: {
       );
 
       // Score each keyword using both data sources
-      return keywords.map((kw) => {
+      const refreshedMetrics = missingKeywords.map((kw) => {
         const words = kw.split(/\s+/).slice(0, 4).join(" ").toLowerCase();
         const directSuggestions = allSuggestions.get(words) ?? [];
         return scoreKeyword(kw, directSuggestions, allSuggestions, trends);
       });
+
+      await persistMetrics(refreshedMetrics, db);
+      for (const metric of refreshedMetrics) {
+        cachedMetrics.set(metric.keyword, metric);
+      }
+
+      return keywords.map((kw) => cachedMetrics.get(kw)!);
     },
   };
 }

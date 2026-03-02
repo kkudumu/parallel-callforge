@@ -23,6 +23,7 @@ const initialAgentState = (name: AgentName): AgentState => ({
 
 const initialState: PipelineState = {
   agents: {
+    "agent-0.5": initialAgentState("agent-0.5"),
     "agent-1": initialAgentState("agent-1"),
     "agent-2": initialAgentState("agent-2"),
     "agent-3": initialAgentState("agent-3"),

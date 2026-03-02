@@ -9,6 +9,7 @@ interface PipelineFlowProps {
 }
 
 export function PipelineFlow({ state, onAgentClick }: PipelineFlowProps) {
+  const agent05 = state.agents["agent-0.5"];
   const agent1 = state.agents["agent-1"];
   const agent2 = state.agents["agent-2"];
   const agent3 = state.agents["agent-3"];
@@ -20,24 +21,32 @@ export function PipelineFlow({ state, onAgentClick }: PipelineFlowProps) {
       <div className="hidden sm:flex relative flex-col items-center gap-6 w-full">
         {/* Connection lines (desktop) */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ overflow: "visible" }}>
+          {/* Agent 0.5 -> Agent 1 */}
+          <DesktopConnection
+            x1="9%" x2="27%"
+            y="35%"
+            status={agent05.status === "completed" ? agent1.status : "idle"}
+            color={AGENTS["agent-1"].color}
+          />
           {/* Agent 1 -> Agent 2 */}
           <DesktopConnection
-            x1="22%" x2="47%"
+            x1="32%" x2="50%"
             y="35%"
             status={agent1.status === "completed" ? agent2.status : "idle"}
             color={AGENTS["agent-2"].color}
           />
           {/* Agent 2 -> Agent 3 */}
           <DesktopConnection
-            x1="53%" x2="78%"
+            x1="55%" x2="73%"
             y="35%"
             status={agent2.status === "completed" ? agent3.status : "idle"}
             color={AGENTS["agent-3"].color}
           />
         </svg>
 
-        {/* Top row: Agent 1 -> Agent 2 -> Agent 3 */}
-        <div className="flex items-start justify-center gap-10 lg:gap-16 w-full relative z-10">
+        {/* Top row: Agent 0.5 -> Agent 1 -> Agent 2 -> Agent 3 */}
+        <div className="flex items-start justify-center gap-6 lg:gap-10 w-full relative z-10">
+          <AgentNode agent={agent05} onClick={() => onAgentClick?.("agent-0.5")} />
           <AgentNode agent={agent1} onClick={() => onAgentClick?.("agent-1")} />
           <AgentNode agent={agent2} onClick={() => onAgentClick?.("agent-2")} />
           <AgentNode agent={agent3} onClick={() => onAgentClick?.("agent-3")} />
@@ -54,6 +63,11 @@ export function PipelineFlow({ state, onAgentClick }: PipelineFlowProps) {
 
       {/* Mobile layout: vertical flow */}
       <div className="sm:hidden flex flex-col items-center gap-2 w-full">
+        <AgentNode agent={agent05} onClick={() => onAgentClick?.("agent-0.5")} />
+        <MobileConnector
+          status={agent05.status === "completed" ? agent1.status : "idle"}
+          color={AGENTS["agent-1"].color}
+        />
         <AgentNode agent={agent1} onClick={() => onAgentClick?.("agent-1")} />
         <MobileConnector
           status={agent1.status === "completed" ? agent2.status : "idle"}

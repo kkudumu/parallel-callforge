@@ -1,5 +1,10 @@
 import { describe, it, expect } from "@jest/globals";
-import { expandKeywordTemplates, getKeywordTemplates, normalizeUrlMapping } from "./index.js";
+import {
+  expandKeywordTemplates,
+  getKeywordTemplates,
+  loadCandidateCitiesFromDeploymentCandidates,
+  normalizeUrlMapping,
+} from "./index.js";
 
 describe("Agent 1 - Keywords", () => {
   describe("expandKeywordTemplates", () => {
@@ -90,6 +95,66 @@ describe("Agent 1 - Keywords", () => {
         "/watsonville/rodent-control/": "/watsonville/rodent-control/",
         "/watsonville/termite-control/": "/watsonville/termite-control/",
       });
+    });
+  });
+
+  describe("loadCandidateCitiesFromDeploymentCandidates", () => {
+    it("loads ranked cities from deployment_candidates while prioritizing ideal markets", async () => {
+      const db = {
+        query: jest.fn().mockResolvedValue({
+          rows: [
+            {
+              city: "Santa Cruz",
+              state: "CA",
+              population: 76000,
+              market_type: "standalone_city",
+              metro_parent: null,
+            },
+            {
+              city: "Shawnee",
+              state: "KS",
+              population: 68000,
+              market_type: "suburb",
+              metro_parent: {
+                city: "Kansas City",
+                state: "MO",
+                population: 510000,
+                distance_miles: 12.4,
+              },
+            },
+          ],
+        }),
+      };
+
+      const result = await loadCandidateCitiesFromDeploymentCandidates("offer-123", db as any, 2);
+
+      expect(result).toEqual([
+        {
+          city: "Santa Cruz",
+          state: "CA",
+          population: 76000,
+          market_type: "standalone_city",
+          cluster: null,
+          metro_parent: null,
+        },
+        {
+          city: "Shawnee",
+          state: "KS",
+          population: 68000,
+          market_type: "suburb",
+          cluster: null,
+          metro_parent: {
+            city: "Kansas City",
+            state: "MO",
+            population: 510000,
+            distance_miles: 12.4,
+          },
+        },
+      ]);
+      expect(db.query).toHaveBeenCalledWith(
+        expect.stringContaining("FROM deployment_candidates"),
+        ["offer-123", 50000, 300000, 2]
+      );
     });
   });
 });

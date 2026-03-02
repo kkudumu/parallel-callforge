@@ -1,9 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { CliProvider, CliInvokeOptions, CliResult } from "./types.js";
 import { extractJson, detectRateLimit } from "./types.js";
-
-const execFileAsync = promisify(execFile);
+import { runCliCommand } from "./run-command.js";
 
 export function createGeminiCli(cliPath: string): CliProvider {
   return {
@@ -19,9 +16,10 @@ export function createGeminiCli(cliPath: string): CliProvider {
       args.push(prompt);
 
       try {
-        const { stdout, stderr } = await execFileAsync(cliPath, args, {
-          timeout: options.timeoutMs ?? 120_000,
+        const { stdout, stderr } = await runCliCommand(cliPath, args, {
+          timeoutMs: options.timeoutMs ?? 120_000,
           maxBuffer: 10 * 1024 * 1024,
+          onOutput: options.onOutput,
         });
 
         const envelope = extractJson(stdout) as Record<string, unknown>;

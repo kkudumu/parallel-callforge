@@ -5,12 +5,85 @@ import { generateMockMetrics, type MockPageMetrics } from "./mock-data.js";
 import { eventBus } from "../../shared/events/event-bus.js";
 
 export interface DataProvider {
-  getMetrics(pageId: string, url: string, city: string, daysSincePublish: number): MockPageMetrics;
+  getMetrics(pageId: string, url: string, city: string, daysSincePublish: number): Promise<MockPageMetrics>;
 }
 
 export class MockDataProvider implements DataProvider {
-  getMetrics(pageId: string, url: string, city: string, daysSincePublish: number): MockPageMetrics {
+  async getMetrics(pageId: string, url: string, city: string, daysSincePublish: number): Promise<MockPageMetrics> {
     return generateMockMetrics(pageId, url, city, daysSincePublish);
+  }
+}
+
+export class DatabaseBackedDataProvider implements DataProvider {
+  constructor(private readonly db: DbClient) {}
+
+  async getMetrics(
+    pageId: string,
+    url: string,
+    city: string,
+    daysSincePublish: number
+  ): Promise<MockPageMetrics> {
+    const [performanceResult, rankingResult] = await Promise.all([
+      this.db.query<{
+        sessions: number;
+        bounce_rate: number | null;
+        avg_session_duration: number | null;
+        click_to_call_count: number;
+        calls_total: number;
+        calls_qualified: number;
+      }>(
+        `SELECT sessions, bounce_rate, avg_session_duration, click_to_call_count, calls_total, calls_qualified
+         FROM performance_snapshots
+         WHERE page_id = $1
+         ORDER BY snapshot_date DESC
+         LIMIT 1`,
+        [pageId]
+      ),
+      this.db.query<{
+        clicks: number;
+        impressions: number;
+        ctr: number | null;
+        position: number | null;
+      }>(
+        `SELECT clicks, impressions, ctr, position
+         FROM ranking_snapshots
+         WHERE page_id = $1
+         ORDER BY snapshot_date DESC
+         LIMIT 1`,
+        [pageId]
+      ),
+    ]);
+
+    const perf = performanceResult.rows[0];
+    const ranking = rankingResult.rows[0];
+
+    if (!perf && !ranking) {
+      return generateMockMetrics(pageId, url, city, daysSincePublish);
+    }
+
+    const callsTotal = Math.max(0, perf?.calls_total ?? 0);
+    const clickToCallCount = Math.max(0, perf?.click_to_call_count ?? 0);
+
+    return {
+      pageId,
+      url,
+      city,
+      daysSincePublish,
+      isIndexed: Boolean(ranking),
+      position: ranking?.position ?? 45,
+      impressions: Math.max(0, ranking?.impressions ?? perf?.sessions ?? 0),
+      clicks: Math.max(0, ranking?.clicks ?? perf?.sessions ?? 0),
+      bounceRate: perf?.bounce_rate ?? 0.55,
+      avgSessionDuration: perf?.avg_session_duration ?? 90,
+      clickToCallRate: callsTotal > 0
+        ? Math.min(1, clickToCallCount / callsTotal)
+        : perf && perf.sessions > 0
+          ? Math.min(1, clickToCallCount / perf.sessions)
+          : 0.08,
+      callQualificationRate: callsTotal > 0
+        ? Math.min(1, (perf?.calls_qualified ?? 0) / callsTotal)
+        : 0.4,
+    };
   }
 }
 
@@ -21,7 +94,9 @@ export interface Agent7Config {
 interface PageRow {
   id: string;
   url: string;
+  slug: string;
   city: string;
+  state: string;
   published_at: string;
 }
 
@@ -71,14 +146,14 @@ function determineOptimizationAction(
 export async function runAgent7(
   config: Agent7Config,
   db: DbClient,
-  dataProvider: DataProvider = new MockDataProvider()
+  dataProvider: DataProvider = new DatabaseBackedDataProvider(db)
 ): Promise<void> {
   console.log(`[Agent 7] Starting performance monitor for ${config.niche}`);
   eventBus.emitEvent({ type: "agent_step", agent: "agent-7", step: "Starting", detail: config.niche, timestamp: Date.now() });
 
   // Fetch all active pages
   const pagesResult = await db.query(
-    "SELECT id, url, city, published_at FROM pages WHERE niche = $1",
+    "SELECT id, url, slug, city, state, published_at FROM pages WHERE niche = $1",
     [config.niche]
   );
 
@@ -97,12 +172,29 @@ export async function runAgent7(
   let totalRevenue = 0;
   let criticalAlerts = 0;
 
-  for (const page of pages) {
+  for (const [index, page] of pages.entries()) {
+    console.log(
+      `[Agent 7] Processing page ${index + 1}/${pages.length}: ${page.city}, ${page.state} (${page.slug})`
+    );
     const daysSincePublish = Math.floor(
       (now - new Date(page.published_at).getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    const metrics = dataProvider.getMetrics(page.id, page.url, page.city, daysSincePublish);
+    const metrics = await dataProvider.getMetrics(page.id, page.url, page.city, daysSincePublish);
+    const sessions = metrics.clicks;
+    const users = Math.max(0, Math.round(metrics.clicks * 0.9));
+    const pageviews = Math.max(sessions, Math.round(metrics.clicks * 1.15));
+    const organicSessions = sessions;
+    const clickToCallCount = Math.max(
+      0,
+      Math.round(metrics.clicks * metrics.clickToCallRate)
+    );
+    const callsTotal = clickToCallCount;
+    const callsQualified = Math.max(
+      0,
+      Math.round(callsTotal * metrics.callQualificationRate)
+    );
+    const estimatedRevenue = callsQualified * 85;
     console.log(
       `[Agent 7] ${page.city}: indexed=${metrics.isIndexed} pos=${metrics.position.toFixed(1)} ctr=${(metrics.clickToCallRate * 100).toFixed(1)}% quality=${(metrics.callQualificationRate * 100).toFixed(1)}%`
     );
@@ -110,23 +202,42 @@ export async function runAgent7(
     // Store performance snapshot
     await db.query(
       `INSERT INTO performance_snapshots
-         (page_id, snapshot_date, sessions, bounce_rate, avg_session_duration, click_to_call_rate, call_count, qualified_call_count, revenue)
-       VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT DO NOTHING`,
+         (page_id, snapshot_date, sessions, users, pageviews, organic_sessions, bounce_rate, avg_session_duration, click_to_call_count, calls_total, calls_qualified, revenue)
+       VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (page_id, snapshot_date) DO UPDATE SET
+         sessions = EXCLUDED.sessions,
+         users = EXCLUDED.users,
+         pageviews = EXCLUDED.pageviews,
+         organic_sessions = EXCLUDED.organic_sessions,
+         bounce_rate = EXCLUDED.bounce_rate,
+         avg_session_duration = EXCLUDED.avg_session_duration,
+         click_to_call_count = EXCLUDED.click_to_call_count,
+         calls_total = EXCLUDED.calls_total,
+         calls_qualified = EXCLUDED.calls_qualified,
+         revenue = EXCLUDED.revenue`,
       [
         page.id,
-        metrics.impressions,
+        sessions,
+        users,
+        pageviews,
+        organicSessions,
         metrics.bounceRate,
         metrics.avgSessionDuration,
-        metrics.clickToCallRate,
-        metrics.clicks,
-        Math.round(metrics.clicks * metrics.callQualificationRate),
-        metrics.clicks * metrics.callQualificationRate * 85, // ~$85 avg payout
+        clickToCallCount,
+        callsTotal,
+        callsQualified,
+        estimatedRevenue,
       ]
     );
 
     // Store ranking snapshot
     if (metrics.isIndexed) {
+      await db.query(
+        `UPDATE pages
+         SET indexation_status = 'indexed'
+         WHERE id = $1`,
+        [page.id]
+      );
       await db.query(
         `INSERT INTO ranking_snapshots (page_id, snapshot_date, query, device, clicks, impressions, ctr, position)
          VALUES ($1, CURRENT_DATE, $2, 'MOBILE', $3, $4, $5, $6)
@@ -139,6 +250,13 @@ export async function runAgent7(
           metrics.impressions > 0 ? metrics.clicks / metrics.impressions : 0,
           metrics.position,
         ]
+      );
+    } else {
+      await db.query(
+        `UPDATE pages
+         SET indexation_status = $2
+         WHERE id = $1`,
+        [page.id, daysSincePublish >= 21 ? "not_indexed" : "pending"]
       );
     }
 
@@ -187,9 +305,10 @@ export async function runAgent7(
         console.log(
           `[Agent 7] Action queued for ${page.city}: ${action.action_type} -> ${action.target_agent} (${metricName})`
         );
-        await db.query(
+        const actionResult = await db.query(
           `INSERT INTO optimization_actions (page_id, alert_id, action_type, target_agent, trigger_reason)
-           VALUES ($1, $2, $3, $4, $5)`,
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id`,
           [
             page.id,
             alertResult.rows[0].id,
@@ -198,6 +317,34 @@ export async function runAgent7(
             action.trigger_reason,
           ]
         );
+
+        const taskPayload = {
+          page_id: page.id,
+          page_slug: page.slug,
+          city: page.city,
+          state: page.state,
+          niche: config.niche,
+          optimizationActionId: actionResult.rows[0].id,
+          forceRefresh: action.target_agent === "agent-1",
+          triggerReason: action.trigger_reason,
+        };
+        const existingTask = await db.query<{ id: string }>(
+          `SELECT id
+           FROM agent_tasks
+           WHERE task_type = $1
+             AND agent_name = $2
+             AND status IN ('pending', 'running')
+             AND payload->>'page_id' = $3
+           LIMIT 1`,
+          [action.action_type, action.target_agent, page.id]
+        );
+        if (existingTask.rows.length === 0) {
+          await db.query(
+            `INSERT INTO agent_tasks (task_type, agent_name, payload)
+             VALUES ($1, $2, $3)`,
+            [action.action_type, action.target_agent, JSON.stringify(taskPayload)]
+          );
+        }
       }
     }
 
@@ -206,8 +353,11 @@ export async function runAgent7(
     if (metrics.position <= 20) totalRanking++;
     totalConversion += metrics.clickToCallRate;
     totalCallQuality += metrics.callQualificationRate;
-    totalTraffic += metrics.impressions;
-    totalRevenue += metrics.clicks * metrics.callQualificationRate * 85;
+    totalTraffic += organicSessions;
+    totalRevenue += estimatedRevenue;
+    console.log(
+      `[Agent 7] Progress ${index + 1}/${pages.length}: indexed=${totalIndexed} ranking=${totalRanking} alerts=${criticalAlerts} revenue=$${totalRevenue}`
+    );
   }
 
   // Calculate portfolio health score
