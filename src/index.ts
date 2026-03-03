@@ -1,6 +1,8 @@
 import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { spawn, type ChildProcess } from "node:child_process";
 import { getEnv, type CitySourceMode } from "./config/env.js";
 import { createDbClient } from "./shared/db/client.js";
 import { createRateLimiters } from "./shared/cli/rate-limiter.js";
@@ -320,13 +322,47 @@ async function runPipeline() {
   const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
   const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
 
+  await runMigrations(env.DATABASE_URL, path.resolve("src/shared/db/migrations"));
+
+  const runId = randomUUID();
+  console.log(`[Pipeline] Run ID: ${runId}`);
+
+  // Spawn WatchdogAgent as a child process — lives for the duration of this pipeline run
+  // Using tsx to run TypeScript directly
+  const watchdogProcess: ChildProcess = spawn(
+    "npx",
+    ["tsx", "src/agents/agent-watchdog/index.ts"],
+    {
+      env: { ...process.env },
+      stdio: ["ignore", "inherit", "inherit"],
+      cwd: process.cwd(),
+      detached: false,
+    }
+  );
+  watchdogProcess.on("error", (err) => {
+    console.warn(`[Watchdog] Failed to start: ${err.message}`);
+  });
+  if (watchdogProcess.pid) {
+    console.log(`[Pipeline] Watchdog started (PID ${watchdogProcess.pid})`);
+  } else {
+    console.warn("[Pipeline] Watchdog started but PID unavailable");
+  }
+
   try {
-    await runMigrations(env.DATABASE_URL, path.resolve("src/shared/db/migrations"));
     const offerIdArg = requireOfferIdArg(normalizeOptionalArg(process.argv[3]), "pipeline");
     const offerContext = await getOfferContext(db, offerIdArg);
 
     console.log("=== CallForge Pipeline ===");
-    console.log("Step 1/4: Keyword Research");
+    console.log("Step 1/4: Geo Scan");
+    await runAgent05(
+      {
+        offerId: offerIdArg,
+        source: "stored-offer",
+      },
+      db
+    );
+
+    console.log("Step 2/4: Keyword Research");
     await runAgent1(
       buildAgent1Config(env, {
         offerId: offerIdArg,
@@ -338,14 +374,14 @@ async function runPipeline() {
       db
     );
 
-    console.log("Step 2/4: Design Research");
+    console.log("Step 3/4: Design Research");
     await runAgent2({
       niche: offerContext.niche,
       offerProfile: offerContext.offerProfile,
       verticalProfile: offerContext.verticalProfile,
     }, llm, db);
 
-    console.log("Step 3/4: Site Build");
+    console.log("Step 4/4: Site Build");
     await runAgent3({
       niche: offerContext.niche,
       offerProfile: offerContext.offerProfile,
@@ -362,11 +398,13 @@ async function runPipeline() {
       minIndexationRatio: env.INDEXATION_RATIO_THRESHOLD,
     }, llm, db);
 
-    console.log("Step 4/4: Performance Monitor");
-    await runAgent7({ niche: offerContext.niche }, db, getAgent7Provider(env, db));
-
     console.log("=== Pipeline Complete ===");
   } finally {
+    // Gracefully stop the watchdog
+    if (watchdogProcess && !watchdogProcess.killed) {
+      watchdogProcess.kill("SIGTERM");
+      console.log("[Pipeline] Watchdog stopped");
+    }
     await db.end();
   }
 }
