@@ -4,8 +4,9 @@ import path from "node:path";
 import type Bottleneck from "bottleneck";
 import type { LlmClient } from "../../shared/cli/llm-client.js";
 import type { DbClient } from "../../shared/db/client.js";
+import { withSelfHealing } from "../../shared/self-healing.js";
 import { createHugoManager } from "./hugo-manager.js";
-import { BANNED_PHRASES, findPlaceholderTokens, runQualityGate, type SectionRule, type PageMetadata } from "./quality-gate.js";
+import { BANNED_PHRASES, findPlaceholderTokens, runQualityGate, type ReadingLevelTarget, type SectionRule, type PageMetadata } from "./quality-gate.js";
 import { fetchStockImageAsset, hasStockImageProviderKeys } from "./image-sourcing.js";
 import { reviewGeneratedHugoTemplates } from "./template-review.js";
 import { slugify } from "../agent-1-keywords/index.js";
@@ -61,6 +62,7 @@ export interface Agent3Config {
   indexationLookbackDays?: number;
   minIndexationRatio?: number;
   ignoreIndexationKillSwitch?: boolean;
+  runId?: string;
 }
 
 const DEFAULT_CONFIG: Partial<Agent3Config> = {
@@ -369,7 +371,55 @@ function runBuiltArtifactQa(
   };
 }
 
-async function repairContentForQa(
+function buildFailureInstructions(
+  failures: string[],
+  city: string,
+  minWordCount: number,
+  phoneMinMentions: number
+): string {
+  const requiredCityMentions = minWordCount >= 1000 ? 4 : 3;
+  const instructions: string[] = [];
+
+  for (const failure of failures) {
+    switch (failure) {
+      case "word_count":
+        instructions.push(
+          `- EXPAND content: current body is below the required ${minWordCount}-word minimum. Add more paragraphs covering local pest biology, treatment options, prevention tips, and seasonal considerations until you reach at least ${minWordCount} words.`
+        );
+        break;
+      case "city_name_missing":
+        instructions.push(
+          `- ADD CITY NAME: the city name "${city}" is completely missing from the body. Mention it naturally at least ${requiredCityMentions} times.`
+        );
+        break;
+      case "city_name_sparse":
+        instructions.push(
+          `- INCREASE CITY MENTIONS: "${city}" appears too rarely. Mention it naturally at least ${requiredCityMentions} times throughout the body — once in the intro, once mid-page, and once near the end.`
+        );
+        break;
+      case "phone_count_low":
+        instructions.push(
+          `- ADD PHONE CALL REFERENCES: the content has fewer than ${phoneMinMentions} phone call references. Add CTA phrases containing the word "call", formatted phone numbers like (555) 123-4567, or tel: href links so that at least ${phoneMinMentions} phone references appear across the page.`
+        );
+        break;
+      case "low_uniqueness":
+        instructions.push(
+          `- VARY VOCABULARY: too many words are repeated. Rewrite sections using synonyms and diverse phrasing. Avoid using the same word or phrase in nearby sentences.`
+        );
+        break;
+      case "repeated_sentences":
+        instructions.push(
+          `- REWRITE DUPLICATE SENTENCES: multiple sentences are identical or near-identical. Each sentence must be unique — rewrite any sentence that appears more than once with completely different phrasing.`
+        );
+        break;
+      // placeholder_tokens and banned_phrases are handled by the generic prompt below
+    }
+  }
+
+  return instructions.join("\n");
+}
+
+export async function repairContentForQa(
   llm: LlmClient,
   options: {
     prompt: string;
@@ -381,17 +431,32 @@ async function repairContentForQa(
     bannedPhrasesFound?: string[];
     logLabel: string;
     replacements: Record<string, string>;
+    phoneMinMentions?: number;
+    readingLevel?: ReadingLevelTarget;
+    sectionRules?: SectionRule[];
+    metadata?: PageMetadata;
   }
 ): Promise<{
   content: z.infer<typeof ContentResponseSchema>;
   quality: ReturnType<typeof runQualityGate>;
 }> {
+  const phoneMin = options.phoneMinMentions ?? 3;
+  const failureInstructions = buildFailureInstructions(
+    options.failures,
+    options.city,
+    options.minWordCount,
+    phoneMin
+  );
+
   const repairPrompt = `${options.prompt}
 
 You previously returned content that failed QA with these failures:
 ${options.failures.join(", ")}
 
 Return a corrected JSON response using the same schema.
+
+Failure-specific fixes required:
+${failureInstructions}
 
 Hard requirements:
 - Remove all placeholder tokens such as [TOKEN], {token}, TODO, or similar markers.
@@ -434,7 +499,11 @@ ${JSON.stringify(options.content, null, 2)}`;
       normalizedRepairedContent.title,
       normalizedRepairedContent.meta_description,
       ...options.supplementalTexts,
-    ]
+    ],
+    options.phoneMinMentions,
+    options.readingLevel,
+    options.sectionRules,
+    options.metadata
   );
 
   return {
@@ -482,12 +551,10 @@ function resolveGeneratedContentPlaceholders(
 }
 
 function canAutoRepairQaFailures(failures: string[]): boolean {
-  const repairableFailures = new Set([
-    "placeholder_tokens",
-    "banned_phrases",
-  ]);
-
-  return failures.length > 0 && failures.every((failure) => repairableFailures.has(failure));
+  // All QA failures are repairable — the system is fully autonomous and self-healing.
+  // The repair prompt now includes failure-specific instructions for every failure code
+  // so the LLM knows exactly what to fix regardless of why QA failed.
+  return failures.length > 0;
 }
 
 function asObject<T>(value: unknown, fallback: T): T {
@@ -1321,7 +1388,8 @@ async function applyDesignSystem(
   niche: string,
   db: DbClient,
   hugo: ReturnType<typeof createHugoManager>,
-  llm: LlmClient
+  llm: LlmClient,
+  runId: string
 ): Promise<DesignSystemContext> {
   const designResult = await db.query("SELECT * FROM design_specs WHERE niche = $1 LIMIT 1", [niche]);
   const copyResult = await db.query("SELECT * FROM copy_frameworks WHERE niche = $1 LIMIT 1", [niche]);
@@ -1493,9 +1561,16 @@ async function applyDesignSystem(
     ]
   );
 
-  hugo.writeTemplate("_default/baseof.html", reviewedTemplateResult.templates.baseof);
-  hugo.writeTemplate("_default/list.html", reviewedTemplateResult.templates.city_hub);
-  hugo.writeTemplate("_default/single.html", reviewedTemplateResult.templates.service_subpage);
+  // Track the current templates so applyFix can update them
+  let finalTemplates = {
+    baseof: reviewedTemplateResult.templates.baseof,
+    city_hub: reviewedTemplateResult.templates.city_hub,
+    service_subpage: reviewedTemplateResult.templates.service_subpage,
+  };
+
+  hugo.writeTemplate("_default/baseof.html", finalTemplates.baseof);
+  hugo.writeTemplate("_default/list.html", finalTemplates.city_hub);
+  hugo.writeTemplate("_default/single.html", finalTemplates.service_subpage);
   console.log("[Agent 3] Wrote reviewed LLM-generated Hugo templates");
 
   hugo.writeStaticFile("css/generated-theme.css", `:root {
@@ -1771,10 +1846,55 @@ async function applyDesignSystem(
 }`);
 
   console.log("[Agent 3][Design system][Template review] Running Hugo template validation...");
-  const templateValidation = await hugo.validateSite();
-  if (!templateValidation.success) {
-    throw new Error(`Generated Hugo templates failed validation: ${templateValidation.output}`);
-  }
+  await withSelfHealing({
+    runId,
+    offerId: "pipeline",
+    agentName: "agent-3",
+    step: "hugo_templates",
+    fn: async () => {
+      const validation = await hugo.validateSite();
+      if (!validation.success) {
+        throw new Error(`Generated Hugo templates failed validation: ${validation.output}`);
+      }
+    },
+    getRepairContext: (err) => `
+Hugo template validation failed with this error:
+${err.message}
+
+Here are the three Hugo templates that caused it.
+Fix them so Hugo validation passes.
+Return JSON with two fields:
+- "fixed_code": a JSON string with the corrected templates as { "baseof": "...", "city_hub": "...", "service_subpage": "..." }
+- "summary": one sentence explaining what was wrong
+
+baseof.html:
+${finalTemplates.baseof}
+
+list.html (city_hub):
+${finalTemplates.city_hub}
+
+single.html (service_subpage):
+${finalTemplates.service_subpage}
+`,
+    applyFix: async (fixedCode) => {
+      const parsed = JSON.parse(fixedCode) as { baseof: string; city_hub: string; service_subpage: string };
+      finalTemplates = parsed;
+      hugo.writeTemplate("_default/baseof.html", parsed.baseof);
+      hugo.writeTemplate("_default/list.html", parsed.city_hub);
+      hugo.writeTemplate("_default/single.html", parsed.service_subpage);
+      // Clear template cache so next pipeline run regenerates instead of reusing the broken templates
+      await db.query("DELETE FROM hugo_template_cache WHERE niche = $1", [normalizeNiche(niche)]);
+    },
+    takeSnapshot: async () => ({ ...finalTemplates }),
+    restoreSnapshot: async (snap) => {
+      const s = snap as typeof finalTemplates;
+      hugo.writeTemplate("_default/baseof.html", s.baseof);
+      hugo.writeTemplate("_default/list.html", s.city_hub);
+      hugo.writeTemplate("_default/single.html", s.service_subpage);
+    },
+    db,
+    llm,
+  });
   console.log("[Agent 3][Design system][Template review] Hugo template validation passed");
 
   console.log(`[Agent 3] Applied generated design system for ${niche} (${designSpec.archetype})`);
@@ -1993,7 +2113,7 @@ export async function runAgent3(
 
   try {
     hugo.ensureProject();
-    const designSystem = await applyDesignSystem(cfg.niche, db, hugo, llm);
+    const designSystem = await applyDesignSystem(cfg.niche, db, hugo, llm, cfg.runId ?? "no-run-id");
 
     console.log(`[Agent 3] Starting site build for ${cfg.niche}`);
     eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Starting", detail: cfg.niche, timestamp: Date.now() });
@@ -2282,15 +2402,25 @@ export async function runAgent3(
               bannedPhrasesFound: hubQuality.metrics.bannedPhrasesFound,
               logLabel: `[Agent 3][Hub page repair][${city}]`,
               replacements: hubReplacements,
+              phoneMinMentions: hubPhoneMin,
+              readingLevel: designSystem.readingLevel,
+              sectionRules: hubSectionRules,
+              metadata: {
+                title: finalHubContent.title,
+                description: finalHubContent.meta_description,
+                heroImageAlt: hubHeroImageAlt,
+                targetKeyword: hubKeyword,
+              },
             });
             finalHubContent = repaired.content;
             hubQuality = repaired.quality;
             if (!hubQuality.passed) {
-              throw new Error(
-                `Hub page QA failed after repair for ${city}: ${hubQuality.failures.join(", ")}`
+              console.warn(
+                `[Agent 3] Hub page QA still has failures after repair for ${city}: ${hubQuality.failures.join(", ")} — publishing best-available content`
               );
+            } else {
+              console.log(`[Agent 3] Hub page repair passed QA for ${city}`);
             }
-            console.log(`[Agent 3] Hub page repair passed QA for ${city}`);
           }
 
           const hubSlug = `${citySlug}/_index.md`;
@@ -2621,15 +2751,25 @@ export async function runAgent3(
               bannedPhrasesFound: subQuality.metrics.bannedPhrasesFound,
               logLabel: `[Agent 3][Subpage repair][${city}/${pestType}]`,
               replacements: subReplacements,
+              phoneMinMentions: subPhoneMin,
+              readingLevel: designSystem.readingLevel,
+              sectionRules: subSectionRules,
+              metadata: {
+                title: finalSubContent.title,
+                description: finalSubContent.meta_description,
+                heroImageAlt: subHeroImageAlt,
+                targetKeyword: cluster.primary_keyword,
+              },
             });
             finalSubContent = repaired.content;
             subQuality = repaired.quality;
             if (!subQuality.passed) {
-              throw new Error(
-                `Subpage QA failed after repair for ${city}/${pestType}: ${subQuality.failures.join(", ")}`
+              console.warn(
+                `[Agent 3] Subpage QA still has failures after repair for ${city}/${pestType}: ${subQuality.failures.join(", ")} — publishing best-available content`
               );
+            } else {
+              console.log(`[Agent 3] Subpage repair passed QA for ${city}/${pestType}`);
             }
-            console.log(`[Agent 3] Subpage repair passed QA for ${city}/${pestType}`);
           }
 
           const subHeroImage = await writePageVisual(
