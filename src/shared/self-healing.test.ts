@@ -132,6 +132,7 @@ describe("withSelfHealing", () => {
 
     // restoreSnapshot must have been called with the captured snapshot
     expect(restoreSnapshot).toHaveBeenCalledWith(snapshot);
+    expect(takeSnapshot).toHaveBeenCalledTimes(1);
 
     // db INSERT must log status='dead'
     expect(db.query).toHaveBeenCalled();

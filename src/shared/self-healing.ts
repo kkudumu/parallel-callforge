@@ -85,8 +85,6 @@ export async function withSelfHealing<T>(opts: SelfHealingOptions<T>): Promise<T
   let lastFixSummary: string | undefined;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const attemptStart = Date.now();
-
     try {
       const result = await fn();
 
