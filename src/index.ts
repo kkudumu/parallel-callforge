@@ -246,6 +246,7 @@ async function runSingleAgent(agentName: string) {
             offerId: offerIdArg,
             zipCodes: zipInputArg ? parseZipInput(zipInputArg) : undefined,
             source: zipInputArg ? "cli" : "stored-offer",
+            llm,
           },
           db
         );
@@ -358,6 +359,8 @@ async function runPipeline() {
       {
         offerId: offerIdArg,
         source: "stored-offer",
+        runId,
+        llm,
       },
       db
     );

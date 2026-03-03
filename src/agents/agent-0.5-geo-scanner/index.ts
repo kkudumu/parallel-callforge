@@ -1,4 +1,5 @@
 import type { DbClient } from "../../shared/db/client.js";
+import type { LlmClient } from "../../shared/cli/llm-client.js";
 import { eventBus } from "../../shared/events/event-bus.js";
 import {
   buildCheckpointScope,
@@ -6,6 +7,7 @@ import {
 } from "../../shared/checkpoints.js";
 import { importGeoZipReferenceIntoDb } from "../../shared/db/import-geo-zip-reference.js";
 import { syncOfferGeoCoverageFromProfile } from "../../shared/offer-profiles.js";
+import { withSelfHealing } from "../../shared/self-healing.js";
 
 export interface GeoZipReferenceRow {
   zip_code: string;
@@ -77,6 +79,8 @@ export interface Agent05Config {
   geoReferenceRefreshMode?: "prompt" | "script";
   missingZipCountThreshold?: number;
   missingZipRatioThreshold?: number;
+  runId?: string;
+  llm?: LlmClient;
 }
 
 const TARGET_POPULATION_MIN = 50_000;
@@ -1143,7 +1147,32 @@ export async function runAgent05(
       throw new Error(`No ZIP coverage available for offer ${offerId}`);
     }
 
-    await ensureGeoReferenceCoverage(db, offerId, config);
+    if (config.llm) {
+      const llm = config.llm;
+      await withSelfHealing({
+        runId: config.runId ?? "no-run-id",
+        offerId: config.offerId,
+        agentName: "agent-0.5",
+        step: "geo_reference_coverage",
+        fn: () => ensureGeoReferenceCoverage(db, offerId, config),
+        getRepairContext: (err) => `
+Geo ZIP reference coverage check failed:
+${err.message}
+
+The geo reference table (geo_zip_reference) needs to have at least ${MIN_EXPECTED_GEO_REFERENCE_ROWS} rows.
+Diagnose the failure and suggest how to fix it.
+Return JSON: { "fixed_code": "description of what to do", "summary": "root cause" }
+`,
+        applyFix: async (fixedCode) => {
+          console.warn(`[Agent 0.5][SelfHealing] LLM repair suggestion: ${fixedCode}`);
+          // Geo reference fixes are usually data issues — log for operator
+        },
+        db,
+        llm,
+      });
+    } else {
+      await ensureGeoReferenceCoverage(db, offerId, config);
+    }
 
     const checkpointScope = buildCheckpointScope([
       offerId,
