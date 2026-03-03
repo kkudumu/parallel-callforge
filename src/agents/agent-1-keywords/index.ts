@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import type { LlmClient } from "../../shared/cli/llm-client.js";
 import type { DbClient } from "../../shared/db/client.js";
+import { withSelfHealing } from "../../shared/self-healing.js";
 import type { CitySourceMode } from "../../config/env.js";
 import { KeywordClusterSchema } from "../../shared/schemas/keyword-clusters.js";
 import { createGoogleKpClient } from "./google-kp.js";
@@ -310,6 +311,7 @@ export interface Agent1Config {
     } | null;
   }>;
   offerId?: string;
+  runId?: string;
   topCandidateLimit?: number;
   citySource?: CitySourceMode;
   payoutPerQualifiedCall?: number;
@@ -892,35 +894,65 @@ export async function runAgent1(
       }
     );
 
-    const clusterResponse = await llm.call({
-      prompt: clusterPrompt,
-      schema: KeywordClusteringResponseSchema,
-      model: "haiku",
-      logLabel: `[Agent 1][Step 5][${city.city} clustering]`,
+    const { clusters, url_mapping } = await withSelfHealing({
+      runId: config.runId ?? "no-run-id",
+      offerId: config.offerId ?? "unknown",
+      agentName: "agent-1",
+      step: "keyword_cluster",
+      city: city.city,
+      state: city.state,
+      fn: async () => {
+        const clusterResponse = await llm.call({
+          prompt: clusterPrompt,
+          schema: KeywordClusteringResponseSchema,
+          model: "haiku",
+          logLabel: `[Agent 1][Step 5][${city.city} clustering]`,
+        });
+        const parsedClusters = clusterResponse.clusters.map((c) =>
+          KeywordClusterSchema.parse({
+            cluster_name: c.cluster_name,
+            primary_keyword: c.primary_keyword,
+            secondary_keywords: c.secondary_keywords,
+            search_volume: c.search_volume,
+            difficulty: c.difficulty,
+            intent: IntentSchema.safeParse(c.intent.toLowerCase()).success
+              ? c.intent.toLowerCase()
+              : "transactional",
+          })
+        );
+        const serviceClusters = parsedClusters.filter((cluster, index) =>
+          index === 0 ||
+          isServiceAllowed(
+            `${cluster.cluster_name} ${cluster.primary_keyword}`,
+            config.offerProfile,
+            config.verticalProfile
+          )
+        );
+        const clusters = serviceClusters.length > 0 ? serviceClusters : parsedClusters;
+        const citySlug = slugify(city.city);
+        const url_mapping = buildUrlMapping(clusters, citySlug);
+        return { clusters, url_mapping };
+      },
+      getRepairContext: (err) => `
+Keyword clustering for ${city.city}, ${city.state} failed with this error:
+${err.message}
+
+The clustering prompt was:
+${clusterPrompt}
+
+Fix the response so it matches the KeywordClusteringResponseSchema:
+{ clusters: Array<{ cluster_name: string, primary_keyword: string, secondary_keywords: string[], search_volume: number, difficulty: number, intent: string }> }
+
+Return JSON with two fields:
+- "fixed_code": a valid JSON string matching the schema above
+- "summary": one sentence describing what was wrong
+`,
+      applyFix: async (fixedCode) => {
+        console.log(`[Agent 1][SelfHealing] Fix for ${city.city} clustering: ${fixedCode.slice(0, 100)}...`);
+      },
+      db,
+      llm,
     });
-    const parsedClusters = clusterResponse.clusters.map((c) =>
-      KeywordClusterSchema.parse({
-        cluster_name: c.cluster_name,
-        primary_keyword: c.primary_keyword,
-        secondary_keywords: c.secondary_keywords,
-        search_volume: c.search_volume,
-        difficulty: c.difficulty,
-        intent: IntentSchema.safeParse(c.intent.toLowerCase()).success
-          ? c.intent.toLowerCase()
-          : "transactional",
-      })
-    );
-    const serviceClusters = parsedClusters.filter((cluster, index) =>
-      index === 0 ||
-      isServiceAllowed(
-        `${cluster.cluster_name} ${cluster.primary_keyword}`,
-        config.offerProfile,
-        config.verticalProfile
-      )
-    );
-    const clusters = serviceClusters.length > 0 ? serviceClusters : parsedClusters;
-    const citySlug = slugify(city.city);
-    const url_mapping = buildUrlMapping(clusters, citySlug);
     const researchFingerprint = getCityResearchFingerprint(
       config.niche,
       city.city,
