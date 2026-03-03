@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { z } from "zod/v4";
 import type { DbClient } from "../../shared/db/client.js";
 import type { LlmClient } from "../../shared/cli/llm-client.js";
@@ -286,8 +286,8 @@ Provide a precise string replacement to harden this fix into the source:
   fs.writeFileSync(path.resolve(targetFile), updated, "utf-8");
 
   const commitMsg = `fix(${agentName}): auto-promote ${step} repair rule from watchdog\n\n${promotion.explanation}`;
-  execSync(`git add ${targetFile}`, { cwd: process.cwd() });
-  execSync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, { cwd: process.cwd() });
+  execFileSync("git", ["add", targetFile], { cwd: process.cwd() });
+  execFileSync("git", ["commit", "-m", commitMsg], { cwd: process.cwd() });
 
   await db.query(
     `UPDATE learned_repair_patterns SET promoted_to_code = true, promoted_at = now() WHERE id = $1`,
@@ -367,9 +367,11 @@ Provide:
 
   for (const row of newSuccesses.rows) {
     try {
-      const parts = row.trigger_condition.split("_");
-      const model = parts[0] ?? "unknown";
-      const avgMs = parseInt(parts[1] ?? "0", 10);
+      // trigger_condition format: "success via <model> avg <N>ms"
+      const tcParts = row.trigger_condition.split(" ");
+      const model = tcParts[2] ?? "unknown";       // index 2: model name e.g. "claude"
+      const avgMsStr = tcParts[4] ?? "0ms";        // index 4: e.g. "15000ms"
+      const avgMs = parseInt(avgMsStr.replace("ms", ""), 10);
       const analysis = await llm.call({
         prompt: `A consistent success pattern was detected:
 
