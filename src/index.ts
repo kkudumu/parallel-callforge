@@ -372,6 +372,7 @@ async function runPipeline() {
         offerProfile: offerContext.offerProfile,
         verticalProfile: offerContext.verticalProfile,
         niche: offerContext.niche,
+        runId,
       }),
       llm,
       db
@@ -399,6 +400,7 @@ async function runPipeline() {
       indexationMinPageAgeDays: env.INDEXATION_MIN_PAGE_AGE_DAYS,
       indexationLookbackDays: env.INDEXATION_LOOKBACK_DAYS,
       minIndexationRatio: env.INDEXATION_RATIO_THRESHOLD,
+      runId,
     }, llm, db);
 
     console.log("=== Pipeline Complete ===");

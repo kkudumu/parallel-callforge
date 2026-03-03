@@ -1389,7 +1389,8 @@ async function applyDesignSystem(
   db: DbClient,
   hugo: ReturnType<typeof createHugoManager>,
   llm: LlmClient,
-  runId: string
+  runId: string,
+  offerId: string
 ): Promise<DesignSystemContext> {
   const designResult = await db.query("SELECT * FROM design_specs WHERE niche = $1 LIMIT 1", [niche]);
   const copyResult = await db.query("SELECT * FROM copy_frameworks WHERE niche = $1 LIMIT 1", [niche]);
@@ -1848,7 +1849,7 @@ async function applyDesignSystem(
   console.log("[Agent 3][Design system][Template review] Running Hugo template validation...");
   await withSelfHealing({
     runId,
-    offerId: "pipeline",
+    offerId,
     agentName: "agent-3",
     step: "hugo_templates",
     fn: async () => {
@@ -2113,7 +2114,7 @@ export async function runAgent3(
 
   try {
     hugo.ensureProject();
-    const designSystem = await applyDesignSystem(cfg.niche, db, hugo, llm, cfg.runId ?? "no-run-id");
+    const designSystem = await applyDesignSystem(cfg.niche, db, hugo, llm, cfg.runId ?? "no-run-id", cfg.offerProfile?.offer_id ?? cfg.niche);
 
     console.log(`[Agent 3] Starting site build for ${cfg.niche}`);
     eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Starting", detail: cfg.niche, timestamp: Date.now() });

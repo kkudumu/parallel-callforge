@@ -91,20 +91,24 @@ export async function withSelfHealing<T>(opts: SelfHealingOptions<T>): Promise<T
       const durationMs = Date.now() - startedAt;
       const status: string = attempt === 0 ? "success" : "recovered";
 
-      await insertLog(db, {
-        runId,
-        offerId,
-        agentName,
-        step,
-        city,
-        state,
-        status,
-        modelUsed: null,
-        durationMs,
-        errorMessage: null,
-        fixApplied: lastFixSummary ?? null,
-        retryCount: attempt,
-      });
+      try {
+        await insertLog(db, {
+          runId,
+          offerId,
+          agentName,
+          step,
+          city,
+          state,
+          status,
+          modelUsed: null,
+          durationMs,
+          errorMessage: null,
+          fixApplied: lastFixSummary ?? null,
+          retryCount: attempt,
+        });
+      } catch (logErr) {
+        console.warn(`[SelfHealing] Failed to log run to pipeline_run_log: ${logErr instanceof Error ? logErr.message : logErr}`);
+      }
 
       return result;
     } catch (err: unknown) {
@@ -131,20 +135,24 @@ export async function withSelfHealing<T>(opts: SelfHealingOptions<T>): Promise<T
 
   const durationMs = Date.now() - startedAt;
 
-  await insertLog(db, {
-    runId,
-    offerId,
-    agentName,
-    step,
-    city,
-    state,
-    status: "dead",
-    modelUsed: null,
-    durationMs,
-    errorMessage: lastError.message,
-    fixApplied: lastFixSummary ?? null,
-    retryCount: maxRetries - 1,
-  });
+  try {
+    await insertLog(db, {
+      runId,
+      offerId,
+      agentName,
+      step,
+      city,
+      state,
+      status: "dead",
+      modelUsed: null,
+      durationMs,
+      errorMessage: lastError.message,
+      fixApplied: lastFixSummary ?? null,
+      retryCount: maxRetries - 1,
+    });
+  } catch (logErr) {
+    console.warn(`[SelfHealing] Failed to log run to pipeline_run_log: ${logErr instanceof Error ? logErr.message : logErr}`);
+  }
 
   throw lastError;
 }
