@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS learned_repair_patterns (
   pattern_type     TEXT NOT NULL CHECK (pattern_type IN ('failure_pattern', 'success_pattern')),
   agent_name       TEXT NOT NULL,
   step             TEXT NOT NULL,
-  trigger          TEXT NOT NULL,
+  trigger_condition TEXT NOT NULL,
   fix_strategy     TEXT,
   best_practice    TEXT,
   occurrence_count INTEGER NOT NULL DEFAULT 1,
@@ -12,5 +12,5 @@ CREATE TABLE IF NOT EXISTS learned_repair_patterns (
   promoted_to_code BOOLEAN NOT NULL DEFAULT false,
   promoted_at      TIMESTAMPTZ,
   notes            TEXT,
-  UNIQUE (agent_name, step, trigger)
+  UNIQUE (agent_name, step, trigger_condition)
 );

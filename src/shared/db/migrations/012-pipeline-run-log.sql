@@ -15,11 +15,11 @@ CREATE TABLE IF NOT EXISTS pipeline_run_log (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS pipeline_run_log_run_id_idx
+CREATE INDEX IF NOT EXISTS idx_pipeline_run_log_run_id
   ON pipeline_run_log (run_id);
 
-CREATE INDEX IF NOT EXISTS pipeline_run_log_agent_step_idx
+CREATE INDEX IF NOT EXISTS idx_pipeline_run_log_agent_step
   ON pipeline_run_log (agent_name, step);
 
-CREATE INDEX IF NOT EXISTS pipeline_run_log_status_idx
+CREATE INDEX IF NOT EXISTS idx_pipeline_run_log_status
   ON pipeline_run_log (status);
