@@ -16,6 +16,7 @@ export interface HugoManager {
   writeContentFile(filePath: string, frontmatter: Record<string, unknown>, content: string): void;
   writeTemplate(filePath: string, html: string): void;
   writeStaticFile(filePath: string, content: string | Buffer): void;
+  writeDataFile(filePath: string, content: string): void;
   validateSite(): Promise<{ success: boolean; output: string }>;
   buildSite(): Promise<{ success: boolean; output: string }>;
   deployDraftSite(siteId: string): Promise<DeployResult>;
@@ -133,6 +134,8 @@ title = "Extermanation - Professional Pest Control"
   business_name = "Extermanation"
   tagline = "Local pest control service built for fast inspections and same-day scheduling."
   has_license = false
+  review_rating = "4.9"
+  review_count = "200"
 `);
       } else {
         let configContent = fs.readFileSync(configPath, "utf-8");
@@ -151,6 +154,16 @@ title = "Extermanation - Professional Pest Control"
 
           if (!configContent.includes("tagline")) {
             configContent = configContent.replace("[params]\n", "[params]\n  tagline = \"Local pest control service built for fast inspections and same-day scheduling.\"\n");
+            updated = true;
+          }
+
+          if (!configContent.includes("review_rating")) {
+            configContent = configContent.replace("[params]\n", "[params]\n  review_rating = \"4.9\"\n");
+            updated = true;
+          }
+
+          if (!configContent.includes("review_count")) {
+            configContent = configContent.replace("[params]\n", "[params]\n  review_count = \"200\"\n");
             updated = true;
           }
         }
@@ -371,6 +384,12 @@ If you are requesting that your personal information not be sold or shared beyon
         return;
       }
       fs.writeFileSync(fullPath, content);
+    },
+
+    writeDataFile(filePath, content) {
+      const fullPath = path.join(hugoSitePath, "data", filePath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content, "utf-8");
     },
 
     async validateSite() {

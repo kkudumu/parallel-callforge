@@ -24,6 +24,10 @@ export const CopyFrameworkSchema = z.object({
     termites: z.string().min(1),
     bed_bugs: z.string().min(1),
     wildlife_rodents: z.string().min(1),
+    ants: z.string().optional(),
+    spiders: z.string().optional(),
+    cockroaches: z.string().optional(),
+    mosquitoes: z.string().optional(),
   }).describe("Core emotional angle by pest vertical"),
   faq_templates: z
     .array(z.object({ question: z.string(), answer_template: z.string() }))

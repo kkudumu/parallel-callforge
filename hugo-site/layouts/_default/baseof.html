@@ -12,6 +12,20 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ .Permalink }}">
   <style>
+    :root {
+      --color-cta-primary: var(--color-cta-primary);
+      --color-cta-primary-hover: var(--color-cta-primary-hover);
+      --color-trust: var(--color-trust);
+      --color-urgency: #C8290F;
+      --color-text: var(--color-text);
+      --color-text-muted: var(--color-text-muted);
+      --color-background: var(--color-background);
+      --color-surface: var(--color-surface);
+      --color-border: var(--color-border);
+      --font-size-body-desktop: 17px;
+      --font-size-body-mobile: 16px;
+      --font-size-cta: 18px;
+    }
     * {
       margin: 0;
       padding: 0;
@@ -22,8 +36,8 @@
     }
     body {
       font-family: Inter, system-ui, -apple-system, sans-serif;
-      color: #1A1A1A;
-      background-color: #FFFFFF;
+      color: var(--color-text);
+      background-color: var(--color-background);
       font-size: 16px;
       line-height: 1.6;
     }
@@ -79,7 +93,7 @@
       font-size: 16px;
       line-height: 1.6;
       margin-bottom: 12px;
-      color: #1A1A1A;
+      color: var(--color-text);
     }
     @media (min-width: 768px) {
       p {
@@ -104,12 +118,12 @@
       white-space: nowrap;
     }
     .btn-primary {
-      background-color: #D93A12;
-      color: #FFFFFF;
+      background-color: var(--color-cta-primary);
+      color: var(--color-background);
       width: 100%;
     }
     .btn-primary:hover {
-      background-color: #B52D0E;
+      background-color: var(--color-cta-primary-hover);
     }
     @media (min-width: 768px) {
       .btn-primary {
@@ -118,8 +132,8 @@
       }
     }
     .btn-secondary {
-      background-color: #2D7A3A;
-      color: #FFFFFF;
+      background-color: var(--color-trust);
+      color: var(--color-background);
     }
     .btn-secondary:hover {
       background-color: #1A5C2A;
@@ -131,8 +145,8 @@
       left: 0;
       right: 0;
       height: 56px;
-      background-color: #D93A12;
-      color: #FFFFFF;
+      background-color: var(--color-cta-primary);
+      color: var(--color-background);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -173,12 +187,12 @@
       right: 0;
       bottom: 0;
       text-decoration: none;
-      color: #FFFFFF;
+      color: var(--color-background);
     }
     /* Header */
     header {
-      background-color: #FFFFFF;
-      border-bottom: 1px solid #E8E8E8;
+      background-color: var(--color-background);
+      border-bottom: 1px solid var(--color-border);
       padding: 16px 0;
       position: relative;
       z-index: 100;
@@ -191,7 +205,7 @@
     .logo {
       font-size: 20px;
       font-weight: 700;
-      color: #1A1A1A;
+      color: var(--color-text);
       text-decoration: none;
     }
     .header-phone {
@@ -202,7 +216,10 @@
         display: block;
         font-size: 18px;
         font-weight: 600;
-        color: #D93A12;
+        color: var(--color-cta-primary);
+      }
+      .call-recording-note {
+        display: block !important;
       }
     }
     .nav {
@@ -211,17 +228,17 @@
       align-items: center;
     }
     .nav a {
-      color: #1A1A1A;
+      color: var(--color-text);
       text-decoration: none;
       font-size: 16px;
       transition: color 0.2s;
     }
     .nav a:hover {
-      color: #D93A12;
+      color: var(--color-cta-primary);
     }
     /* Footer */
     footer {
-      background-color: #F7F7F5;
+      background-color: var(--color-surface);
       padding: 40px 0 56px;
     }
     @media (min-width: 768px) {
@@ -256,13 +273,13 @@
       margin-bottom: 8px;
     }
     .footer-section a {
-      color: #5C5C5C;
+      color: var(--color-text-muted);
       text-decoration: none;
       font-size: 14px;
       transition: color 0.2s;
     }
     .footer-section a:hover {
-      color: #D93A12;
+      color: var(--color-cta-primary);
     }
     .nap-block {
       margin-bottom: 24px;
@@ -274,7 +291,7 @@
     .footer-phone {
       font-size: 20px;
       font-weight: 700;
-      color: #D93A12;
+      color: var(--color-cta-primary);
       margin-bottom: 12px;
     }
     .trust-icons-row {
@@ -286,7 +303,7 @@
     .trust-icon {
       width: 48px;
       height: 48px;
-      background-color: #FFFFFF;
+      background-color: var(--color-background);
       border-radius: 8px;
       display: flex;
       align-items: center;
@@ -295,7 +312,7 @@
       text-align: center;
       padding: 8px;
       font-weight: 600;
-      color: #2D7A3A;
+      color: var(--color-trust);
     }
     /* Spacing */
     section {
@@ -361,22 +378,25 @@
       display: block;
     }
   </style>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/generated-theme.css">
   {{ block "additional-styles" . }}{{ end }}
-  {{ if .Params.schema }}
+  {{ if .Params.schema_template }}
   <script type="application/ld+json">
-  {{ .Params.schema | jsonify }}
+  {{ .Params.schema_template | jsonify | safeHTML }}
   </script>
   {{ end }}
 </head>
 <body>
-  <a href="#main-content" class="skip-link" style="position: absolute; top: -40px; left: 0; background: #D93A12; color: white; padding: 8px; z-index: 100;">Skip to main content</a>
+  <a href="#main-content" class="skip-link" style="position: absolute; top: -40px; left: 0; background: var(--color-cta-primary); color: white; padding: 8px; z-index: 100;">Skip to main content</a>
   
   <header role="banner">
     <div class="container">
       <div class="header-content">
         <a href="{{ .Site.BaseURL }}" class="logo">{{ .Site.Params.business_name }}</a>
         <div class="nav">
-          <span class="header-phone">{{ .Site.Params.phone }}</span>
+          <a href="tel:{{ .Site.Params.phone_raw }}" class="header-phone" style="text-decoration: none; color: var(--color-cta-primary);">{{ .Site.Params.phone }}</a>
+          <span class="call-recording-note" style="display: none; font-size: 11px; color: var(--color-text-muted);">Calls may be recorded</span>
         </div>
       </div>
     </div>
@@ -387,8 +407,9 @@
       <path d="M17.92 7.02C17.45 6.18 16.84 5.48 16.07 4.9M19.07 11.07C19.54 10.23 19.93 9.32 20.16 8.37M21 16.92v3.5c0 1.08-.892 2-2 2-.59 0-1.12-.147-1.6-.38-1.95-.88-3.63-2.24-4.8-3.97-.5-.75-.88-1.58-1.11-2.49-.1-.39-.15-.8-.15-1.23v-2c0-1.1.9-2 2-2h2.5c1.1 0 2 .9 2 2 0 .5-.1 1-.27 1.46"/>
     </svg>
     <div class="sticky-call-bar__content">
-      <div class="sticky-call-bar__urgency">Help Now</div>
+      <div class="sticky-call-bar__urgency">{{ .Params.sticky_cta_text | default "Call Now" }}</div>
       <div class="sticky-call-bar__number">{{ .Site.Params.phone }}</div>
+      <div class="sticky-recording-note" style="font-size: 10px; opacity: 0.8;">Calls may be recorded</div>
     </div>
     <a href="tel:{{ .Site.Params.phone_raw }}" class="sticky-call-bar__link"></a>
   </div>
@@ -406,7 +427,7 @@
             <p>{{ .Site.Params.address }}</p>
             <p>{{ .Site.Params.service_area }}</p>
             <div class="footer-phone">
-              <a href="tel:{{ .Site.Params.phone_raw }}" style="color: #D93A12; text-decoration: none;">{{ .Site.Params.phone }}</a>
+              <a href="tel:{{ .Site.Params.phone_raw }}" style="color: var(--color-cta-primary); text-decoration: none;">{{ .Site.Params.phone }}</a>
             </div>
           </div>
         </div>
@@ -430,14 +451,16 @@
           <h3>Company</h3>
           <ul>
             <li><a href="/about/">About Us</a></li>
-            <li><a href="/disclaimer/">Disclaimer</a></li>
-            <li><a href="/privacy/">Privacy Policy</a></li>
+            <li><a href="{{ .Site.Params.terms_url | default "/disclaimer/" }}">Disclaimer</a></li>
+            <li><a href="{{ .Site.Params.privacy_policy_url | default "/privacy/" }}">Privacy Policy</a></li>
+            <li><a href="{{ .Site.Params.do_not_sell_url | default "/do-not-sell/" }}">Do Not Sell My Info</a></li>
             <li><a href="/contact/">Contact</a></li>
           </ul>
+          {{ if .Site.Params.license_disclaimer }}<p style="font-size: 11px; color: var(--color-text-muted); margin-top: 12px;">{{ .Site.Params.license_disclaimer }}</p>{{ end }}
           <div class="trust-icons-row">
             {{ if .Site.Params.has_license }}<div class="trust-icon">Licensed</div>{{ end }}
             <div class="trust-icon">Insured</div>
-            <div class="trust-icon">⭐5.0</div>
+            <div class="trust-icon">⭐{{ .Site.Params.review_rating | default "5.0" }}</div>
           </div>
         </div>
       </div>

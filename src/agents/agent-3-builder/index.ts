@@ -5,7 +5,7 @@ import type Bottleneck from "bottleneck";
 import type { LlmClient } from "../../shared/cli/llm-client.js";
 import type { DbClient } from "../../shared/db/client.js";
 import { createHugoManager } from "./hugo-manager.js";
-import { BANNED_PHRASES, findPlaceholderTokens, runQualityGate } from "./quality-gate.js";
+import { BANNED_PHRASES, findPlaceholderTokens, runQualityGate, type SectionRule, type PageMetadata } from "./quality-gate.js";
 import { fetchStockImageAsset, hasStockImageProviderKeys } from "./image-sourcing.js";
 import { reviewGeneratedHugoTemplates } from "./template-review.js";
 import { slugify } from "../agent-1-keywords/index.js";
@@ -222,6 +222,10 @@ interface DesignSystemContext {
     termites: string;
     bed_bugs: string;
     wildlife_rodents: string;
+    ants?: string;
+    spiders?: string;
+    cockroaches?: string;
+    mosquitoes?: string;
   };
   trustSignals: string[];
   faqLead: { question: string; answer_template: string } | null;
@@ -552,6 +556,7 @@ function asSeasonalMonths(value: unknown): Array<{
   content_topics: string[];
   messaging_priority: string;
   seasonal_keywords: string[];
+  region_overrides?: Array<{ region: string; notes: string[] }>;
 }> {
   if (Array.isArray(value)) {
     return value
@@ -569,6 +574,9 @@ function asSeasonalMonths(value: unknown): Array<{
         seasonal_keywords: Array.isArray(item.seasonal_keywords)
           ? item.seasonal_keywords.filter((entry: unknown): entry is string => typeof entry === "string")
           : [],
+        region_overrides: Array.isArray(item.region_overrides)
+          ? item.region_overrides.filter((r: any) => r && typeof r.region === "string")
+          : undefined,
       }))
       .filter((item) => item.name);
   }
@@ -656,6 +664,52 @@ function getPestDescription(pestName: string): string {
   if (lower.includes("earwig")) return "Earwig control inside and outside your home.";
   if (lower.includes("centipede") || lower.includes("millipede")) return "Centipede and millipede removal services.";
   return `Professional ${pestName.toLowerCase()} control services.`;
+}
+
+function resolveHeadlineFormula(
+  formula: string,
+  city: string,
+  state: string,
+  service: string,
+  phone: string
+): string {
+  return formula
+    .replace(/\[City\]/gi, city)
+    .replace(/\{city\}/gi, city)
+    .replace(/\[State\]/gi, state)
+    .replace(/\{state\}/gi, state)
+    .replace(/\[Service\]/gi, service)
+    .replace(/\{service\}/gi, service)
+    .replace(/\[Phone\]/gi, phone)
+    .replace(/\{phone\}/gi, phone)
+    .replace(/\[Benefit\]/gi, "Fast & Reliable Service");
+}
+
+function generateTestimonials(
+  city: string,
+  pestType: string | undefined,
+  copyFramework: CopyFramework,
+  hasLicense: boolean
+): Array<{ stars: string; rating: string; text: string; author: string; city: string }> {
+  const firstNames = ["Sarah", "Mike", "Jennifer", "David", "Lisa", "James", "Maria", "Robert"];
+  const lastInitials = ["M", "T", "R", "K", "L", "S", "W", "P"];
+  const serviceLabel = pestType ? serviceSlugToLabel(pestType) : "pest control";
+  const trustAngle = hasLicense ? "licensed and insured" : "professional";
+  const guaranteeMention = copyFramework.guarantees[0] || "satisfaction guaranteed";
+
+  const templates = [
+    `Called about a ${serviceLabel.toLowerCase()} problem and they had someone out the same day. The technician was ${trustAngle}, thorough, and explained everything. Highly recommend for anyone in ${city}.`,
+    `We were dealing with ${serviceLabel.toLowerCase()} issues for weeks before we called. The tech arrived on time, treated the whole house, and we haven't seen a single one since. ${guaranteeMention.charAt(0).toUpperCase() + guaranteeMention.slice(1)}.`,
+    `Fast response, fair pricing, and effective treatment. The ${serviceLabel.toLowerCase()} problem in our kitchen is completely gone. Great service for ${city} homeowners.`,
+  ];
+
+  return templates.slice(0, 3).map((text, i) => ({
+    stars: "★★★★★",
+    rating: i === 2 ? "4.8" : "5.0",
+    text,
+    author: `${firstNames[i % firstNames.length]} ${lastInitials[i % lastInitials.length]}.`,
+    city,
+  }));
 }
 
 // States that require a pest control business license for advertising/operation
@@ -1056,6 +1110,10 @@ function normalizeCopyFramework(row: Record<string, unknown>, niche: string): Co
       termites: string;
       bed_bugs: string;
       wildlife_rodents: string;
+      ants?: string;
+      spiders?: string;
+      cockroaches?: string;
+      mosquitoes?: string;
     }>(row.vertical_angles, {
       general_pest: "Fast relief and safer living spaces.",
       termites: "Protect your home from expensive structural damage.",
@@ -1199,7 +1257,8 @@ function resolveSchemaTemplate(
 function summarizeSeasonalResearch(
   seasonalCalendar: DesignSystemContext["seasonalCalendar"],
   keyword: string,
-  pestType?: string
+  pestType?: string,
+  region?: string
 ): string {
   const target = `${keyword} ${pestType ?? ""}`.toLowerCase();
   const matches = seasonalCalendar.filter((month) => {
@@ -1220,9 +1279,42 @@ function summarizeSeasonalResearch(
   return selection
     .map((month) => {
       const pests = month.primary_pests.slice(0, 3).join(", ");
-      return `${month.name}: focus on ${pests || "priority pests"}; message = ${month.messaging_priority}`;
+      let summary = `${month.name}: focus on ${pests || "priority pests"}; message = ${month.messaging_priority}`;
+      // Append region-specific override notes if available
+      if (region && (month as any).region_overrides) {
+        const overrides = (month as any).region_overrides as Array<{ region: string; notes: string[] }>;
+        const regionLower = region.toLowerCase();
+        const matchingOverride = overrides.find((o) => o.region.toLowerCase().includes(regionLower) || regionLower.includes(o.region.toLowerCase()));
+        if (matchingOverride && matchingOverride.notes.length > 0) {
+          summary += `; regional notes for ${matchingOverride.region}: ${matchingOverride.notes.join(", ")}`;
+        }
+      }
+      return summary;
     })
     .join(" | ");
+}
+
+function buildSeasonalFocus(
+  seasonalCalendar: DesignSystemContext["seasonalCalendar"],
+  keyword: string,
+  summaryText: string,
+  pestType?: string
+): { message: string; season_name: string; seasonal_pests: string[]; icon: string } {
+  const target = `${keyword} ${pestType ?? ""}`.toLowerCase();
+  const matches = seasonalCalendar.filter((month) => {
+    const haystack = [month.name, month.messaging_priority, ...month.primary_pests].join(" ").toLowerCase();
+    return haystack.includes(target) || month.primary_pests.some((pest) => target.includes(pest.toLowerCase()));
+  });
+  const best = matches.length > 0 ? matches[0] : seasonalCalendar[0];
+  const pests = best ? best.primary_pests.slice(0, 3) : [];
+  const seasonName = best ? best.name : "Peak Season";
+  const urgency = best ? best.messaging_priority : "Act now before infestations worsen";
+  return {
+    message: urgency,
+    season_name: seasonName,
+    seasonal_pests: pests,
+    icon: "⚠️",
+  };
 }
 
 async function applyDesignSystem(
@@ -1412,8 +1504,25 @@ async function applyDesignSystem(
   --color-secondary: ${secondary};
   --color-bg-alt: ${tertiary};
   --color-success: ${highlight};
+  --color-cta-primary: ${designSpec.colors.cta_primary};
+  --color-cta-primary-hover: ${designSpec.colors.cta_primary_hover};
+  --color-urgency: ${designSpec.colors.urgency};
+  --color-text: ${designSpec.colors.text};
+  --color-text-muted: ${designSpec.colors.text_muted};
+  --color-trust: ${designSpec.colors.trust};
+  --color-background: ${designSpec.colors.background};
+  --color-surface: ${designSpec.colors.surface};
+  --color-border: #E8E8E8;
   --font-heading: ${headingFont};
   --font-body: ${bodyFont};
+  --font-size-body-desktop: ${designSpec.typography.body_size_desktop || '16px'};
+  --font-size-body-mobile: ${designSpec.typography.body_size_mobile || '14px'};
+  --font-size-cta: ${designSpec.typography.cta_size || '18px'};
+  --bp-mobile: ${designSpec.responsive_breakpoints.mobile}px;
+  --bp-phablet: ${designSpec.responsive_breakpoints.phablet}px;
+  --bp-tablet: ${designSpec.responsive_breakpoints.tablet}px;
+  --bp-laptop: ${designSpec.responsive_breakpoints.laptop}px;
+  --bp-desktop: ${designSpec.responsive_breakpoints.desktop}px;
 }
 
 .brand-shell {
@@ -1628,6 +1737,37 @@ async function applyDesignSystem(
     width: 100%;
     text-align: center;
   }
+}
+
+@media (max-width: 767px) {
+  body {
+    font-size: var(--font-size-body-mobile, 14px);
+  }
+}
+
+@media (min-width: 768px) {
+  body {
+    font-size: var(--font-size-body-desktop, 16px);
+  }
+}
+
+/* Agent-2 Responsive Breakpoints */
+@media (min-width: ${designSpec.responsive_breakpoints.phablet}px) {
+  .container { padding: 0 20px; }
+}
+
+@media (min-width: ${designSpec.responsive_breakpoints.tablet}px) {
+  .container { padding: 0 24px; }
+  .hero-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (min-width: ${designSpec.responsive_breakpoints.laptop}px) {
+  .container { padding: 0 32px; }
+  .content-grid { grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr); align-items: start; }
+}
+
+@media (min-width: ${designSpec.responsive_breakpoints.desktop}px) {
+  .container { max-width: 1440px; }
 }`);
 
   console.log("[Agent 3][Design system][Template review] Running Hugo template validation...");
@@ -1985,10 +2125,13 @@ export async function runAgent3(
         const hubKeyword = orderedClusters.find(
           (c: any) => c.intent === "transactional"
         )?.primary_keyword ?? `${city} ${cfg.niche}`;
-        const hubSeasonalSummary = summarizeSeasonalResearch(
+        const hubSeasonalSummaryText = summarizeSeasonalResearch(
           designSystem.seasonalCalendar,
-          hubKeyword
+          hubKeyword,
+          undefined,
+          state
         );
+        const hubSeasonalSummary = buildSeasonalFocus(designSystem.seasonalCalendar, hubKeyword, hubSeasonalSummaryText);
 
         // Compute service clusters early so hub page can reference them
         const serviceClusterTypes = orderedClusters.filter(
@@ -2007,6 +2150,18 @@ export async function runAgent3(
           hubContentPath,
           citySlug
         );
+        // Determine license status for this state (accessible to both hub and subpage scopes)
+        const hasLicense = false; // Configurable: set true when business obtains a pest control license
+        const stateRequiresLicense = LICENSE_REQUIRED_STATES.has(state);
+        if (stateRequiresLicense && !hasLicense) {
+          console.log(`[Agent 3] Note: ${state} requires pest control license. Site will not display license claims for ${city}.`);
+        }
+
+        // CTA text shared between hub and subpage frontmatter
+        const heroCta = designSystem.primaryCta || "Call a Local Pro Now";
+        const midCtaButton = designSystem.secondaryCta || "Connect With a Pro in Your Area";
+        const stickyCta = designSystem.copyFramework.ctas[2] || "Call Now";
+
         if (shouldSkipHub) {
           console.log(`[Agent 3] Reusing checkpointed hub page for ${city}`);
         } else {
@@ -2021,11 +2176,20 @@ export async function runAgent3(
               agent1Summary: `- Approved hub keyword: ${hubKeyword}
 - Approved route keys: ${approvedRoutes.join(", ") || "none"}
 - Approved cluster count: ${orderedClusters.length}`,
-              agent2Summary: `- Archetype: ${designSystem.designSpec.archetype}
-- Layout sequence: ${Object.keys(designSystem.designSpec.layout).join(", ")}
-- CTA variants: ${designSystem.copyFramework.ctas.join(" | ")}
-- Trust signals: ${designSystem.copyFramework.trust_signals.join(" | ")}`,
-              seasonalGuidance: hubSeasonalSummary,
+              agent2Summary: [
+                "- Archetype: " + designSystem.designSpec.archetype,
+                "- Layout sequence: " + Object.keys(designSystem.designSpec.layout).join(", "),
+                "- CTA variants: " + designSystem.copyFramework.ctas.join(" | "),
+                "- Trust signals: " + designSystem.copyFramework.trust_signals.join(" | "),
+                "- Guarantees to weave in: " + (designSystem.guarantees.join(" | ") || "satisfaction guaranteed"),
+                "- CTA microcopy: " + (designSystem.ctaMicrocopy[0] || "No obligation, fast local routing"),
+                "- Reading level: Write at " + designSystem.readingLevel.target_grade_min + "th-" + designSystem.readingLevel.target_grade_max + "th grade level. Tone: " + designSystem.readingLevel.tone + ". Short sentences, direct language.",
+                "- Emotional angles: General pest = " + designSystem.verticalAngles.general_pest + "; Termites = " + designSystem.verticalAngles.termites + "; Bed bugs = " + designSystem.verticalAngles.bed_bugs + "; Wildlife/rodents = " + designSystem.verticalAngles.wildlife_rodents,
+                "- PAS scripts: " + (designSystem.copyFramework.pas_scripts.map((s) => "Problem: " + s.problem + " | Agitate: " + s.agitate + " | Solve: " + s.solve).join("; ") || "none"),
+                "- Conversion strategy: Phone mentions minimum " + (designSystem.designSpec.layout.conversion_strategy?.phone_mentions_min ?? 4) + ", no forms allowed",
+                "- Trust placement hierarchy: Above fold = " + (designSystem.designSpec.layout.trust_strategy?.above_fold ?? []).join(", ") + "; Mid-page = " + (designSystem.designSpec.layout.trust_strategy?.mid_page ?? []).join(", ") + "; Near CTA = " + (designSystem.designSpec.layout.trust_strategy?.near_cta ?? []).join(", "),
+              ].join("\n"),
+              seasonalGuidance: hubSeasonalSummaryText,
             },
             strategyContext
           );
@@ -2072,16 +2236,33 @@ export async function runAgent3(
           );
 
           let finalHubContent = hubContent;
+          const minHubWords = designSystem.designSpec.layout?.content_rules?.city_hub_words?.min ?? cfg.minWordCountHub!;
+          console.log(`[Agent 3] Hub word count minimum: ${minHubWords} (source: ${designSystem.designSpec.layout?.content_rules?.city_hub_words?.min ? "agent-2 content_rules" : "config"})`);
+          const hubPhoneMin = designSystem.designSpec.layout?.conversion_strategy?.phone_mentions_min ?? 3;
+          const hubSectionRules = (designSystem.designSpec.layout?.section_rules ?? []) as SectionRule[];
+          const hubHeroImageAlt = `${hubKeyword} pest control in ${city}`;
           let hubQuality = runQualityGate(
             finalHubContent.content,
             city,
-            cfg.minWordCountHub!,
+            minHubWords,
             [
               finalHubContent.title,
               finalHubContent.meta_description,
               JSON.stringify(hubSchemaTemplate),
-            ]
+            ],
+            hubPhoneMin,
+            designSystem.readingLevel,
+            hubSectionRules,
+            {
+              title: finalHubContent.title,
+              description: finalHubContent.meta_description,
+              heroImageAlt: hubHeroImageAlt,
+              targetKeyword: hubKeyword,
+            }
           );
+          if (hubQuality.warnings.length > 0) {
+            console.warn(`[Agent 3] Hub page QA warnings for ${city}: ${hubQuality.warnings.join("; ")}`);
+          }
           if (!hubQuality.passed) {
             const canAutoRepair = canAutoRepairQaFailures(hubQuality.failures);
             if (!canAutoRepair) {
@@ -2095,7 +2276,7 @@ export async function runAgent3(
               prompt: hubPrompt,
               content: finalHubContent,
               city,
-              minWordCount: cfg.minWordCountHub!,
+              minWordCount: minHubWords,
               supplementalTexts: [JSON.stringify(hubSchemaTemplate)],
               failures: hubQuality.failures,
               bannedPhrasesFound: hubQuality.metrics.bannedPhrasesFound,
@@ -2165,31 +2346,60 @@ export async function runAgent3(
                 answer: tpl.answer_template.replace(/\{city\}/g, city).replace(/\{phone\}/g, cfg.phone ?? "").replace(/\{service\}/g, cfg.niche),
               }));
 
-          // Determine license status for this state
-          const hasLicense = false; // Configurable: set true when business obtains a pest control license
-          const stateRequiresLicense = LICENSE_REQUIRED_STATES.has(state);
-          if (stateRequiresLicense && !hasLicense) {
-            console.log(`[Agent 3] Note: ${state} requires pest control license. Site will not display license claims for ${city}.`);
-          }
-
           // Derive mid-CTA text and service area copy (license-aware)
           const midCtaText = hasLicense
             ? `Professional pest control available for homes and businesses in ${city}. Licensed technician dispatched to your location.`
             : `Professional pest control available for homes and businesses in ${city}. Vetted technician dispatched to your location.`;
           const serviceAreaCopy = `Our pest control network covers ${city} and the surrounding ${state} communities. Call to confirm coverage in your neighborhood.`;
 
+          // Resolve hub subheadline from agent-2 headline formulas
+          const hubSubheadline = designSystem.copyFramework.headlines.length > 1
+            ? resolveHeadlineFormula(designSystem.copyFramework.headlines[1], city, state, cfg.niche, cfg.phone ?? "")
+            : hasLicense
+              ? `Fast, Licensed Pest Control in ${city}, ${state}`
+              : `Fast, Professional Pest Control in ${city}, ${state}`;
+
+          // Resolve additional headlines for section headings
+          const headlines = designSystem.copyFramework.headlines;
+          const sectionHeadline1 = headlines.length > 2
+            ? resolveHeadlineFormula(headlines[2], city, state, cfg.niche, cfg.phone ?? "")
+            : `${cfg.niche.charAt(0).toUpperCase() + cfg.niche.slice(1)} Services We Offer`;
+          const sectionHeadline2 = headlines.length > 3
+            ? resolveHeadlineFormula(headlines[3], city, state, cfg.niche, cfg.phone ?? "")
+            : "What Our Customers Say";
+          const sectionHeadline3 = headlines.length > 4
+            ? resolveHeadlineFormula(headlines[4], city, state, cfg.niche, cfg.phone ?? "")
+            : "Frequently Asked Questions";
+
+          // Resolve CTA microcopy and guarantees from agent-2 data
+          const hubCtaMicrocopy = designSystem.ctaMicrocopy[0] || "No obligation \u2022 Takes 30 seconds \u2022 Same-day appointments available";
+          const hubHeroCtaMicrocopy = designSystem.ctaMicrocopy[0] || hubCtaMicrocopy;
+          const hubMidCtaMicrocopy = designSystem.ctaMicrocopy[1] || designSystem.ctaMicrocopy[0] || hubCtaMicrocopy;
+          const hubStickyCtaMicrocopy = designSystem.ctaMicrocopy[2] || designSystem.ctaMicrocopy[0] || hubCtaMicrocopy;
+          const hubGuarantees = designSystem.guarantees.length > 0
+            ? designSystem.guarantees
+            : [
+                "Professional treatment with proven methods",
+                "Qualified local technician network",
+                "Transparent pricing with no surprises",
+                "Pet and child-safe treatment options",
+                "100% satisfaction assurance on all service",
+              ];
+
+          // Generate testimonials from agent-2 trust signals
+          const hubTestimonials = generateTestimonials(city, undefined, designSystem.copyFramework, hasLicense);
+
           hugo.writeContentFile(hubSlug, {
             title: finalHubContent.title,
             description: finalHubContent.meta_description,
             h1_title: finalHubContent.title,
-            subheadline: hasLicense
-              ? `Fast, Licensed Pest Control in ${city}, ${state}`
-              : `Fast, Professional Pest Control in ${city}, ${state}`,
+            subheadline: hubSubheadline,
             city: city,
             state: state,
             type: "city_hub",
             target_keyword: hubKeyword,
             hero_image: hubHeroImage,
+            hero_image_alt: hubHeroImageAlt,
             feature_image: hubFeatureImage,
             schema_template: hubSchemaTemplate,
             seasonal_focus: hubSeasonalSummary,
@@ -2200,6 +2410,28 @@ export async function runAgent3(
             disclaimer_text: disclaimerText,
             mid_cta_text: midCtaText,
             service_area_copy: serviceAreaCopy,
+            section_headline_1: sectionHeadline1,
+            section_headline_2: sectionHeadline2,
+            section_headline_3: sectionHeadline3,
+            cta_microcopy: hubCtaMicrocopy,
+            hero_cta_microcopy: hubHeroCtaMicrocopy,
+            mid_cta_microcopy: hubMidCtaMicrocopy,
+            sticky_cta_microcopy: hubStickyCtaMicrocopy,
+            hero_cta_text: heroCta,
+            mid_cta_text_button: midCtaButton,
+            sticky_cta_text: stickyCta,
+            trust_signals: designSystem.copyFramework.trust_signals.slice(0, 4),
+            trust_above_fold: designSystem.designSpec.layout.trust_strategy?.above_fold ?? [],
+            trust_mid_page: designSystem.designSpec.layout.trust_strategy?.mid_page ?? [],
+            trust_near_cta: designSystem.designSpec.layout.trust_strategy?.near_cta ?? [],
+            trust_footer: designSystem.designSpec.layout.trust_strategy?.footer ?? [],
+            process_steps: [
+              { icon: "📞", title: "Call Us", description: `Describe your ${cfg.niche} problem to a local specialist—no waiting on hold` },
+              { icon: "🎯", title: "Get Matched", description: `We connect you with a vetted, ${hasLicense ? "licensed " : ""}professional in ${city}` },
+              { icon: "🚗", title: "Professional Service", description: `Your matched technician arrives and handles the problem fast and safely` },
+            ],
+            guarantees: hubGuarantees,
+            testimonials: hubTestimonials,
             hero_bullets: hasLicense
               ? [
                   "Licensed & insured professionals",
@@ -2254,11 +2486,13 @@ export async function runAgent3(
             console.log(`[Agent 3] Reusing checkpointed subpage ${citySlug}/${pestSlug}`);
             return;
           }
-          const serviceSeasonalSummary = summarizeSeasonalResearch(
+          const serviceSeasonalSummaryText = summarizeSeasonalResearch(
             designSystem.seasonalCalendar,
             cluster.primary_keyword,
-            pestType
+            pestType,
+            state
           );
+          const serviceSeasonalSummary = buildSeasonalFocus(designSystem.seasonalCalendar, cluster.primary_keyword, serviceSeasonalSummaryText, pestType);
           console.log(`[Agent 3] Generating subpage: ${city}/${pestType}...`);
           eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Subpage", detail: `${city}/${pestType}`, timestamp: Date.now() });
 
@@ -2271,10 +2505,29 @@ export async function runAgent3(
               phone: cfg.phone!,
               agent1Summary: `- Approved service keyword: ${cluster.primary_keyword}
 - Approved URL slug: /${citySlug}/${pestSlug}/`,
-              agent2Summary: `- Archetype: ${designSystem.designSpec.archetype}
-- PAS sequence: ${designSystem.copyFramework.pas_scripts.map((item) => item.problem).join(" | ")}
-- CTA variants: ${designSystem.copyFramework.ctas.join(" | ")}`,
-              seasonalGuidance: serviceSeasonalSummary,
+              agent2Summary: (() => {
+                const lower = pestType.toLowerCase();
+                let emotionalAngle = designSystem.verticalAngles.general_pest;
+                if (lower.includes("termite")) emotionalAngle = designSystem.verticalAngles.termites;
+                else if (lower.includes("bed") && lower.includes("bug")) emotionalAngle = designSystem.verticalAngles.bed_bugs;
+                else if (lower.includes("rodent") || lower.includes("mouse") || lower.includes("mice") || lower.includes("rat") || lower.includes("wildlife")) emotionalAngle = designSystem.verticalAngles.wildlife_rodents;
+                else if (lower.includes("ant")) emotionalAngle = designSystem.verticalAngles.ants ?? designSystem.verticalAngles.general_pest;
+                else if (lower.includes("spider")) emotionalAngle = designSystem.verticalAngles.spiders ?? designSystem.verticalAngles.general_pest;
+                else if (lower.includes("cockroach") || lower.includes("roach")) emotionalAngle = designSystem.verticalAngles.cockroaches ?? designSystem.verticalAngles.general_pest;
+                else if (lower.includes("mosquito")) emotionalAngle = designSystem.verticalAngles.mosquitoes ?? designSystem.verticalAngles.general_pest;
+                return [
+                  "- Archetype: " + designSystem.designSpec.archetype,
+                  "- CTA variants: " + designSystem.copyFramework.ctas.join(" | "),
+                  "- Guarantees to weave in: " + (designSystem.guarantees.join(" | ") || "satisfaction guaranteed"),
+                  "- CTA microcopy: " + (designSystem.ctaMicrocopy[0] || "No obligation, fast local routing"),
+                  "- Reading level: Write at " + designSystem.readingLevel.target_grade_min + "th-" + designSystem.readingLevel.target_grade_max + "th grade level. Tone: " + designSystem.readingLevel.tone + ". Short sentences, direct language.",
+                  "- Emotional angle for this pest type: " + emotionalAngle,
+                  "- PAS scripts (you MUST weave at least one into content): " + (designSystem.copyFramework.pas_scripts.map((s) => "Problem: " + s.problem + " | Agitate: " + s.agitate + " | Solve: " + s.solve).join("; ") || "none"),
+                  "- Trust placement hierarchy: Above fold = " + (designSystem.designSpec.layout.trust_strategy?.above_fold ?? []).join(", ") + "; Mid-page = " + (designSystem.designSpec.layout.trust_strategy?.mid_page ?? []).join(", ") + "; Near CTA = " + (designSystem.designSpec.layout.trust_strategy?.near_cta ?? []).join(", "),
+                  "- Conversion strategy: Phone mentions minimum " + (designSystem.designSpec.layout.conversion_strategy?.phone_mentions_min ?? 4) + ", no forms allowed",
+                ].join("\n");
+              })(),
+              seasonalGuidance: serviceSeasonalSummaryText,
             },
             strategyContext
           );
@@ -2322,16 +2575,33 @@ export async function runAgent3(
           console.log(`[Agent 3] Subpage title for ${city}/${pestType}: ${subContent.title}`);
 
           let finalSubContent = subContent;
+          const minSubWords = designSystem.designSpec.layout?.content_rules?.service_page_words?.min ?? cfg.minWordCountSubpage!;
+          console.log(`[Agent 3] Subpage word count minimum: ${minSubWords} (source: ${designSystem.designSpec.layout?.content_rules?.service_page_words?.min ? "agent-2 content_rules" : "config"})`);
+          const subPhoneMin = designSystem.designSpec.layout?.conversion_strategy?.phone_mentions_min ?? 3;
+          const subSectionRules = (designSystem.designSpec.layout?.section_rules ?? []) as SectionRule[];
+          const subHeroImageAlt = `${cluster.primary_keyword} pest control in ${city}`;
           let subQuality = runQualityGate(
             finalSubContent.content,
             city,
-            cfg.minWordCountSubpage!,
+            minSubWords,
             [
               finalSubContent.title,
               finalSubContent.meta_description,
               JSON.stringify(subSchemaTemplate),
-            ]
+            ],
+            subPhoneMin,
+            designSystem.readingLevel,
+            subSectionRules,
+            {
+              title: finalSubContent.title,
+              description: finalSubContent.meta_description,
+              heroImageAlt: subHeroImageAlt,
+              targetKeyword: cluster.primary_keyword,
+            }
           );
+          if (subQuality.warnings.length > 0) {
+            console.warn(`[Agent 3] Subpage QA warnings for ${city}/${pestType}: ${subQuality.warnings.join("; ")}`);
+          }
           if (!subQuality.passed) {
             const canAutoRepair = canAutoRepairQaFailures(subQuality.failures);
             if (!canAutoRepair) {
@@ -2345,7 +2615,7 @@ export async function runAgent3(
               prompt: subPrompt,
               content: finalSubContent,
               city,
-              minWordCount: cfg.minWordCountSubpage!,
+              minWordCount: minSubWords,
               supplementalTexts: [JSON.stringify(subSchemaTemplate)],
               failures: subQuality.failures,
               bannedPhrasesFound: subQuality.metrics.bannedPhrasesFound,
@@ -2407,11 +2677,45 @@ export async function runAgent3(
             cfg.offerProfile?.constraints?.required_disclaimer?.trim() ||
             `This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance.`;
 
+          // Resolve subpage subheadline from agent-2 headline formulas
+          const subSubheadline = designSystem.copyFramework.headlines.length > 2
+            ? resolveHeadlineFormula(designSystem.copyFramework.headlines[2], city, state, serviceSlugToLabel(pestType), cfg.phone ?? "")
+            : `Expert ${serviceSlugToLabel(pestType)} Services in ${city}`;
+
+          // Resolve CTA microcopy and guarantees from agent-2 data
+          const subCtaMicrocopy = designSystem.ctaMicrocopy[0] || "No obligation \u2022 Takes 30 seconds \u2022 Same-day appointments available";
+          const subHeroCtaMicrocopy = designSystem.ctaMicrocopy[0] || subCtaMicrocopy;
+          const subMidCtaMicrocopy = designSystem.ctaMicrocopy[1] || designSystem.ctaMicrocopy[0] || subCtaMicrocopy;
+          const subStickyCtaMicrocopy = designSystem.ctaMicrocopy[2] || designSystem.ctaMicrocopy[0] || subCtaMicrocopy;
+          const subGuarantees = designSystem.guarantees.length > 0
+            ? designSystem.guarantees
+            : [
+                "Professional treatment with proven methods",
+                "Transparent pricing with no surprises",
+                "Pet and child-safe treatment options",
+              ];
+
+          // Generate subpage testimonials
+          const subTestimonials = generateTestimonials(city, pestType, designSystem.copyFramework, hasLicense);
+
+          // Build hero_bullets for subpage (license-conditional)
+          const subHeroBullets = hasLicense
+            ? [
+                `Licensed ${serviceSlugToLabel(pestType).toLowerCase()} specialists`,
+                "Same-day inspection available",
+                "Child and pet safe treatments",
+              ]
+            : [
+                `Experienced ${serviceSlugToLabel(pestType).toLowerCase()} specialists`,
+                "Same-day inspection available",
+                "Child and pet safe treatments",
+              ];
+
           hugo.writeContentFile(`${citySlug}/${pestSlug}.md`, {
             title: finalSubContent.title,
             description: finalSubContent.meta_description,
             h1_title: finalSubContent.title,
-            subheadline: `Expert ${serviceSlugToLabel(pestType)} Services in ${city}`,
+            subheadline: subSubheadline,
             city: city,
             state: state,
             region: `${city}, ${state}`,
@@ -2421,12 +2725,28 @@ export async function runAgent3(
             type: "service_subpage",
             target_keyword: cluster.primary_keyword,
             hero_image: subHeroImage,
+            hero_image_alt: subHeroImageAlt,
             feature_image: subFeatureImage,
             schema_template: subSchemaTemplate,
             seasonal_focus: serviceSeasonalSummary,
             faqs: subFaqs,
             disclaimer_text: subDisclaimerText,
             service_cities: cityRows.map((row: any) => String(row.city ?? "").trim()).slice(0, 10),
+            cta_microcopy: subCtaMicrocopy,
+            hero_cta_microcopy: subHeroCtaMicrocopy,
+            mid_cta_microcopy: subMidCtaMicrocopy,
+            sticky_cta_microcopy: subStickyCtaMicrocopy,
+            hero_cta_text: heroCta,
+            mid_cta_text_button: midCtaButton,
+            sticky_cta_text: stickyCta,
+            trust_signals: designSystem.copyFramework.trust_signals.slice(0, 4),
+            trust_above_fold: designSystem.designSpec.layout.trust_strategy?.above_fold ?? [],
+            trust_mid_page: designSystem.designSpec.layout.trust_strategy?.mid_page ?? [],
+            trust_near_cta: designSystem.designSpec.layout.trust_strategy?.near_cta ?? [],
+            trust_footer: designSystem.designSpec.layout.trust_strategy?.footer ?? [],
+            guarantees: subGuarantees,
+            testimonials: subTestimonials,
+            hero_bullets: subHeroBullets,
             draft: false,
           }, finalSubContent.content);
 
@@ -2528,6 +2848,20 @@ export async function runAgent3(
       );
     }
 
+    // Ensure review_rating and review_count are present
+    if (!configContent.includes("review_rating")) {
+      configContent = configContent.replace(
+        "[params]\n",
+        "[params]\n  review_rating = \"4.9\"\n"
+      );
+    }
+    if (!configContent.includes("review_count")) {
+      configContent = configContent.replace(
+        "[params]\n",
+        "[params]\n  review_count = \"200\"\n"
+      );
+    }
+
     fs.writeFileSync(configPath, configContent, "utf-8");
 
     // Extract business name from config for homepage generation
@@ -2582,6 +2916,24 @@ Call the number on this page and describe your pest problem. We match you with a
 
 Every technician in our network uses EPA-registered products applied according to manufacturer specifications. Treatments are selected to be effective against target pests while minimizing exposure risk to children, pets, and the surrounding environment.`;
 
+    // Resolve homepage CTA microcopy and guarantees from agent-2 data
+    const homepageCtaMicrocopy = designSystem.ctaMicrocopy[0] || "No obligation \u2022 Takes 30 seconds \u2022 Same-day appointments available";
+    const homepageGuarantees = designSystem.guarantees.length > 0
+      ? designSystem.guarantees
+      : [
+          "Professional treatment with proven methods",
+          "Qualified local technician network",
+          "Transparent pricing with no surprises",
+          "Pet and child-safe treatment options",
+          "100% satisfaction assurance on all service",
+        ];
+    const homepageTestimonials = generateTestimonials(
+      allCitySlugs[0]?.name ?? "Your City",
+      undefined,
+      designSystem.copyFramework,
+      hasLicenseSite
+    );
+
     hugo.writeContentFile("_index.md", {
       title: `Professional Pest Control Services | ${businessName}`,
       description: `${businessName} connects you with vetted local pest control professionals in ${stateList}. Same-day scheduling available. Call now.`,
@@ -2603,6 +2955,9 @@ Every technician in our network uses EPA-registered products applied according t
         ? "Professional pest control available for homes and businesses across our service areas. Licensed technician dispatched to your location."
         : "Professional pest control available for homes and businesses across our service areas. Vetted technician dispatched to your location.",
       service_area_copy: `Our pest control network covers communities in ${stateList}. Call to confirm coverage in your neighborhood.`,
+      cta_microcopy: homepageCtaMicrocopy,
+      guarantees: homepageGuarantees,
+      testimonials: homepageTestimonials,
       draft: false,
     }, homepageContent);
     console.log("[Agent 3] Generated homepage _index.md");

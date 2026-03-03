@@ -180,6 +180,12 @@ Requirements:
 - Write in a professional but approachable tone
 - Include local trust signals (serving {city} since..., local team...)
 
+Additional Requirements:
+- Write at 5th-7th grade reading level. Use short, direct sentences.
+- Use PAS (Problem-Agitate-Solve) structure at least once in the body content.
+- Include at least one guarantee statement naturally in the copy.
+- Mention the phone number at least 4 times throughout the content.
+
 CRITICAL: Do NOT use any of these AI-sounding phrases:
 - "it is important to note", "in conclusion", "when it comes to"
 - "it's worth noting", "in today's world", "without further ado"
@@ -201,6 +207,12 @@ Requirements:
 - Include FAQ section (4-6 questions)
 - Professional, authoritative tone
 - Clear CTA sections with phone placeholder {phone}
+
+Additional Requirements:
+- Write at 5th-7th grade reading level. Use short, direct sentences.
+- Use PAS (Problem-Agitate-Solve) structure at least once in the body content.
+- Include at least one guarantee statement naturally in the copy.
+- Mention the phone number at least 4 times throughout the content.
 
 CRITICAL: Do NOT use AI-sounding phrases. Write like a local pest control expert.
 

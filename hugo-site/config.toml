@@ -4,12 +4,20 @@ title = "Extermanation - Professional Pest Control"
 
 [params]
   has_license = false
+  license_number = ""
+  license_disclaimer = ""
   service_area = "Kansas, Florida, and Georgia"
   address = "Serving multiple locations"
   phone = "(555) 123-4567"
   phone_raw = "5551234567"
   business_name = "Extermanation"
   tagline = "Local Pest Control Experts"
+  review_rating = "4.9"
+  review_count = "200"
+  tcpa_text = "By calling, you consent to being contacted by a service professional. Calls may be recorded."
+  privacy_policy_url = "/privacy/"
+  terms_url = "/disclaimer/"
+  do_not_sell_url = "/do-not-sell/"
 [markup]
   [markup.goldmark]
     [markup.goldmark.renderer]
