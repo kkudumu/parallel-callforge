@@ -336,6 +336,25 @@ function collectFilesRecursive(root: string, matcher: (filePath: string) => bool
   return files;
 }
 
+function repairBuiltArtifactPlaceholders(hugoSitePath: string, niche: string): number {
+  const nicheLabel = niche.replace(/-/g, " ");
+  const nicheLabelCapitalized = nicheLabel.charAt(0).toUpperCase() + nicheLabel.slice(1);
+  const contentDir = path.join(hugoSitePath, "content");
+  const mdFiles = collectFilesRecursive(contentDir, (f) => f.endsWith(".md"));
+  let repairedCount = 0;
+  for (const file of mdFiles) {
+    const content = fs.readFileSync(file, "utf-8");
+    if (content.includes("{Pest}") || content.includes("{pest}")) {
+      const fixed = content
+        .replace(/\{Pest\}/g, nicheLabelCapitalized)
+        .replace(/\{pest\}/g, nicheLabel);
+      fs.writeFileSync(file, fixed, "utf-8");
+      repairedCount++;
+    }
+  }
+  return repairedCount;
+}
+
 function runBuiltArtifactQa(
   hugoSitePath: string,
   citySlugs: string[] = []
@@ -747,6 +766,8 @@ function resolveHeadlineFormula(
     .replace(/\{state\}/gi, state)
     .replace(/\[Service\]/gi, service)
     .replace(/\{service\}/gi, service)
+    .replace(/\{Pest\}/g, service.charAt(0).toUpperCase() + service.slice(1))
+    .replace(/\{pest\}/g, service)
     .replace(/\[Phone\]/gi, phone)
     .replace(/\{phone\}/gi, phone)
     .replace(/\[Benefit\]/gi, "Fast & Reliable Service");
@@ -762,7 +783,12 @@ function generateTestimonials(
   const lastInitials = ["M", "T", "R", "K", "L", "S", "W", "P"];
   const serviceLabel = pestType ? serviceSlugToLabel(pestType) : "pest control";
   const trustAngle = hasLicense ? "licensed and insured" : "professional";
-  const guaranteeMention = copyFramework.guarantees[0] || "satisfaction guaranteed";
+  const rawGuarantee = copyFramework.guarantees[0] || "satisfaction guaranteed";
+  const guaranteeMention = rawGuarantee
+    .replace(/\{Pest\}/g, serviceLabel.charAt(0).toUpperCase() + serviceLabel.slice(1))
+    .replace(/\{pest\}/g, serviceLabel)
+    .replace(/\{service\}/gi, serviceLabel)
+    .replace(/\{city\}/gi, city);
 
   const templates = [
     `Called about a ${serviceLabel.toLowerCase()} problem and they had someone out the same day. The technician was ${trustAngle}, thorough, and explained everything. Highly recommend for anyone in ${city}.`,
@@ -1457,7 +1483,7 @@ async function applyDesignSystem(
     typography: designSpec.typography,
     responsive_breakpoints: designSpec.responsive_breakpoints,
   }, null, 2);
-  const designFingerprint = computeCacheFingerprint(designSpecSummary);
+  const designFingerprint = computeCacheFingerprint(designSpecSummary + HUGO_TEMPLATE_PROMPT);
   const templateCache = await db.query<{
     design_fingerprint: string;
     baseof: string;
@@ -1479,7 +1505,7 @@ async function applyDesignSystem(
       generatedTemplates = await llm.call({
         prompt: hugoPrompt,
         schema: HugoTemplateResponseSchema,
-        model: "haiku",
+        model: "sonnet",
         timeoutMs: AGENT3_TEMPLATE_TIMEOUT_MS,
         logLabel: "[Agent 3][Design system][Hugo templates]",
         onOutput: (chunk, stream) => templateLogger.onOutput(chunk, stream),
@@ -3058,8 +3084,18 @@ Call the number on this page and describe your pest problem. We match you with a
 Every technician in our network uses EPA-registered products applied according to manufacturer specifications. Treatments are selected to be effective against target pests while minimizing exposure risk to children, pets, and the surrounding environment.`;
 
     // Resolve homepage CTA microcopy and guarantees from agent-2 data
-    const homepageCtaMicrocopy = designSystem.ctaMicrocopy[0] || "No obligation \u2022 Takes 30 seconds \u2022 Same-day appointments available";
-    const homepageGuarantees = designSystem.guarantees.length > 0
+    const nicheLabel = cfg.niche.replace(/-/g, " ");
+    const nicheLabelCap = nicheLabel.charAt(0).toUpperCase() + nicheLabel.slice(1);
+    const resolveHomepageTokens = (s: string) =>
+      s.replace(/\{Pest\}/g, nicheLabelCap)
+       .replace(/\{pest\}/g, nicheLabel)
+       .replace(/\{service\}/gi, nicheLabel)
+       .replace(/\{city\}/gi, allCitySlugs[0]?.name ?? "your area")
+       .replace(/\{phone\}/gi, cfg.phone ?? "");
+    const homepageCtaMicrocopy = resolveHomepageTokens(
+      designSystem.ctaMicrocopy[0] || "No obligation \u2022 Takes 30 seconds \u2022 Same-day appointments available"
+    );
+    const homepageGuarantees = (designSystem.guarantees.length > 0
       ? designSystem.guarantees
       : [
           "Professional treatment with proven methods",
@@ -3067,7 +3103,8 @@ Every technician in our network uses EPA-registered products applied according t
           "Transparent pricing with no surprises",
           "Pet and child-safe treatment options",
           "100% satisfaction assurance on all service",
-        ];
+        ]
+    ).map(resolveHomepageTokens);
     const homepageTestimonials = generateTestimonials(
       allCitySlugs[0]?.name ?? "Your City",
       undefined,
@@ -3118,12 +3155,24 @@ Every technician in our network uses EPA-registered products applied according t
         build_output_preview: buildResult.output.slice(0, 500),
       },
     });
-    const artifactQa = runBuiltArtifactQa(
-      cfg.hugoSitePath,
-      cityRows.map((row) => slugify(String(row.city ?? "")))
-    );
+    const citySlugsForQa = cityRows.map((row) => slugify(String(row.city ?? "")));
+    let artifactQa = runBuiltArtifactQa(cfg.hugoSitePath, citySlugsForQa);
     if (!artifactQa.passed) {
-      throw new Error(`Built artifact QA failed: ${artifactQa.failures.join(", ")}`);
+      console.warn(`[Agent 3] Artifact QA failed: ${artifactQa.failures.join(", ")}. Attempting deterministic repair...`);
+      const repairedCount = repairBuiltArtifactPlaceholders(cfg.hugoSitePath, cfg.niche);
+      if (repairedCount > 0) {
+        console.log(`[Agent 3] Repaired placeholder tokens in ${repairedCount} content file(s). Rebuilding Hugo...`);
+        const rebuildResult = await hugo.buildSite();
+        if (rebuildResult.success) {
+          artifactQa = runBuiltArtifactQa(cfg.hugoSitePath, citySlugsForQa);
+          if (artifactQa.passed) {
+            console.log("[Agent 3] Artifact QA passed after repair");
+          }
+        }
+      }
+      if (!artifactQa.passed) {
+        throw new Error(`Built artifact QA failed: ${artifactQa.failures.join(", ")}`);
+      }
     }
 
     const netlifySiteId = process.env.NETLIFY_SITE_ID;
