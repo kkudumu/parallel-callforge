@@ -108,8 +108,18 @@ describe("validateResearchFile", () => {
     expect(validateResearchFile(VALID_FILE)).toBe(true);
   });
 
+  it("fails a file with no Key Findings section", () => {
+    const bad = VALID_FILE.replace("## Key Findings", "## Findings");
+    expect(validateResearchFile(bad)).toBe(false);
+  });
+
   it("fails a file with no Source Index", () => {
     const bad = VALID_FILE.replace("## Source Index", "## Sources");
+    expect(validateResearchFile(bad)).toBe(false);
+  });
+
+  it("fails a file missing required finding anchors", () => {
+    const bad = VALID_FILE.replace(/\*\*Evidence:\*\*/g, "**Proof:**");
     expect(validateResearchFile(bad)).toBe(false);
   });
 

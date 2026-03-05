@@ -160,8 +160,8 @@ Output ONLY valid JSON matching the provided schema.`;
 
 // Legacy named exports for backward compatibility during migration
 // These are used by the vertical strategy system which has not been updated yet
-export const COMPETITOR_ANALYSIS_PROMPT = buildCompetitorAnalysisPrompt("pest control");
-export const DESIGN_SPEC_PROMPT = buildDesignSpecPrompt("pest control", "{}");
-export const COPY_FRAMEWORK_PROMPT = buildCopyFrameworkPrompt("pest control");
-export const SCHEMA_TEMPLATE_PROMPT = buildSchemaTemplatePrompt("pest control");
-export const SEASONAL_CALENDAR_PROMPT = buildSeasonalCalendarPrompt("pest control");
+export const COMPETITOR_ANALYSIS_PROMPT = buildCompetitorAnalysisPrompt("{niche}");
+export const DESIGN_SPEC_PROMPT = buildDesignSpecPrompt("{niche}", "{competitor_analysis}");
+export const COPY_FRAMEWORK_PROMPT = buildCopyFrameworkPrompt("{niche}");
+export const SCHEMA_TEMPLATE_PROMPT = buildSchemaTemplatePrompt("{niche}");
+export const SEASONAL_CALENDAR_PROMPT = buildSeasonalCalendarPrompt("{niche}");

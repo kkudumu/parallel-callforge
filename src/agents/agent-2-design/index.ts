@@ -27,7 +27,7 @@ import {
   buildSeasonalCalendarPrompt,
   type SynthesisPromptContext,
 } from "./prompts.js";
-import { readResearchFile } from "./research-reader.js";
+import { readResearchFile, validateResearchFile } from "./research-reader.js";
 import { withSelfHealing } from "../../shared/self-healing.js";
 
 const AGENT2_COMPETITOR_ANALYSIS_TIMEOUT_MS = 420_000;
@@ -215,6 +215,42 @@ async function loadCheckpointedSeasonalCalendar(niche: string, db: DbClient) {
   });
 }
 
+function countResearchDocuments(ctx: SynthesisPromptContext): number {
+  return Object.values(ctx).filter(
+    (value): value is string => typeof value === "string" && value.trim().length > 0
+  ).length;
+}
+
+function loadValidatedResearchContext(researchDir: string): {
+  context: SynthesisPromptContext;
+  validCount: number;
+} {
+  const readValid = (fileName: string): string | null => {
+    const path = join(researchDir, fileName);
+    const content = readResearchFile(path);
+    if (!content) return null;
+    if (!validateResearchFile(content)) {
+      console.warn(`[Agent 2] Ignoring invalid research file: ${fileName}`);
+      return null;
+    }
+    return content;
+  };
+
+  const context: SynthesisPromptContext = {
+    competitorResearch: readValid("competitors.md"),
+    croResearch: readValid("cro-data.md"),
+    designResearch: readValid("design.md"),
+    copyResearch: readValid("copy.md"),
+    schemaResearch: readValid("schema.md"),
+    seasonalResearch: readValid("seasonal.md"),
+  };
+
+  return {
+    context,
+    validCount: countResearchDocuments(context),
+  };
+}
+
 export async function runAgent2(
   config: Agent2Config,
   llm: LlmClient,
@@ -262,39 +298,55 @@ export async function runAgent2(
   // Phase 1: Deep research via Agent SDK subagents
   const researchDir = join("tmp", "agent2-research", config.offerProfile?.offer_id ?? cacheKey);
   let researchCtx: SynthesisPromptContext = {};
+  const runDeepResearch = async (): Promise<void> => {
+    console.log("[Agent 2] Phase 1: Running deep research...");
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Deep research", detail: "Spawning subagents", timestamp: Date.now() });
+
+    try {
+      const findings = await runResearchPhase({ niche: config.niche, researchDir });
+      researchCtx = {
+        competitorResearch: findings.competitors,
+        croResearch: findings.croData,
+        designResearch: findings.design,
+        copyResearch: findings.copy,
+        schemaResearch: findings.schema,
+        seasonalResearch: findings.seasonal,
+      };
+
+      const validCount = countResearchDocuments(researchCtx);
+      if (validCount === 0) {
+        console.warn("[Agent 2] Deep research produced no valid files; proceeding without research context");
+        eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research degraded", detail: "No valid findings", timestamp: Date.now() });
+        researchCtx = {};
+        return;
+      }
+
+      await checkpoints.mark("research_complete", {
+        competitorsWords: findings.competitors?.split(/\s+/).length ?? 0,
+        croWords: findings.croData?.split(/\s+/).length ?? 0,
+      });
+      console.log("[Agent 2] Phase 1 complete");
+      eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research complete", detail: "Phase 2: synthesis", timestamp: Date.now() });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(`[Agent 2] Deep research failed: ${reason}. Proceeding without research context.`);
+      eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research degraded", detail: reason, timestamp: Date.now() });
+      researchCtx = {};
+    }
+  };
 
   if (!config.forceRefresh && checkpoints.has("research_complete")) {
     console.log("[Agent 2] Reusing checkpointed research findings");
-    try {
-      researchCtx = {
-        competitorResearch: readResearchFile(join(researchDir, "competitors.md")),
-        croResearch: readResearchFile(join(researchDir, "cro-data.md")),
-        designResearch: readResearchFile(join(researchDir, "design.md")),
-        copyResearch: readResearchFile(join(researchDir, "copy.md")),
-        schemaResearch: readResearchFile(join(researchDir, "schema.md")),
-        seasonalResearch: readResearchFile(join(researchDir, "seasonal.md")),
-      };
-    } catch {
-      console.warn("[Agent 2] Could not reload research files, will re-run research");
+    const reloaded = loadValidatedResearchContext(researchDir);
+    if (reloaded.validCount === 0) {
+      console.warn("[Agent 2] Checkpointed research files were missing/invalid; re-running deep research");
+      await runDeepResearch();
+    } else {
+      researchCtx = reloaded.context;
+      console.log(`[Agent 2] Reused ${reloaded.validCount} validated research files`);
     }
   } else {
-    console.log("[Agent 2] Phase 1: Running deep research...");
-    eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Deep research", detail: "Spawning subagents", timestamp: Date.now() });
-    const findings = await runResearchPhase({ niche: config.niche, researchDir });
-    researchCtx = {
-      competitorResearch: findings.competitors,
-      croResearch: findings.croData,
-      designResearch: findings.design,
-      copyResearch: findings.copy,
-      schemaResearch: findings.schema,
-      seasonalResearch: findings.seasonal,
-    };
-    await checkpoints.mark("research_complete", {
-      competitorsWords: findings.competitors?.split(/\s+/).length ?? 0,
-      croWords: findings.croData?.split(/\s+/).length ?? 0,
-    });
-    console.log("[Agent 2] Phase 1 complete");
-    eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research complete", detail: "Phase 2: synthesis", timestamp: Date.now() });
+    await runDeepResearch();
   }
 
   // Step 1: Competitor analysis
