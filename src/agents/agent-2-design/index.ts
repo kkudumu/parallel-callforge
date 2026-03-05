@@ -1,4 +1,6 @@
 import { z } from "zod/v4";
+import { join } from "node:path";
+import { rmSync } from "node:fs";
 import type { LlmClient } from "../../shared/cli/llm-client.js";
 import type { DbClient } from "../../shared/db/client.js";
 import { DesignSpecSchema } from "../../shared/schemas/design-specs.js";
@@ -16,6 +18,16 @@ import {
   isFreshTimestamp,
   normalizeNiche,
 } from "../../shared/cache-policy.js";
+import { runResearchPhase } from "./research-orchestrator.js";
+import {
+  buildCompetitorAnalysisPrompt,
+  buildDesignSpecPrompt,
+  buildCopyFrameworkPrompt,
+  buildSchemaTemplatePrompt,
+  buildSeasonalCalendarPrompt,
+  type SynthesisPromptContext,
+} from "./prompts.js";
+import { readResearchFile } from "./research-reader.js";
 
 const AGENT2_COMPETITOR_ANALYSIS_TIMEOUT_MS = 420_000;
 const AGENT2_DESIGN_SPEC_TIMEOUT_MS = 180_000;
@@ -246,6 +258,44 @@ export async function runAgent2(
   };
   console.log(`[Agent 2] Design research missing or stale for ${config.niche}, refreshing`);
 
+  // Phase 1: Deep research via Agent SDK subagents
+  const researchDir = join("tmp", "agent2-research", config.offerProfile?.offer_id ?? cacheKey);
+  let researchCtx: SynthesisPromptContext = {};
+
+  if (!config.forceRefresh && checkpoints.has("research_complete")) {
+    console.log("[Agent 2] Reusing checkpointed research findings");
+    try {
+      researchCtx = {
+        competitorResearch: readResearchFile(join(researchDir, "competitors.md")),
+        croResearch: readResearchFile(join(researchDir, "cro-data.md")),
+        designResearch: readResearchFile(join(researchDir, "design.md")),
+        copyResearch: readResearchFile(join(researchDir, "copy.md")),
+        schemaResearch: readResearchFile(join(researchDir, "schema.md")),
+        seasonalResearch: readResearchFile(join(researchDir, "seasonal.md")),
+      };
+    } catch {
+      console.warn("[Agent 2] Could not reload research files, will re-run research");
+    }
+  } else {
+    console.log("[Agent 2] Phase 1: Running deep research...");
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Deep research", detail: "Spawning subagents", timestamp: Date.now() });
+    const findings = await runResearchPhase({ niche: config.niche, researchDir });
+    researchCtx = {
+      competitorResearch: findings.competitors,
+      croResearch: findings.croData,
+      designResearch: findings.design,
+      copyResearch: findings.copy,
+      schemaResearch: findings.schema,
+      seasonalResearch: findings.seasonal,
+    };
+    await checkpoints.mark("research_complete", {
+      competitorsWords: findings.competitors?.split(/\s+/).length ?? 0,
+      croWords: findings.croData?.split(/\s+/).length ?? 0,
+    });
+    console.log("[Agent 2] Phase 1 complete");
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research complete", detail: "Phase 2: synthesis", timestamp: Date.now() });
+  }
+
   // Step 1: Competitor analysis
   let competitorAnalysis = config.forceRefresh
     ? null
@@ -261,10 +311,7 @@ export async function runAgent2(
   } else {
     console.log("[Agent 2] Step 1: Running competitor analysis...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Competitor analysis", detail: "CRO patterns", timestamp: Date.now() });
-    const competitorPrompt = strategy.getCompetitorAnalysisPrompt(
-      config.niche,
-      strategyContext
-    );
+    const competitorPrompt = buildCompetitorAnalysisPrompt(config.niche, researchCtx);
     competitorAnalysis = await llm.call({
       prompt: competitorPrompt,
       schema: CompetitorAnalysisSchema,
@@ -308,13 +355,7 @@ export async function runAgent2(
   } else {
     console.log("[Agent 2] Step 2: Generating design specification...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Design spec", detail: "Generating specification", timestamp: Date.now() });
-    const designPrompt = strategy.getDesignSpecPrompt(
-      {
-        niche: config.niche,
-        competitorAnalysisJson: JSON.stringify(competitorAnalysis, null, 2),
-      },
-      strategyContext
-    );
+    const designPrompt = buildDesignSpecPrompt(config.niche, JSON.stringify(competitorAnalysis, null, 2), researchCtx);
     designSpec = await llm.call({
       prompt: designPrompt,
       schema: DesignSpecSchema,
@@ -370,10 +411,7 @@ export async function runAgent2(
   } else {
     console.log("[Agent 2] Step 3: Generating copy framework...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Copy framework", detail: "Headlines, CTAs, trust signals", timestamp: Date.now() });
-    const copyPrompt = strategy.getCopyFrameworkPrompt(
-      config.niche,
-      strategyContext
-    );
+    const copyPrompt = buildCopyFrameworkPrompt(config.niche, researchCtx);
     copyFramework = await llm.call({
       prompt: copyPrompt,
       schema: CopyFrameworkSchema,
@@ -437,10 +475,7 @@ export async function runAgent2(
   } else {
     console.log("[Agent 2] Step 4: Generating schema templates...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Schema templates", detail: "JSON-LD generation", timestamp: Date.now() });
-    const schemaPrompt = strategy.getSchemaTemplatePrompt(
-      config.niche,
-      strategyContext
-    );
+    const schemaPrompt = buildSchemaTemplatePrompt(config.niche, researchCtx);
     schemaTemplates = await llm.call({
       prompt: schemaPrompt,
       schema: SchemaTemplateSchema,
@@ -484,10 +519,7 @@ export async function runAgent2(
   } else {
     console.log("[Agent 2] Step 5: Generating seasonal calendar...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Seasonal calendar", detail: "12-month planning", timestamp: Date.now() });
-    const seasonalPrompt = strategy.getSeasonalCalendarPrompt(
-      config.niche,
-      strategyContext
-    );
+    const seasonalPrompt = buildSeasonalCalendarPrompt(config.niche, researchCtx);
     seasonalCalendar = await llm.call({
       prompt: seasonalPrompt,
       schema: SeasonalCalendarSchema,
@@ -519,5 +551,14 @@ export async function runAgent2(
   await checkpoints.mark("completed", {
     niche: cacheKey,
   });
+
+  // Clean up research temp files after successful synthesis
+  try {
+    rmSync(researchDir, { recursive: true, force: true });
+    console.log("[Agent 2] Research temp files cleaned up");
+  } catch {
+    // Non-fatal — temp files can linger
+  }
+
   console.log("[Agent 2] Design research complete");
 }
