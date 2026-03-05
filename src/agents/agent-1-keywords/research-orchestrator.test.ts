@@ -1,32 +1,106 @@
-import { describe, it, expect } from "vitest";
-import {
-  RESEARCH_FILE_NAMES_A1,
-} from "./research-reader.js";
-import {
-  type ResearchFindings,
-} from "./research-orchestrator.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
-// We test the type shape and file name constants, not the live query() call
-// (that's tested in the integration run in Task 7).
+vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
+  query: vi.fn(),
+}));
 
-describe("ResearchFindings type", () => {
-  it("has all 6 required finding fields", () => {
-    const sample: ResearchFindings = {
-      keywordPatterns: null,
-      marketData: null,
-      competitorKeywords: null,
-      localSeo: null,
-      ppcEconomics: null,
-      gbpCompetition: null,
-    };
-    expect(sample).toBeDefined();
-    expect(Object.keys(sample)).toHaveLength(6);
+import { query } from "@anthropic-ai/claude-agent-sdk";
+import { runResearchPhase } from "./research-orchestrator.js";
+
+const mockedQuery = vi.mocked(query as any);
+
+const VALID_RESEARCH_FILE = `# Keyword Pattern Research — pest control
+
+**Subagent:** keyword-pattern-researcher
+**Sources consulted:** 42
+**Date:** 2026-03-05
+
+## Key Findings
+
+### High-intent emergency terms dominate
+**Evidence:** https://example.com/emergency-pest-keywords
+**Data:** Same-day intent terms carry 2.3x higher CPC and 1.7x higher click-to-call rate in paid search benchmarks
+**Implication:** Keyword templates should prioritize emergency and availability modifiers in city-level head terms
+
+## Source Index
+- https://example.com/emergency-pest-keywords — emergency keyword benchmark data
+`.repeat(12);
+
+function makeAsyncGenerator(items: any[]) {
+  return (async function* () {
+    for (const item of items) {
+      yield item;
+    }
+  })();
+}
+
+describe("runResearchPhase", () => {
+  let researchDir: string;
+
+  beforeEach(() => {
+    researchDir = join(tmpdir(), `agent1-research-orch-${Date.now()}-${Math.random()}`);
+    mkdirSync(researchDir, { recursive: true });
+    vi.clearAllMocks();
   });
-});
 
-describe("RESEARCH_FILE_NAMES_A1", () => {
-  it("maps to 6 unique file names", () => {
-    const unique = new Set(RESEARCH_FILE_NAMES_A1);
-    expect(unique.size).toBe(6);
+  afterEach(() => {
+    rmSync(researchDir, { recursive: true, force: true });
+  });
+
+  it("returns findings when at least 4 files are valid", async () => {
+    mockedQuery.mockImplementation(() => {
+      writeFileSync(join(researchDir, "keyword-patterns.md"), VALID_RESEARCH_FILE, "utf8");
+      writeFileSync(join(researchDir, "market-data.md"), VALID_RESEARCH_FILE, "utf8");
+      writeFileSync(join(researchDir, "competitor-keywords.md"), VALID_RESEARCH_FILE, "utf8");
+      writeFileSync(join(researchDir, "local-seo.md"), VALID_RESEARCH_FILE, "utf8");
+      return makeAsyncGenerator([{ result: "ok" }]);
+    });
+
+    const findings = await runResearchPhase({
+      niche: "pest control",
+      researchDir,
+    });
+
+    expect(findings.keywordPatterns).toBeTruthy();
+    expect(findings.marketData).toBeTruthy();
+    expect(findings.competitorKeywords).toBeTruthy();
+    expect(findings.localSeo).toBeTruthy();
+    expect(findings.ppcEconomics).toBeNull();
+    expect(findings.gbpCompetition).toBeNull();
+  });
+
+  it("throws when fewer than 4 files are valid", async () => {
+    mockedQuery.mockImplementation(() => {
+      writeFileSync(join(researchDir, "keyword-patterns.md"), VALID_RESEARCH_FILE, "utf8");
+      writeFileSync(join(researchDir, "market-data.md"), VALID_RESEARCH_FILE, "utf8");
+      writeFileSync(join(researchDir, "competitor-keywords.md"), VALID_RESEARCH_FILE, "utf8");
+      return makeAsyncGenerator([{ result: "ok" }]);
+    });
+
+    await expect(
+      runResearchPhase({
+        niche: "pest control",
+        researchDir,
+      })
+    ).rejects.toThrow("produced only 3/6 valid files");
+  });
+
+  it("throws when the SDK query emits an error event mid-stream", async () => {
+    mockedQuery.mockImplementation(() =>
+      makeAsyncGenerator([
+        { message: { content: [] } },
+        { is_error: true, result: "stream error" },
+      ])
+    );
+
+    await expect(
+      runResearchPhase({
+        niche: "pest control",
+        researchDir,
+      })
+    ).rejects.toThrow("Research phase failed");
   });
 });

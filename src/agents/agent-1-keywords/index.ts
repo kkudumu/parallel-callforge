@@ -23,7 +23,7 @@ import {
   type ScoredCity,
 } from "../../shared/cache-policy.js";
 import { join } from "node:path";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { runResearchPhase, type ResearchFindings } from "./research-orchestrator.js";
 import {
   buildResearchContext,
@@ -37,6 +37,8 @@ import {
 const PlaybookTextSchema = z.object({
   markdown: z.string(),
 });
+const DEFAULT_MIN_VALID_RESEARCH_FILES = 4;
+const MAX_PLAYBOOK_RESEARCH_CONTEXT_CHARS = 120_000;
 
 // Schema for LLM keyword template generation
 const KeywordTemplatesResponseSchema = z.object({
@@ -334,6 +336,21 @@ export interface Agent1Config {
   forceRefresh?: boolean;
   researchEnabled?: boolean;   // default: false (opt-in)
   researchDir?: string;        // default: tmp/agent1-research/{runId}
+  minValidResearchFiles?: number; // default: 4
+  cleanupResearchDir?: boolean; // default: true
+}
+
+function clampResearchContext(input: string): { value: string; truncated: boolean } {
+  if (input.length <= MAX_PLAYBOOK_RESEARCH_CONTEXT_CHARS) {
+    return { value: input, truncated: false };
+  }
+
+  const suffix = "\n\n[TRUNCATED: research context exceeded prompt safety limit]";
+  const budget = Math.max(0, MAX_PLAYBOOK_RESEARCH_CONTEXT_CHARS - suffix.length);
+  return {
+    value: `${input.slice(0, budget)}${suffix}`,
+    truncated: true,
+  };
 }
 
 export async function loadCandidateCitiesFromDeploymentCandidates(
@@ -754,91 +771,127 @@ export async function runAgent1(
   let researchContextForTemplates: string | null = null;
   let researchContextForScoring: string | null = null;
   let researchContextForClustering: string | null = null;
+  let researchDirToCleanup: string | null = null;
 
-  if (config.researchEnabled) {
-    const runId = config.runId ?? `agent1-${Date.now()}`;
-    const researchDir = config.researchDir ?? join("tmp", "agent1-research", runId);
-    console.log("[Agent 1] Phase 1: Starting deep research...");
-    eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Research phase", detail: "Starting", timestamp: Date.now() });
+  try {
+    if (config.researchEnabled) {
+      const runId = config.runId ?? `agent1-${Date.now()}`;
+      const researchDir = config.researchDir ?? join("tmp", "agent1-research", runId);
+      researchDirToCleanup = researchDir;
+      console.log("[Agent 1] Phase 1: Starting deep research...");
+      eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Research phase", detail: "Starting", timestamp: Date.now() });
 
-    researchFindings = await runResearchPhase({ niche: config.niche, researchDir });
-
-    const validCount = Object.values(researchFindings).filter(Boolean).length;
-    console.log(`[Agent 1] Phase 1: Research complete — ${validCount}/6 files valid`);
-
-    if (validCount < 4) {
-      throw new Error(
-        `[Agent 1] Research phase produced only ${validCount}/6 valid files. ` +
-        "Aborting to prevent low-quality synthesis. Check subagent logs."
+      const minValidFiles = Math.max(
+        1,
+        Math.min(6, config.minValidResearchFiles ?? DEFAULT_MIN_VALID_RESEARCH_FILES)
       );
+      researchFindings = await runResearchPhase({
+        niche: config.niche,
+        researchDir,
+        minValidFiles,
+      });
+
+      const validCount = Object.values(researchFindings).filter(Boolean).length;
+      console.log(`[Agent 1] Phase 1: Research complete — ${validCount}/6 files valid`);
+
+      // Phase 2a: Synthesize playbook from research findings
+      console.log("[Agent 1] Phase 2a: Synthesizing market selection playbook...");
+      const allResearchContext = buildResearchContext({
+        "keyword-patterns": researchFindings.keywordPatterns,
+        "market-data": researchFindings.marketData,
+        "competitor-keywords": researchFindings.competitorKeywords,
+        "local-seo": researchFindings.localSeo,
+        "ppc-economics": researchFindings.ppcEconomics,
+        "gbp-competition": researchFindings.gbpCompetition,
+      });
+      const boundedContext = clampResearchContext(allResearchContext);
+      if (boundedContext.truncated) {
+        console.warn(
+          `[Agent 1] Research context exceeded ${MAX_PLAYBOOK_RESEARCH_CONTEXT_CHARS} chars and was truncated for playbook synthesis`
+        );
+      }
+
+      const playbookPrompt = buildPlaybookSynthesisPrompt({
+        niche: config.niche,
+        researchContext: boundedContext.value,
+        runId,
+      });
+
+      let playbookRepairHint = "";
+      try {
+        const playbookResult = await withSelfHealing({
+          runId: config.runId ?? "no-run-id",
+          offerId: config.offerId ?? "unknown",
+          agentName: "agent-1",
+          step: "playbook_synthesis",
+          fn: async () => {
+            const prompt = playbookRepairHint
+              ? playbookPrompt + `\n\n[Correction guidance from previous attempt: ${playbookRepairHint}]`
+              : playbookPrompt;
+            return llm.call({
+              prompt,
+              schema: PlaybookTextSchema,
+              model: "sonnet",
+              logLabel: "[Agent 1][Phase 2a][Playbook synthesis]",
+            });
+          },
+          getRepairContext: (err) =>
+            `Playbook synthesis failed for niche "${config.niche}" with: ${err.message}\n\nReturn JSON with one field: markdown (string). The markdown must include all required sections and preserve valid markdown formatting.`,
+          applyFix: async (fixedCode) => {
+            playbookRepairHint = fixedCode;
+          },
+          db,
+          llm,
+        });
+        playbookContent = playbookResult.markdown;
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `[Agent 1] Playbook synthesis failed after retries: ${reason}. Proceeding with focused research contexts only.`
+        );
+        playbookContent = null;
+      }
+
+      if (playbookContent && !validatePlaybookFile(playbookContent)) {
+        console.warn("[Agent 1] Playbook failed validation — missing required sections. Proceeding with research context only.");
+        playbookContent = null;
+      } else if (playbookContent) {
+        // Save playbook permanently
+        const playbookDir = join("docs", "playbooks", normalizeNiche(config.niche));
+        mkdirSync(playbookDir, { recursive: true });
+        const playbookPath = join(playbookDir, `${runId}-playbook.md`);
+        writeFileSync(playbookPath, playbookContent, "utf8");
+        console.log(`[Agent 1] Playbook saved to ${playbookPath}`);
+        eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Playbook saved", detail: playbookPath, timestamp: Date.now() });
+      }
+
+      // Build targeted research contexts for each synthesis call
+      const keywordResearch = buildResearchContext({
+        "keyword-patterns": researchFindings.keywordPatterns,
+        "competitor-keywords": researchFindings.competitorKeywords,
+      });
+      researchContextForTemplates = playbookContent
+        ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${keywordResearch}`
+        : keywordResearch;
+
+      const scoringResearch = buildResearchContext({
+        "market-data": researchFindings.marketData,
+        "gbp-competition": researchFindings.gbpCompetition,
+        "ppc-economics": researchFindings.ppcEconomics,
+      });
+      researchContextForScoring = playbookContent
+        ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${scoringResearch}`
+        : scoringResearch;
+
+      const clusteringResearch = buildResearchContext({
+        "keyword-patterns": researchFindings.keywordPatterns,
+        "competitor-keywords": researchFindings.competitorKeywords,
+        "local-seo": researchFindings.localSeo,
+      });
+      researchContextForClustering = playbookContent
+        ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${clusteringResearch}`
+        : clusteringResearch;
     }
-
-    // Phase 2a: Synthesize playbook from research findings
-    console.log("[Agent 1] Phase 2a: Synthesizing market selection playbook...");
-    const allResearchContext = buildResearchContext({
-      "keyword-patterns": researchFindings.keywordPatterns,
-      "market-data": researchFindings.marketData,
-      "competitor-keywords": researchFindings.competitorKeywords,
-      "local-seo": researchFindings.localSeo,
-      "ppc-economics": researchFindings.ppcEconomics,
-      "gbp-competition": researchFindings.gbpCompetition,
-    });
-
-    const playbookPrompt = buildPlaybookSynthesisPrompt({
-      niche: config.niche,
-      researchContext: allResearchContext,
-      runId,
-    });
-
-    const playbookResult = await llm.call({
-      prompt: playbookPrompt,
-      schema: PlaybookTextSchema,
-      model: "sonnet",
-      logLabel: "[Agent 1][Phase 2a][Playbook synthesis]",
-    });
-
-    playbookContent = playbookResult.markdown;
-
-    if (!validatePlaybookFile(playbookContent)) {
-      console.warn("[Agent 1] Playbook failed validation — missing required sections. Proceeding with research context only.");
-      playbookContent = null;
-    } else {
-      // Save playbook permanently
-      const playbookDir = join("docs", "playbooks", normalizeNiche(config.niche));
-      mkdirSync(playbookDir, { recursive: true });
-      const playbookPath = join(playbookDir, `${runId}-playbook.md`);
-      writeFileSync(playbookPath, playbookContent, "utf8");
-      console.log(`[Agent 1] Playbook saved to ${playbookPath}`);
-      eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Playbook saved", detail: playbookPath, timestamp: Date.now() });
-    }
-
-    // Build targeted research contexts for each synthesis call
-    const keywordResearch = buildResearchContext({
-      "keyword-patterns": researchFindings.keywordPatterns,
-      "competitor-keywords": researchFindings.competitorKeywords,
-    });
-    researchContextForTemplates = playbookContent
-      ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${keywordResearch}`
-      : keywordResearch;
-
-    const scoringResearch = buildResearchContext({
-      "market-data": researchFindings.marketData,
-      "gbp-competition": researchFindings.gbpCompetition,
-      "ppc-economics": researchFindings.ppcEconomics,
-    });
-    researchContextForScoring = playbookContent
-      ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${scoringResearch}`
-      : scoringResearch;
-
-    const clusteringResearch = buildResearchContext({
-      "keyword-patterns": researchFindings.keywordPatterns,
-      "competitor-keywords": researchFindings.competitorKeywords,
-      "local-seo": researchFindings.localSeo,
-    });
-    researchContextForClustering = playbookContent
-      ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${clusteringResearch}`
-      : clusteringResearch;
-  }
 
   // Step 1: Load cached templates or generate them once per niche
   console.log("[Agent 1] Step 1: Loading keyword templates...");
@@ -1176,8 +1229,18 @@ Return JSON with two fields:
     });
   }
 
-  await checkpoints.mark("completed", {
-    selectedCities: selectedCities.length,
-  });
-  console.log("[Agent 1] Keyword research complete");
+    await checkpoints.mark("completed", {
+      selectedCities: selectedCities.length,
+    });
+    console.log("[Agent 1] Keyword research complete");
+  } finally {
+    if (researchDirToCleanup && config.cleanupResearchDir !== false) {
+      try {
+        rmSync(researchDirToCleanup, { recursive: true, force: true });
+        console.log(`[Agent 1] Cleaned up research temp directory: ${researchDirToCleanup}`);
+      } catch (error) {
+        console.warn(`[Agent 1] Failed to clean up research temp directory: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
 }

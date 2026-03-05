@@ -14,6 +14,8 @@ import {
   validateResearchFile,
 } from "./research-reader.js";
 
+const DEFAULT_MIN_VALID_FILES = 4;
+
 export interface ResearchFindings {
   keywordPatterns: string | null;
   marketData: string | null;
@@ -26,6 +28,7 @@ export interface ResearchFindings {
 export interface ResearchPhaseConfig {
   niche: string;
   researchDir: string;
+  minValidFiles?: number;
 }
 
 export async function runResearchPhase(
@@ -98,7 +101,16 @@ export async function runResearchPhase(
     }
   }
 
-  return readResearchFindings(cfg.researchDir);
+  const findings = readResearchFindings(cfg.researchDir);
+  const validCount = Object.values(findings).filter(Boolean).length;
+  const threshold = Math.max(1, Math.min(6, cfg.minValidFiles ?? DEFAULT_MIN_VALID_FILES));
+  if (validCount < threshold) {
+    throw new Error(
+      `[Agent 1][Research] Research phase produced only ${validCount}/6 valid files (minimum required: ${threshold})`
+    );
+  }
+
+  return findings;
 }
 
 function readResearchFindings(researchDir: string): ResearchFindings {
