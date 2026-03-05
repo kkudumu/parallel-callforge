@@ -699,3 +699,34 @@ But future release logic should separate:
 - current build artifacts
 - staged content not intended for release
 - legacy content that should be retired or excluded
+
+## March 5, 2026: Design Pipeline CSS Fix
+
+Three bugs were discovered that caused the generated Hugo sites to look nothing like the researched design.
+
+### Bug 1: generated-theme.css Was Never Loaded
+
+The pipeline writes `static/css/generated-theme.css` with the design spec's color and font values derived from Agent 2's competitor research. The LLM-generated `baseof.html` never contained a `<link>` to it, so the file was dead code — never loaded by any page.
+
+**Fix:** Two layers of enforcement were added:
+
+1. `HUGO_TEMPLATE_PROMPT` now explicitly instructs the LLM to include `<link rel="stylesheet" href="/css/generated-theme.css">` in the `<head>`.
+2. `template-review.ts` now has an `ensureStylesheetLink` repair that deterministically injects the link if the LLM still misses it.
+
+### Bug 2: CSS Variable Naming Mismatch
+
+`generated-theme.css` defined variables as `--color-primary`, `--color-trust`, etc. The LLM-generated templates referenced `var(--primary)`, `var(--trust)`, etc. Even when the stylesheet was eventually loaded, the variables resolved to nothing because the names did not match.
+
+**Fix:** `HUGO_TEMPLATE_PROMPT` now lists all 17 canonical CSS variable names that the pipeline writes to `generated-theme.css`. The LLM is instructed to use only those names and is forbidden from adding `<style>` blocks that define or shadow them.
+
+### Bug 3: Template Generation Used Haiku
+
+`HUGO_TEMPLATE_PROMPT` was sent to `claude-haiku` to generate three production Hugo HTML templates from a JSON design spec. Generating responsive, CRO-optimized page templates is a complex creative task that Haiku executes poorly. The result was generic, low-quality output that bore no resemblance to the researched design patterns.
+
+**Fix:** Changed `model: "haiku"` to `model: "sonnet"` in the `generateHugoTemplatesFromLlm` call in `src/agents/agent-3-builder/index.ts`.
+
+### Template Cache Fingerprint Now Includes Prompt
+
+Previously the template cache fingerprint was computed only from the design spec JSON. Prompt changes never busted the cache, so old low-quality templates could be reused indefinitely regardless of prompt improvements.
+
+**Fix:** The fingerprint is now computed from `designSpecSummary + HUGO_TEMPLATE_PROMPT`. Any change to the prompt automatically invalidates all cached templates for that niche.
