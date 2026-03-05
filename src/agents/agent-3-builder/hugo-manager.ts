@@ -363,7 +363,16 @@ If you are requesting that your personal information not be sold or shared beyon
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
 
       const yamlLines = Object.entries(frontmatter)
-        .map(([key, value]) => `${toYamlKey(key)}: ${typeof value === "object" && value !== null ? "\n" + toYamlValue(value, 2) : toYamlValue(value, 0)}`)
+        .map(([key, value]) => {
+          if (typeof value !== "object" || value === null) {
+            return `${toYamlKey(key)}: ${toYamlValue(value, 0)}`;
+          }
+          const yaml = toYamlValue(value, 2);
+          // Empty arrays/objects are compact ([] or {}) — inline them to avoid YAML block errors
+          const isEmpty = (Array.isArray(value) && value.length === 0) ||
+            (!Array.isArray(value) && Object.keys(value as Record<string, unknown>).length === 0);
+          return isEmpty ? `${toYamlKey(key)}: ${yaml}` : `${toYamlKey(key)}:\n${yaml}`;
+        })
         .join("\n");
 
       const fileContent = `---\n${yamlLines}\n---\n\n${content}\n`;
