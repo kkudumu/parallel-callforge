@@ -5,7 +5,7 @@ const FILLER_WORDS = Array.from({ length: 1300 }, (_, index) => `word${index}`).
 
 describe("Quality Gate", () => {
   it("passes content that meets all criteria", () => {
-    const content = `${FILLER_WORDS} Santa Cruz pest control services available here. Santa Cruz homeowners call for inspections. Santa Cruz neighborhoods need seasonal treatments. Santa Cruz service is available now.`;
+    const content = `${FILLER_WORDS} Santa Cruz pest control services available here. Call (831) 555-1234 for inspections. Santa Cruz homeowners call our team anytime. Santa Cruz neighborhoods need seasonal treatments. Call now for Santa Cruz service.`;
     const result = runQualityGate(content, "Santa Cruz", 1200);
     expect(result.passed).toBe(true);
   });
