@@ -22,6 +22,22 @@ import {
   selectTopCities,
   type ScoredCity,
 } from "../../shared/cache-policy.js";
+import { join } from "node:path";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { runResearchPhase, type ResearchFindings } from "./research-orchestrator.js";
+import {
+  buildResearchContext,
+  validatePlaybookFile,
+} from "./research-reader.js";
+import {
+  buildPlaybookSynthesisPrompt,
+  withResearchContext,
+} from "./prompts.js";
+// Schema for playbook synthesis (wraps markdown string for LLM structured output)
+const PlaybookTextSchema = z.object({
+  markdown: z.string(),
+});
+
 // Schema for LLM keyword template generation
 const KeywordTemplatesResponseSchema = z.object({
   templates: z.array(z.string()).min(10).max(40),
@@ -316,6 +332,8 @@ export interface Agent1Config {
   citySource?: CitySourceMode;
   payoutPerQualifiedCall?: number;
   forceRefresh?: boolean;
+  researchEnabled?: boolean;   // default: false (opt-in)
+  researchDir?: string;        // default: tmp/agent1-research/{runId}
 }
 
 export async function loadCandidateCitiesFromDeploymentCandidates(
@@ -419,7 +437,8 @@ export async function getKeywordTemplates(
   db: DbClient,
   forceRefresh = false,
   offerProfile?: OfferProfile | null,
-  verticalProfile?: VerticalProfile | null
+  verticalProfile?: VerticalProfile | null,
+  researchContext?: string | null
 ): Promise<string[]> {
   const cacheKey = normalizeNiche(niche);
   console.log(`[Agent 1] Checking keyword template cache for ${cacheKey}...`);
@@ -438,7 +457,8 @@ export async function getKeywordTemplates(
       ? isFreshTimestamp(cached.rows[0].updated_at, KEYWORD_RESEARCH_TTL_MS)
       : true
     : false;
-  if (!forceRefresh && Array.isArray(cachedTemplates) && cachedTemplates.length > 0 && isFresh) {
+  const effectiveForceRefresh = forceRefresh || Boolean(researchContext);
+  if (!effectiveForceRefresh && Array.isArray(cachedTemplates) && cachedTemplates.length > 0 && isFresh) {
     console.log(`[Agent 1] Reusing ${cachedTemplates.length} cached keyword templates`);
     return filterKeywordTemplates(cachedTemplates, offerProfile);
   }
@@ -450,17 +470,19 @@ export async function getKeywordTemplates(
     verticalProfile,
   });
   const { templates } = await llm.call({
-    prompt: templatePrompt,
+    prompt: withResearchContext(templatePrompt, researchContext ?? null),
     schema: KeywordTemplatesResponseSchema,
     model: "haiku",
     logLabel: "[Agent 1][Step 1][Keyword templates]",
   });
 
   console.log(`[Agent 1] Saving ${templates.length} keyword templates...`);
+  const retrievalMethod = researchContext ? "research-grounded" : "generated";
+  const confidenceScore = researchContext ? 0.90 : 0.65;
   await db.query(
     `INSERT INTO keyword_templates
      (niche, templates, cache_provider, cache_version, retrieval_method, confidence_score, updated_at)
-     VALUES ($1, $2, 'llm', 'v1', 'generated', 0.65, now())
+     VALUES ($1, $2, 'llm', 'v1', $3, $4, now())
      ON CONFLICT (niche)
      DO UPDATE SET
        templates = EXCLUDED.templates,
@@ -469,7 +491,7 @@ export async function getKeywordTemplates(
        retrieval_method = EXCLUDED.retrieval_method,
        confidence_score = EXCLUDED.confidence_score,
        updated_at = now()`,
-    [cacheKey, templates]
+    [cacheKey, templates, retrievalMethod, confidenceScore]
   );
   console.log("[Agent 1] Keyword templates saved");
 
@@ -482,7 +504,8 @@ async function getScoredCities(
   metrics: unknown[],
   llm: LlmClient,
   db: DbClient,
-  forceRefresh = false
+  forceRefresh = false,
+  researchContext?: string | null
 ): Promise<ScoredCity[]> {
   const candidateCities = config.candidateCities ?? [];
   const cacheKey = normalizeNiche(config.niche);
@@ -542,7 +565,7 @@ async function getScoredCities(
   let scored_cities: ScoredCity[] = [];
   try {
     ({ scored_cities } = await llm.call({
-      prompt: scoringPrompt,
+      prompt: withResearchContext(scoringPrompt, researchContext ?? null),
       schema: CityScoringResponseSchema,
       model: "haiku",
       onOutput: (chunk, stream) => scoringLogger.onOutput(chunk, stream),
@@ -725,6 +748,98 @@ export async function runAgent1(
     console.log("[Agent 1] Force refresh enabled, bypassing keyword research caches");
   }
 
+  // Phase 1: Deep research (optional — enabled via config.researchEnabled)
+  let researchFindings: ResearchFindings | null = null;
+  let playbookContent: string | null = null;
+  let researchContextForTemplates: string | null = null;
+  let researchContextForScoring: string | null = null;
+  let researchContextForClustering: string | null = null;
+
+  if (config.researchEnabled) {
+    const runId = config.runId ?? `agent1-${Date.now()}`;
+    const researchDir = config.researchDir ?? join("tmp", "agent1-research", runId);
+    console.log("[Agent 1] Phase 1: Starting deep research...");
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Research phase", detail: "Starting", timestamp: Date.now() });
+
+    researchFindings = await runResearchPhase({ niche: config.niche, researchDir });
+
+    const validCount = Object.values(researchFindings).filter(Boolean).length;
+    console.log(`[Agent 1] Phase 1: Research complete — ${validCount}/6 files valid`);
+
+    if (validCount < 4) {
+      throw new Error(
+        `[Agent 1] Research phase produced only ${validCount}/6 valid files. ` +
+        "Aborting to prevent low-quality synthesis. Check subagent logs."
+      );
+    }
+
+    // Phase 2a: Synthesize playbook from research findings
+    console.log("[Agent 1] Phase 2a: Synthesizing market selection playbook...");
+    const allResearchContext = buildResearchContext({
+      "keyword-patterns": researchFindings.keywordPatterns,
+      "market-data": researchFindings.marketData,
+      "competitor-keywords": researchFindings.competitorKeywords,
+      "local-seo": researchFindings.localSeo,
+      "ppc-economics": researchFindings.ppcEconomics,
+      "gbp-competition": researchFindings.gbpCompetition,
+    });
+
+    const playbookPrompt = buildPlaybookSynthesisPrompt({
+      niche: config.niche,
+      researchContext: allResearchContext,
+      runId,
+    });
+
+    const playbookResult = await llm.call({
+      prompt: playbookPrompt,
+      schema: PlaybookTextSchema,
+      model: "sonnet",
+      logLabel: "[Agent 1][Phase 2a][Playbook synthesis]",
+    });
+
+    playbookContent = playbookResult.markdown;
+
+    if (!validatePlaybookFile(playbookContent)) {
+      console.warn("[Agent 1] Playbook failed validation — missing required sections. Proceeding with research context only.");
+      playbookContent = null;
+    } else {
+      // Save playbook permanently
+      const playbookDir = join("docs", "playbooks", normalizeNiche(config.niche));
+      mkdirSync(playbookDir, { recursive: true });
+      const playbookPath = join(playbookDir, `${runId}-playbook.md`);
+      writeFileSync(playbookPath, playbookContent, "utf8");
+      console.log(`[Agent 1] Playbook saved to ${playbookPath}`);
+      eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Playbook saved", detail: playbookPath, timestamp: Date.now() });
+    }
+
+    // Build targeted research contexts for each synthesis call
+    const keywordResearch = buildResearchContext({
+      "keyword-patterns": researchFindings.keywordPatterns,
+      "competitor-keywords": researchFindings.competitorKeywords,
+    });
+    researchContextForTemplates = playbookContent
+      ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${keywordResearch}`
+      : keywordResearch;
+
+    const scoringResearch = buildResearchContext({
+      "market-data": researchFindings.marketData,
+      "gbp-competition": researchFindings.gbpCompetition,
+      "ppc-economics": researchFindings.ppcEconomics,
+    });
+    researchContextForScoring = playbookContent
+      ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${scoringResearch}`
+      : scoringResearch;
+
+    const clusteringResearch = buildResearchContext({
+      "keyword-patterns": researchFindings.keywordPatterns,
+      "competitor-keywords": researchFindings.competitorKeywords,
+      "local-seo": researchFindings.localSeo,
+    });
+    researchContextForClustering = playbookContent
+      ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${clusteringResearch}`
+      : clusteringResearch;
+  }
+
   // Step 1: Load cached templates or generate them once per niche
   console.log("[Agent 1] Step 1: Loading keyword templates...");
   eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Loading templates", detail: "Cache lookup", timestamp: Date.now() });
@@ -734,7 +849,8 @@ export async function runAgent1(
     db,
     config.forceRefresh,
     config.offerProfile,
-    config.verticalProfile
+    config.verticalProfile,
+    researchContextForTemplates
   );
   console.log(`[Agent 1] Using ${templates.length} keyword templates`);
   for (const [index, template] of templates.slice(0, 8).entries()) {
@@ -764,7 +880,8 @@ export async function runAgent1(
     metrics,
     llm,
     db,
-    config.forceRefresh
+    config.forceRefresh,
+    researchContextForScoring
   );
 
   if (config.offerId) {
@@ -903,7 +1020,7 @@ export async function runAgent1(
       state: city.state,
       fn: async () => {
         const clusterResponse = await llm.call({
-          prompt: clusterPrompt,
+          prompt: withResearchContext(clusterPrompt, researchContextForClustering),
           schema: KeywordClusteringResponseSchema,
           model: "haiku",
           logLabel: `[Agent 1][Step 5][${city.city} clustering]`,
