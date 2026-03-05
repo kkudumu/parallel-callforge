@@ -76,8 +76,8 @@ Do NOT add <style> blocks that redefine or shadow these variables. You may write
 
 Generate three templates:
 1. baseof — Full page shell: <html>, <head> with meta/title/stylesheet link, sticky mobile call bar, header with phone, <main> block, footer with NAP/links, structured-data block
-2. city_hub — Defines {{ define "main" }}: hero section, services grid, local trust signals, testimonials, CTA
-3. service_subpage — Defines {{ define "main" }}: identification section, treatment section, mid-page CTA, prevention tips, FAQ accordion, service areas, related pests, final CTA
+2. city_hub — Defines {{ define "main" }}: arrange sections using the design spec's layout.section_order array as the sequence. Map section names to content blocks (e.g. "hero" → hero section, "trust" → trust bar, "services" → services grid, "faq" → FAQ accordion, "cta" → CTA block).
+3. service_subpage — Defines {{ define "main" }}: arrange sections using layout.section_order where applicable. Standard subpage sections: identification, treatment, mid-page CTA, prevention tips, FAQ accordion, service areas, related pests, final CTA.
 
 ## DESIGN REQUIREMENTS
 - Mobile-first CSS (min-width breakpoints matching the spec's responsive_breakpoints)

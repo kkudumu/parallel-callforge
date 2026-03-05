@@ -2325,7 +2325,7 @@ export async function runAgent3(
 - Approved cluster count: ${orderedClusters.length}`,
               agent2Summary: [
                 "- Archetype: " + designSystem.designSpec.archetype,
-                "- Layout sequence: " + Object.keys(designSystem.designSpec.layout).join(", "),
+                "- Section order: " + (designSystem.designSpec.layout.section_order ?? []).join(" → "),
                 "- CTA variants: " + designSystem.copyFramework.ctas.join(" | "),
                 "- Trust signals: " + designSystem.copyFramework.trust_signals.join(" | "),
                 "- Guarantees to weave in: " + (designSystem.guarantees.join(" | ") || "satisfaction guaranteed"),
@@ -2680,6 +2680,7 @@ export async function runAgent3(
                   "- Reading level: Write at " + designSystem.readingLevel.target_grade_min + "th-" + designSystem.readingLevel.target_grade_max + "th grade level. Tone: " + designSystem.readingLevel.tone + ". Short sentences, direct language.",
                   "- Emotional angle for this pest type: " + emotionalAngle,
                   "- PAS scripts (you MUST weave at least one into content): " + (designSystem.copyFramework.pas_scripts.map((s) => "Problem: " + s.problem + " | Agitate: " + s.agitate + " | Solve: " + s.solve).join("; ") || "none"),
+                  "- Section order: " + (designSystem.designSpec.layout.section_order ?? []).join(" → "),
                   "- Trust placement hierarchy: Above fold = " + (designSystem.designSpec.layout.trust_strategy?.above_fold ?? []).join(", ") + "; Mid-page = " + (designSystem.designSpec.layout.trust_strategy?.mid_page ?? []).join(", ") + "; Near CTA = " + (designSystem.designSpec.layout.trust_strategy?.near_cta ?? []).join(", "),
                   "- Conversion strategy: Phone mentions minimum " + (designSystem.designSpec.layout.conversion_strategy?.phone_mentions_min ?? 4) + ", no forms allowed",
                 ].join("\n");
