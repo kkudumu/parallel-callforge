@@ -1,93 +1,62 @@
 ---
-"title": "Athens Rodent Control – Licensed Mouse & Rat Removal for Clarke County Homes"
-"description": "Dealing with mice or rats in Athens, GA? Our licensed, locally operated team provides fast rodent control for Clarke County homeowners. Call now to speak with a local expert."
+"title": "Athens Rodent Control | Rat & Mouse Removal — Local Pros"
+"description": "Need Athens rodent control? Licensed & insured pest control pros serve GA homeowners fast. Call (706) 555-0112 — a real person answers. Scheduling available today."
+"h1_title": "Athens Rodent Control | Rat & Mouse Removal — Local Pros"
+"subheadline": "Same-Day pest-control in Athens - Call Now"
 "city": "Athens"
 "state": "GA"
 "type": "city_hub"
 "target_keyword": "Athens rodent control"
 "hero_image": "/images/generated/athens-hub-hero.svg"
+"hero_image_alt": "Athens rodent control pest control in Athens"
 "feature_image": "/images/generated/athens-hub-feature.svg"
 "schema_template": 
   "@context": "https://schema.org"
   "@type": "LocalBusiness"
   "additionalType": "https://www.productontology.org/id/Pest_control"
-  "name": "Athens Rodent Control – Licensed Mouse & Rat Removal for Clarke County Homes"
-  "description": "Dealing with mice or rats in Athens, GA? Our licensed, locally operated team provides fast rodent control for Clarke County homeowners. Call now to speak with a local expert."
+  "name": "Athens Rodent Control | Rat & Mouse Removal — Local Pros"
+  "description": "Need Athens rodent control? Licensed & insured pest control pros serve GA homeowners fast. Call  — no online forms required. Scheduling available today."
   "areaServed":
     "@type": "City"
     "name": "Athens"
     "containedInPlace":
       "@type": "State"
       "name": "GA"
-"seasonal_focus": "January: focus on mice, rats, cockroaches; message = prevention and early treatment — emphasize household safety and protecting the family during indoor-heavy winter months | February: focus on mice, rats, cockroaches; message = prevention with urgency — termite awareness campaign aligns with national awareness; reinforce rodent exclusion before spring thaw opens new entry points | March: focus on ants, termites, spiders; message = early treatment and prevention — spring emergence creates urgency; homeowners are motivated to act before infestations establish"
+"seasonal_focus": 
+  "message": "prevention and early treatment — emphasize household safety and protecting the family during indoor-heavy winter months"
+  "season_name": "January"
+  "seasonal_pests":
+    - "mice"
+    - "rats"
+    - "cockroaches"
+  "icon": "⚠️"
 "approved_routes": 
   - "athens"
-  - "athens/athens-rodent-control"
-  - "athens/athens-silverfish-control"
-"draft": false
-"h1_title": "Professional Pest Control in Athens, GA"
-"subheadline": "Fast, Professional Pest Control in Athens, GA"
-"disclaimer_text": "This website is a referral service connecting consumers with local pest control professionals. We are not a pest control company. By calling the number on this page, your call may be routed to a third-party service provider. Calls may be recorded for quality assurance. The specific services, pricing, scheduling, and service guarantees are determined by the independent provider dispatched to your location."
-"mid_cta_text": "Professional pest control available for homes and businesses in Athens. Vetted technician dispatched to your location."
-"service_area_copy": "Our pest control network covers Athens and the surrounding GA communities. Call to confirm coverage in your neighborhood."
-"hero_bullets": 
-  - "Vetted & insured professionals"
-  - "Same-day scheduling available"
-  - "Child and pet safe treatments"
+  - "athens/rodent-control"
+  - "athens/silverfish-control"
 "services": 
-  -
-    "icon": "🐀"
-    "name": "Rodent Control"
-    "description": "Professional mouse and rat removal with exclusion sealing to prevent re-entry."
-    "link": "/athens/rodent-control/"
   -
     "icon": "🐛"
     "name": "Silverfish Control"
-    "description": "Targeted treatment for silverfish infestations in basements, bathrooms, and storage areas."
+    "description": "Targeted silverfish treatment for your home."
     "link": "/athens/silverfish-control/"
-  -
-    "icon": "🐜"
-    "name": "Ant Control"
-    "description": "Eliminate ant colonies at the source with professional-grade baiting and barrier treatments."
-    "link": "/athens/ant-control/"
-  -
-    "icon": "🕷️"
-    "name": "Spider Control"
-    "description": "Remove spiders and their webs with targeted interior and exterior treatments."
-    "link": "/athens/spider-control/"
-  -
-    "icon": "🪳"
-    "name": "Cockroach Control"
-    "description": "Comprehensive cockroach elimination using gel baits, growth regulators, and exclusion methods."
-    "link": "/athens/cockroach-control/"
-  -
-    "icon": "🪵"
-    "name": "Termite Control"
-    "description": "Protect your home from structural damage with professional termite inspection and treatment."
-    "link": "/athens/termite-control/"
 "faqs": 
   -
-    "question": "How quickly can I get pest control service in Athens?"
-    "answer": "Most service requests in Athens, GA are scheduled within 24-48 hours. Same-day service may be available depending on technician availability in your area."
+    "question": "How do I know if I have a rodent problem?"
+    "answer": "Look for droppings near food, gnaw marks on wiring or wood, and scratching sounds in walls at night. Greasy smear marks along baseboards are another clear sign. If you spot any of these, call (706) 555-0112 for a professional inspection."
   -
-    "question": "What pests do you treat in Athens?"
-    "answer": "Our network of local professionals handles common household pests including rodents (mice and rats), silverfish, ants, spiders, cockroaches, and more. Call to discuss your specific pest issue."
+    "question": "What types of rodents are common in Athens?"
+    "answer": "Norway rats, roof rats, and house mice are the most common. Norway rats burrow near foundations. Roof rats climb trees and enter through rooflines. House mice can squeeze through a gap as small as a dime."
   -
-    "question": "Are the treatments safe for kids and pets?"
-    "answer": "Yes. The technicians in our network use EPA-registered products and follow all safety protocols. Treatments are designed to be effective against pests while remaining safe for your family and pets."
+    "question": "How fast can a rodent infestation grow?"
+    "answer": "Very fast. One pair of mice can produce dozens of offspring in just a few weeks. The longer you wait, the larger the infestation — and the harder it is to remove. Call (706) 555-0112 as soon as you notice the signs."
   -
-    "question": "How much does pest control cost in Athens?"
-    "answer": "Pricing varies based on the type of pest, severity of the infestation, and size of your property. The service provider dispatched to your location will provide a specific quote before beginning work."
+    "question": "Are rodent treatments safe for children and pets?"
+    "answer": "Yes. Licensed technicians use child- and pet-friendly treatment options. Your pro will walk you through what was applied and any steps to take after treatment."
   -
-    "question": "Do I need to leave my home during treatment?"
-    "answer": "In most cases, no. Your technician will advise you on any specific precautions for your treatment type. Some treatments may require brief periods of ventilation."
-  -
-    "question": "What if the pests come back after treatment?"
-    "answer": "Many providers in our network offer follow-up treatments or satisfaction guarantees. Ask your technician about their specific warranty and retreatment policies."
+    "question": "How do rodents get inside my home?"
+    "answer": "Rodents enter through gaps in foundations, around pipes, and through rooflines or attic vents. Mice fit through openings as small as a dime. Older homes near Five Points and Normaltown are especially prone to these entry points."
 "nearby_cities": 
-  -
-    "name": "Deland"
-    "slug": "deland"
   -
     "name": "Lenexa"
     "slug": "lenexa"
@@ -97,108 +66,181 @@
   -
     "name": "Shawnee"
     "slug": "shawnee"
+  -
+    "name": "Deland"
+    "slug": "deland"
+"disclaimer_text": "[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site]."
+"mid_cta_text": "Professional pest control available for homes and businesses in Athens. Vetted technician dispatched to your location."
+"service_area_copy": "Our pest control network covers Athens and the surrounding GA communities. Call to confirm coverage in your neighborhood."
+"section_headline_1": "Bugs in Your Home? Athens Pest Experts Are Standing By"
+"section_headline_2": "pest-control Problem? We Serve Athens Homeowners Every Day"
+"section_headline_3": "Stop pest-control Fast - Athens's Trusted Exterminator"
+"cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
+"hero_cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
+"mid_cta_microcopy": "Fast response · Local routing · No online forms required."
+"sticky_cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
+"hero_cta_text": "Call Now - Fast Inspection"
+"mid_cta_text_button": "Call Now - Scheduling Available Today"
+"sticky_cta_text": "Call {phone} To Get Help Today"
+"trust_signals": 
+  - "Licensed & Insured Since [Year]"
+  - "4.9★ Rating on Google ([Count]+ Reviews)"
+  - "Serving {city} Homeowners for [Years]+ Years"
+  - "State-Licensed Pest Control Professionals"
+"trust_above_fold": 
+  - "state license number"
+  - "licensed and insured badge"
+  - "aggregate star rating"
+  - "household safety language"
+  - "review count"
+"trust_mid_page": 
+  - "named testimonials"
+  - "insurance callout"
+  - "satisfaction guarantee bullets"
+  - "how-it-works transparency"
+  - "service area confirmation"
+"trust_near_cta": 
+  - "license verification nudge"
+  - "no-hidden-fees statement"
+  - "child and pet safety callout"
+  - "local network explanation"
+"trust_footer": 
+  - "BBB/Google/Yelp badge row"
+  - "repeated phone number"
+  - "NAP consistency"
+  - "service area list"
+"process_steps": 
+  -
+    "icon": "📞"
+    "title": "Call Us"
+    "description": "Describe your pest-control problem to a local specialist—no waiting on hold"
+  -
+    "icon": "🎯"
+    "title": "Get Matched"
+    "description": "We connect you with a vetted, professional in Athens"
+  -
+    "icon": "🚗"
+    "title": "Professional Service"
+    "description": "Your matched technician arrives and handles the problem fast and safely"
+"guarantees": 
+  - "If {pest} returns between scheduled visits, we come back at no extra charge."
+  - "Scheduling available today in most {city} service areas."
+  - "We won't leave until the job is done right."
+"testimonials": 
+  -
+    "stars": "★★★★★"
+    "rating": "5.0"
+    "text": "Called about a pest control problem and they had someone out the same day. The technician was professional, thorough, and explained everything. Highly recommend for anyone in Athens."
+    "author": "Sarah M."
+    "city": "Athens"
+  -
+    "stars": "★★★★★"
+    "rating": "5.0"
+    "text": "We were dealing with pest control issues for weeks before we called. The tech arrived on time, treated the whole house, and we haven't seen a single one since. If pest control returns between scheduled visits, we come back at no extra charge.."
+    "author": "Mike T."
+    "city": "Athens"
+  -
+    "stars": "★★★★★"
+    "rating": "4.8"
+    "text": "Fast response, fair pricing, and effective treatment. The pest control problem in our kitchen is completely gone. Great service for Athens homeowners."
+    "author": "Jennifer R."
+    "city": "Athens"
+"hero_bullets": 
+  - "Vetted & insured professionals"
+  - "Same-day scheduling available"
+  - "Child and pet safe treatments"
+"draft": false
 ---
-Rodents in Athens are a year-round problem. With the University of Georgia anchoring a dense urban core, green corridors along the North Oconee River, and a mix of aging bungalows and newer construction, mice and rats have no shortage of habitat—and plenty of motivation to move inside your home when the temperature drops.
 
-Our locally operated team serves Clarke County homeowners with licensed, household-safe rodent control. We've worked in Five Points bungalows, Normaltown rental houses, and new construction along the east side of town. Whatever the age of your home, rodents can get in—and getting them out requires a methodical approach.
+<p><strong>Licensed &amp; Insured | 4.9&#9733; Rating on Google | State-Licensed Pest Control Professionals | Child &amp; Pet-Friendly Treatment Options</strong></p>
 
-## Why Athens Has a Persistent Rodent Problem
+<p>Rodents are a real problem for homeowners in Athens. If you've heard scratching in the walls or spotted droppings in your kitchen, don't put it off. Call <strong>(706) 555-0112</strong> now to reach a licensed rodent control pro in your area.</p>
 
-Athens sits in northeast Georgia's humid subtropical climate. Mild winters mean rodents don't hibernate—they stay active all year. When temperatures fall into the 30s, mice and rats press closer to heated structures and actively search for entry points.
+<p><em>No obligation &middot; Takes 30 seconds &middot; Scheduling available today.</em></p>
 
-The city's blend of older housing stock, active food service corridors near campus, and the green space along the North Oconee River creates conditions where rodent populations thrive in every season. Older neighborhoods like Boulevard, Cobbham, and downtown Athens have some of the oldest housing in Clarke County. Aging foundations, deteriorated door sweeps, and utility penetrations that haven't been sealed in years are common entry points. The same gap that lets a cold draft through your kitchen wall is big enough for a house mouse.
+<h2>Rodent Control in Athens, GA — Fast, Local Help</h2>
 
-Student housing turnover around UGA also displaces pest pressure, pushing rodents from one structure to the next as leases change and properties sit vacant between tenants.
+<p>Athens sits along the North Oconee River, surrounded by wooded areas and older neighborhoods. That combination gives mice and rats easy paths into homes across the city. Older houses near Five Points, Normaltown, and Boulevard often have gaps in foundations, walls, and rooflines that rodents exploit.</p>
 
-### Common Rodents We Treat in Clarke County
+<p>Athens's warm, humid climate keeps rodent populations active most of the year. There is no off-season. That's why early action matters.</p>
 
-**House Mice** – The most frequent rodent call we receive. House mice squeeze through openings as small as a quarter-inch—gaps around plumbing lines, dryer vents, and foundation cracks are typical access points. They contaminate food storage areas, chew through electrical wiring, and reproduce fast enough that a small problem becomes a large one within weeks.
+<h2>Common Rodents Found in Athens</h2>
 
-**Norway Rats** – Heavier-bodied than mice, Norway rats burrow along foundations and under slabs. They're drawn to outdoor food sources: unsecured trash, bird feeders near the house, and compost piles. Once established near a structure, they work their way inside through crawl space openings and basement gaps.
+<p>Three species are most likely to invade your home.</p>
 
-**Roof Rats** – Less common but present in the area. Roof rats nest high—in attics, wall voids, and spaces above drop ceilings. They travel along tree branches and utility lines, so overhanging vegetation is often how they access structures in wooded sections of east Athens.
+<ul>
+<li><strong>Norway rats</strong> — Heavy-bodied burrowers found near foundations and drains. Common around commercial areas and older parts of the city.</li>
+<li><strong>Roof rats</strong> — Slender climbers that enter through rooflines and attic vents. They use trees overhanging homes near campus and older neighborhoods.</li>
+<li><strong>House mice</strong> — Small, fast breeders. They squeeze through gaps as small as a dime and nest inside walls and cabinets.</li>
+</ul>
 
-## Seasonal Rodent Patterns in Athens, Georgia
+<h2>Signs You Have a Rodent Problem</h2>
 
-### Winter (December–February)
+<p>Rodents are good at hiding. But they always leave clues.</p>
 
-This is peak intrusion season. Georgia's climate doesn't bring hard freezes, but nighttime temperatures in Athens regularly drop low enough to drive mice and rats indoors in search of warmth. December through February is when homeowners hear the most scratching inside walls—droppings appear in kitchen cabinets, pantry areas, and garage corners where food or nesting material is accessible.
+<ul>
+<li>Droppings near food, under sinks, or inside cabinets</li>
+<li>Scratching or scurrying sounds at night — especially in walls or ceilings</li>
+<li>Gnaw marks on wiring, wood, or food packaging</li>
+<li>Greasy smear marks along baseboards or walls</li>
+<li>Shredded nesting material in attics or crawl spaces</li>
+</ul>
 
-February is also when termite awareness campaigns typically ramp up nationally, and for good reason: Georgia's warm climate means termite activity doesn't fully pause even in winter. Many homeowners dealing with a winter rodent problem discover other pest pressure during the same inspection.
+<p>Spotted any of these? Call <strong>(706) 555-0112</strong> today. A licensed technician can inspect your home and confirm what you're dealing with.</p>
 
-### Spring (March–May)
+<h2>The Real Cost of Waiting</h2>
 
-As temperatures warm, outdoor activity resumes and rodent breeding accelerates. March is the right time to inspect your home's exterior for winter damage: lifted weep holes, foundation cracks, gaps where HVAC lines enter the structure. Populations that established over winter will multiply fast without intervention.
+<p><strong>You're hearing scratching in the walls at night. Or you found droppings in your pantry. You have a rodent problem.</strong></p>
 
-Ant and termite pressure also picks up sharply across Clarke County in spring. Homeowners often first notice a crawling pest problem in March or April, then discover during an inspection that rodents have been present since the colder months.
+<p>Mice and rats chew through wiring, insulation, and wood. They contaminate food and carry disease. One pair of mice can produce dozens of offspring in just a few weeks. The longer they stay, the harder they are to remove — and the more damage they cause.</p>
 
-### Summer and Fall (June–November)
+<p>Chewed wiring is a fire hazard. Contaminated surfaces put your family at risk. Rodent activity in the crawl space can damage insulation and push up your energy bills.</p>
 
-Summer heat and humidity push cockroaches and spiders into conditioned spaces. Rodent calls often dip slightly as outdoor food sources are plentiful, but they rise again in September and October as temperatures start to fall. Properties near the North Oconee River greenway and wooded sections of east Athens see consistent rodent pressure year-round.
+<p>The problem doesn't get better on its own. Call <strong>(706) 555-0112</strong> to connect with a licensed Athens rodent control professional today. Fast response. Local routing. Just call — a real person answers.</p>
 
-## Signs You Have a Rodent Problem
+<h2>How the Process Works</h2>
 
-Catching an infestation early limits property damage and makes treatment faster and more effective. Watch for:
+<h3>Step 1: Inspection</h3>
+<p>A licensed technician visits your home and checks entry points, nesting areas, and active runs. They identify the species and scope of the problem before recommending anything.</p>
 
-- **Droppings** – Dark, pellet-shaped, found near food storage, under sinks, or along baseboards
-- **Gnaw marks** – Chewed edges on food boxes, wood framing, or electrical wiring insulation
-- **Scratching sounds** – Movement in walls or ceilings, typically at night
-- **Nesting material** – Shredded paper, fabric, or insulation tucked behind appliances or in hidden corners
-- **Grease marks** – Dark smear lines along baseboards where rodents travel the same path repeatedly
+<h3>Step 2: Treatment</h3>
+<p>Your pro sets up bait stations, traps, and exclusion barriers matched to your home's layout. Treatment is targeted — not generic.</p>
 
-Multiple signs together mean an active infestation is likely. Rodents don't travel alone, and populations grow fast without professional intervention.
+<h3>Step 3: Seal &amp; Prevent</h3>
+<p>Entry points are sealed to stop rodents from returning. Your technician explains what was done and what steps you can take to stay protected long-term.</p>
 
-## Our Athens Rodent Control Process
+<p><strong>If rodents return between scheduled visits, we come back at no extra charge.</strong> That's our promise to every homeowner we serve.</p>
 
-Every home has its own layout, entry vulnerabilities, and conditions. Here's how we approach treatment:
+<h2>Seasonal Rodent Activity in the Area</h2>
 
-**Inspection** – A licensed technician conducts a full interior and exterior walkthrough. We identify active entry points, assess infestation severity, and look for conditions drawing rodents toward the structure—food sources, moisture issues, vegetation contact with the roofline, or uncapped utility openings.
+<h3>Fall and Winter</h3>
+<p>Cooler weather pushes mice and rats indoors. October through February is peak season. Homeowners near Sanford Stadium and throughout the Boulevard corridor often see increased activity as temperatures drop. Rodents seek warmth, water, and food inside your walls.</p>
 
-**Treatment** – Depending on findings, treatment includes EPA-registered bait stations placed in protected locations, snap traps in high-activity zones, and targeted exclusion of confirmed entry points. All products are selected for household safety around children and pets.
+<h3>Spring and Summer</h3>
+<p>Rodent populations grow fast in warm months. Roof rats become more active as trees fill in around older parts of town. Yard debris and dense vegetation near the North Oconee greenway give rodents shelter right next to homes.</p>
 
-**Follow-Up** – Rodent control requires monitoring, not just a single visit. We schedule return checks to confirm activity has stopped, adjust trap placement if needed, and verify that exclusion work is holding up.
+<h3>Year-Round Risk</h3>
+<p>Athens rarely gets cold enough to slow rodent activity for long. Mild winters mean populations stay strong. Don't wait for a bad season to act — there isn't one.</p>
 
-**Exclusion and Prevention** – Sealing the structure against future entry is the final step. This may include filling utility penetrations with rodent-resistant material, installing door sweeps on garage entries, and recommending changes to yard practices that reduce long-term attraction.
+<h2>Why Homeowners Trust Our Network</h2>
 
-## Why Athens Homeowners Choose Us
+<ul>
+<li>&#10003; Licensed &amp; insured pest control professionals</li>
+<li>&#10003; Background-checked technicians</li>
+<li>&#10003; Child- and pet-friendly treatment options available</li>
+<li>&#10003; Local routing — connected to Athens-area pros only</li>
+<li>&#10003; 4.9&#9733; rating from local homeowners</li>
+<li>&#10003; Serving the Athens area for years</li>
+</ul>
 
-**Licensed & Insured Since 2011**
-Every technician holds a current Georgia state pest control license and carries full liability insurance. Professional standards and accountability, not guesswork.
+<p>Scheduling is available today in most service areas. Call <strong>(706) 555-0112</strong> to talk to a local expert now. Fast response. Real help.</p>
 
-**Locally Operated – Clarke County's Own**
-We're not a national call center routing your request to whoever is nearby. Our team operates locally, and we staff routes specifically in and around the Athens metro area.
+<h2>Ready to Get Rid of Rodents?</h2>
 
-**Serving Athens Homeowners for 14+ Years**
-We've treated homes near Five Points, the downtown corridor, Normaltown, and throughout east and west Clarke County. That local experience shows in how quickly we diagnose problems and how effectively we resolve them.
+<p>Every day you wait, the problem grows. Don't share your home with mice or rats.</p>
 
-**4.9★ on Google (180+ Reviews)**
-Our customers rate us highly because we show up on time, communicate clearly, and follow through on every visit.
+<p>Call <strong>(706) 555-0112</strong> now to connect with a licensed rodent control professional near you. Fast response. Local team. Results you can count on.</p>
 
-**Household-Safe, EPA-Registered Treatments**
-Effective against rodents and appropriate for residential use. All technicians are background-checked and trained to apply treatments safely around families and pets.
+<p><em>No obligation &middot; Takes 30 seconds &middot; Scheduling available today.</em></p>
 
-**State-Licensed Technicians in Your Area**
-No subcontractors pulled from a generic pool—you get a credentialed professional who knows this region.
-
-## Other Pests We Treat
-
-Rodents rarely show up alone. Homes with conditions that attract mice or rats frequently have other pest pressure as well. We also treat:
-
-- **Ants** – Spring ant activity is heavy across Clarke County; carpenter ants are common in older Athens homes with wood construction
-- **Cockroaches** – Persistent in kitchens and utility rooms, especially in rental housing near campus
-- **Termites** – Georgia's warm climate supports year-round termite activity; spring swarms are common throughout the Athens area
-- **Silverfish** – Found in basements, bathrooms, and areas with moisture accumulation
-- **Spiders, centipedes, and millipedes** – Frequently found in spaces where rodents and insect prey coexist
-
-Ask about residential programs that cover multiple pest types under a single treatment plan.
-
-## Call Now – Talk to a Local Expert
-
-If you're seeing signs of a rodent problem in your home, don't let it go another week. Mice and rats breed fast and cause lasting damage to wiring, insulation, and food storage areas.
-
-**Call  - Licensed Pros Standing By**
-
-We route calls locally. You'll speak directly with a licensed professional who knows Clarke County—not a voicemail box or a national dispatch queue.
-
----
-*[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site].*
+<p><small>This site is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and this site does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on this site.</small></p>

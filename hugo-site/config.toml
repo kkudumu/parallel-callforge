@@ -4,8 +4,7 @@ title = "Extermanation - Professional Pest Control"
 
 [params]
   has_license = false
-  license_number = ""
-  license_disclaimer = ""
+license_disclaimer = ""
   service_area = "Kansas, Florida, and Georgia"
   address = "Serving multiple locations"
   phone = "(555) 123-4567"

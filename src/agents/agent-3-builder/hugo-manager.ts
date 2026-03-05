@@ -53,6 +53,7 @@ export function createHugoManager(hugoSitePath: string): HugoManager {
 
     if (typeof value === "string") {
       return `"${value.replace(/\\/g, "\\\\").replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/"/g, '\\"')}"`;
+
     }
 
     if (typeof value === "number" || typeof value === "boolean") {
@@ -415,7 +416,7 @@ If you are requesting that your personal information not be sold or shared beyon
 
     async buildSite() {
       try {
-        const { stdout, stderr } = await execFileAsync("hugo", ["--minify"], {
+        const { stdout, stderr } = await execFileAsync("hugo", ["--minify", "--cleanDestinationDir"], {
           cwd: hugoSitePath,
           timeout: 30_000,
         });

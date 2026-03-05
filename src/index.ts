@@ -36,6 +36,43 @@ import {
   VerticalDefinitionSchema,
 } from "./shared/vertical-profiles.js";
 
+async function notifyDiscord(
+  webhookUrl: string,
+  payload: { success: boolean; offerId: string; durationMs: number; error?: string }
+): Promise<void> {
+  const { success, offerId, durationMs, error } = payload;
+  const mins = Math.floor(durationMs / 60_000);
+  const secs = Math.floor((durationMs % 60_000) / 1000);
+  const duration = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  const embed: Record<string, unknown> = {
+    title: success ? "Pipeline Complete" : "Pipeline Failed",
+    color: success ? 0x57f287 : 0xed4245,
+    fields: [
+      { name: "Offer", value: `\`${offerId}\``, inline: true },
+      { name: "Duration", value: duration, inline: true },
+    ],
+    timestamp: new Date().toISOString(),
+  };
+
+  if (error) {
+    embed.description = `\`\`\`${error.slice(0, 1000)}\`\`\``;
+  }
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ embeds: [embed] }),
+    });
+    if (!res.ok) {
+      console.warn(`[notify] Discord webhook returned ${res.status}`);
+    }
+  } catch (err: any) {
+    console.warn(`[notify] Failed to send Discord notification: ${err.message}`);
+  }
+}
+
 async function runMigrations(databaseUrl: string, migrationsDir: string) {
   const db = createDbClient(databaseUrl);
   try {
@@ -316,6 +353,7 @@ async function runSingleAgent(agentName: string) {
 
 async function runPipeline() {
   const env = getEnv();
+  const pipelineStart = Date.now();
   const db = createDbClient(env.DATABASE_URL);
   const limiters = createRateLimiters();
   const claudeCli = createClaudeCli(env.CLAUDE_CLI_PATH);
@@ -404,6 +442,23 @@ async function runPipeline() {
     }, llm, db);
 
     console.log("=== Pipeline Complete ===");
+    if (env.DISCORD_WEBHOOK_URL) {
+      await notifyDiscord(env.DISCORD_WEBHOOK_URL, {
+        success: true,
+        offerId: offerIdArg,
+        durationMs: Date.now() - pipelineStart,
+      });
+    }
+  } catch (err: any) {
+    if (env.DISCORD_WEBHOOK_URL) {
+      await notifyDiscord(env.DISCORD_WEBHOOK_URL, {
+        success: false,
+        offerId: normalizeOptionalArg(process.argv[3]) ?? "unknown",
+        durationMs: Date.now() - pipelineStart,
+        error: err?.message ?? String(err),
+      });
+    }
+    throw err;
   } finally {
     // Gracefully stop the watchdog
     if (watchdogProcess && !watchdogProcess.killed) {

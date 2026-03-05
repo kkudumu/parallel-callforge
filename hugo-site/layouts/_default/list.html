@@ -1,640 +1,200 @@
 {{ define "main" }}
-<style>
-  .hero {
-    background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-background) 100%);
-    padding: 40px 0;
-  }
-  @media (min-width: 768px) {
-    .hero {
-      padding: 60px 0;
-    }
-  }
-  @media (min-width: 1024px) {
-    .hero {
-      padding: 80px 0;
-    }
-  }
-  .hero-content {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 32px;
-    align-items: center;
-  }
-  @media (min-width: 768px) {
-    .hero-content {
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-  .hero-text h1 {
-    color: var(--color-text);
-    margin-bottom: 16px;
-  }
-  .hero-subheadline {
-    font-size: 18px;
-    color: var(--color-urgency);
-    font-weight: 600;
-    margin-bottom: 24px;
-    line-height: 1.4;
-  }
-  .trust-bullets {
-    list-style: none;
-    margin: 24px 0;
-    gap: 12px;
-    display: flex;
-    flex-direction: column;
-  }
-  .trust-bullets li {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 16px;
-  }
-  .trust-bullets li:before {
-    content: "✓";
-    color: var(--color-trust);
-    font-weight: 700;
-    font-size: 20px;
-    flex-shrink: 0;
-  }
-  .hero-image {
-    width: 100%;
-    height: 300px;
-    background-color: var(--color-border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  @media (min-width: 768px) {
-    .hero-image {
-      height: 400px;
-    }
-  }
-  .trust-bar {
-    background-color: var(--color-surface);
-    padding: 24px 0;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-  }
-  @media (min-width: 768px) {
-    .trust-bar {
-      grid-template-columns: repeat(4, 1fr);
-      gap: 24px;
-    }
-  }
-  .trust-item {
-    text-align: center;
-    padding: 12px;
-  }
-  .trust-item-icon {
-    font-size: 32px;
-    margin-bottom: 8px;
-  }
-  .trust-item-label {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--color-text);
-  }
-  .trust-item-sublabel {
-    font-size: 12px;
-    color: var(--color-text-muted);
-  }
-  .pest-grid-section {
-    padding: 32px 0;
-  }
-  @media (min-width: 768px) {
-    .pest-grid-section {
-      padding: 48px 0;
-    }
-  }
-  .pest-card {
-    background-color: var(--color-surface);
-    border-radius: 8px;
-    padding: 24px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-  .pest-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-  }
-  .pest-card-icon {
-    font-size: 48px;
-    margin-bottom: 12px;
-  }
-  .pest-card-name {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: var(--color-text);
-  }
-  .pest-card-desc {
-    font-size: 14px;
-    color: var(--color-text-muted);
-    margin-bottom: 16px;
-    flex-grow: 1;
-  }
-  .pest-card .btn {
-    width: 100%;
-    font-size: 16px;
-    min-height: 48px;
-  }
-  .how-it-works {
-    background-color: var(--color-surface);
-    padding: 40px 0;
-  }
-  @media (min-width: 768px) {
-    .how-it-works {
-      padding: 60px 0;
-    }
-  }
-  .steps {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 24px;
-  }
-  @media (min-width: 768px) {
-    .steps {
-      grid-template-columns: repeat(3, 1fr);
-    }
-  }
-  .step {
-    text-align: center;
-  }
-  .step-icon {
-    font-size: 56px;
-    margin-bottom: 16px;
-  }
-  .step-number {
-    display: inline-block;
-    width: 40px;
-    height: 40px;
-    background-color: var(--color-cta-primary);
-    color: white;
-    border-radius: 50%;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 12px;
-  }
-  .step-label {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-  .step-desc {
-    font-size: 14px;
-    color: var(--color-text-muted);
-  }
-  .mid-page-cta {
-    background-color: var(--color-cta-primary);
-    color: white;
-    padding: 48px 0;
-    text-align: center;
-  }
-  @media (min-width: 768px) {
-    .mid-page-cta {
-      padding: 64px 0;
-    }
-  }
-  .mid-page-cta-number {
-    font-size: 40px;
-    font-weight: 700;
-    margin-bottom: 16px;
-  }
-  @media (min-width: 768px) {
-    .mid-page-cta-number {
-      font-size: 48px;
-    }
-  }
-  .mid-page-cta-text {
-    font-size: 16px;
-    margin-bottom: 24px;
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .mid-page-cta .btn-primary {
-    background-color: var(--color-background);
-    color: var(--color-cta-primary);
-  }
-  .mid-page-cta .btn-primary:hover {
-    background-color: var(--color-surface);
-  }
-  .social-proof {
-    padding: 40px 0;
-  }
-  @media (min-width: 768px) {
-    .social-proof {
-      padding: 60px 0;
-    }
-  }
-  .testimonial-card {
-    background-color: var(--color-surface);
-    padding: 24px;
-    border-radius: 8px;
-    margin-bottom: 16px;
-  }
-  .testimonial-stars {
-    color: #FFB800;
-    font-size: 14px;
-    margin-bottom: 8px;
-  }
-  .testimonial-text {
-    font-size: 15px;
-    margin-bottom: 12px;
-    line-height: 1.6;
-  }
-  .testimonial-author {
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--color-text);
-  }
-  .testimonial-city {
-    font-size: 13px;
-    color: var(--color-text-muted);
-  }
-  .trust-authority {
-    background-color: var(--color-surface);
-    padding: 40px 0;
-  }
-  @media (min-width: 768px) {
-    .trust-authority {
-      padding: 60px 0;
-    }
-  }
-  .license-info {
-    background-color: white;
-    padding: 24px;
-    border-radius: 8px;
-    margin-bottom: 24px;
-  }
-  .license-badge {
-    display: inline-block;
-    padding: 8px 12px;
-    background-color: var(--color-trust);
-    color: white;
-    border-radius: 4px;
-    font-weight: 600;
-    font-size: 14px;
-    margin-bottom: 12px;
-  }
-  .guarantee-list {
-    list-style: none;
-    margin-top: 16px;
-  }
-  .guarantee-list li {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 12px;
-    font-size: 15px;
-  }
-  .guarantee-list li:before {
-    content: "✓";
-    color: var(--color-trust);
-    font-weight: 700;
-    font-size: 18px;
-    flex-shrink: 0;
-  }
-  .service-area {
-    padding: 40px 0;
-  }
-  @media (min-width: 768px) {
-    .service-area {
-      padding: 60px 0;
-    }
-  }
-  .city-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 16px;
-  }
-  .city-pill {
-    background-color: var(--color-border);
-    color: var(--color-text);
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: 500;
-  }
-  .faq {
-    padding: 40px 0;
-  }
-  @media (min-width: 768px) {
-    .faq {
-      padding: 60px 0;
-    }
-  }
-  .faq-item {
-    margin-bottom: 16px;
-  }
-  .faq-item details {
-    background-color: var(--color-surface);
-    border-radius: 8px;
-    padding: 16px;
-    cursor: pointer;
-  }
-  .faq-item summary {
-    font-weight: 600;
-    font-size: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    user-select: none;
-  }
-  .faq-item summary:before {
-    content: "▶";
-    display: inline-block;
-    margin-right: 12px;
-    transition: transform 0.2s;
-  }
-  .faq-item details[open] summary:before {
-    transform: rotate(90deg);
-  }
-  .faq-item-content {
-    margin-top: 12px;
-    font-size: 15px;
-    line-height: 1.6;
-    color: var(--color-text);
-  }
-  .faq-cta {
-    margin-top: 12px;
-    padding: 8px 0;
-  }
-  .faq-cta a {
-    color: var(--color-cta-primary);
-    font-weight: 600;
-    text-decoration: none;
-  }
-  .disclaimer {
-    background-color: #FDF6F3;
-    padding: 32px 0;
-    border-top: 3px solid var(--color-cta-primary);
-  }
-  @media (min-width: 768px) {
-    .disclaimer {
-      padding: 40px 0;
-    }
-  }
-  .disclaimer-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  .disclaimer-icon {
-    font-size: 28px;
-    flex-shrink: 0;
-  }
-  .disclaimer-title {
-    font-size: 18px;
-    font-weight: 600;
-  }
-  .disclaimer-text {
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--color-text);
-  }
-</style>
-
 <section class="hero">
-  <div class="container">
-    <div class="hero-content">
-      <div class="hero-text">
-        <h1>{{ .Params.h1_title }}</h1>
-        <p class="hero-subheadline">{{ .Params.subheadline }}</p>
-        <a href="tel:{{ .Site.Params.phone_raw }}" class="btn btn-primary">{{ .Params.hero_cta_text | default "Call a Local Pro Now" }}</a>
-        <div style="margin-top: 12px;">
-          <a href="tel:{{ .Site.Params.phone_raw }}" style="font-size: 22px; font-weight: 700; color: var(--color-cta-primary); text-decoration: none;">{{ .Site.Params.phone }}</a>
+    <div class="container">
+        <h1>{{ .Params.city }} Pest Control</h1>
+        <p class="hero-subhead">Professional residential pest control services for {{ .Params.city }} homeowners. Licensed, insured, trusted locally.</p>
+        <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn btn-full hero-cta">
+            📞 Call Now for Local Pest Help
+        </a>
+        <div class="hero-bullets">
+            <span class="hero-bullet">Licensed & insured</span>
+            <span class="hero-bullet">Same-day service</span>
+            <span class="hero-bullet">No hidden fees</span>
+            <span class="hero-bullet">Residential only</span>
+            <span class="hero-bullet">Pets & kids safe</span>
         </div>
-        {{ $heroMicro := .Params.hero_cta_microcopy | default .Params.cta_microcopy }}
-        {{ if $heroMicro }}<p class="cta-microcopy" style="font-size: 14px; color: var(--color-text-muted); margin-top: 8px;">{{ $heroMicro }}</p>{{ end }}
-        <p style="font-size: 10px; color: var(--color-text-muted); margin-top: 6px;">{{ .Site.Params.tcpa_text | default "By calling, you consent to being contacted by a service professional." }}</p>
-        <ul class="trust-bullets">
-          {{ range .Params.hero_bullets }}
-          <li>{{ . }}</li>
-          {{ end }}
-        </ul>
-        {{ if .Params.trust_above_fold }}
-        <div class="trust-inline" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;">
-          {{ range .Params.trust_above_fold }}
-          <span style="font-size: 12px; color: var(--color-text-muted); background: var(--color-surface); padding: 4px 8px; border-radius: 4px;">✓ {{ . }}</span>
-          {{ end }}
-        </div>
-        {{ end }}
-      </div>
-      <div class="hero-image">
-        {{ if .Params.hero_image }}
-        <img src="{{ .Params.hero_image }}" alt="{{ .Params.hero_image_alt | default "Professional pest control service" }}" loading="lazy" width="400" height="400">
-        {{ else }}
-        <div style="width: 100%; height: 100%; background: linear-gradient(135deg, var(--color-trust) 0%, var(--color-trust) 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 48px;">🏠</div>
-        {{ end }}
-      </div>
     </div>
-  </div>
 </section>
-
-{{ if .Params.seasonal_focus }}
-{{ if (reflect.IsMap .Params.seasonal_focus) }}
-<div style="background-color: var(--color-urgency, var(--color-urgency)); color: #fff; padding: 12px 0; text-align: center; width: 100%;">
-  <div class="container">
-    <span style="margin-right: 8px;">{{ .Params.seasonal_focus.icon | default "⚠️" }}</span>
-    <strong>{{ .Params.seasonal_focus.season_name }}</strong> &mdash; {{ .Params.seasonal_focus.message }}
-  </div>
-</div>
-{{ end }}
-{{ end }}
 
 <section class="trust-bar">
-  <div class="container" style="display: contents;">
-    {{ $defaultSignals := slice "Licensed & Insured" "4.9 Star Rating" "Guaranteed Service" "Family Safe" }}
-    {{ $signals := .Params.trust_signals | default $defaultSignals }}
-    {{ range $signals }}
-    <div class="trust-item">
-      <div class="trust-item-icon">✅</div>
-      <div class="trust-item-label">{{ . }}</div>
-    </div>
-    {{ end }}
-  </div>
-</section>
-
-<section class="pest-grid-section">
-  <div class="container">
-    <h2 style="text-align: center; margin-bottom: 32px;">{{ .Params.section_headline_1 | default "Pest Control Services We Offer" }}</h2>
-    <div class="grid-4">
-      {{ range .Params.services }}
-      <div class="pest-card">
-        <div class="pest-card-icon">{{ .icon }}</div>
-        <div class="pest-card-name">{{ .name }}</div>
-        <div class="pest-card-desc">{{ .description }}</div>
-        <a href="{{ .link }}" class="btn btn-secondary">Learn More</a>
-      </div>
-      {{ end }}
-    </div>
-  </div>
-</section>
-
-<section class="how-it-works">
-  <div class="container">
-    <h2 style="text-align: center; margin-bottom: 40px;">How We Work</h2>
-    <div class="steps">
-      {{ $defaultSteps := slice
-        (dict "icon" "📞" "title" "Call Us" "description" "Describe your pest problem in just a few words")
-        (dict "icon" "🎯" "title" "Get Matched" "description" "We connect you with a local specialist")
-        (dict "icon" "🚗" "title" "Professional Service" "description" "Expert technician treats your home")
-      }}
-      {{ $steps := .Params.process_steps | default $defaultSteps }}
-      {{ range $i, $step := $steps }}
-      <div class="step">
-        <div class="step-number">{{ add $i 1 }}</div>
-        <div class="step-icon">{{ $step.icon }}</div>
-        <div class="step-label">{{ $step.title }}</div>
-        <div class="step-desc">{{ $step.description }}</div>
-      </div>
-      {{ end }}
-    </div>
-  </div>
-</section>
-
-{{ if .Params.trust_mid_page }}
-<div style="background: var(--color-surface); padding: 8px 0; text-align: center;">
-  <div class="container">
-    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 16px;">
-      {{ range .Params.trust_mid_page }}
-      <span style="font-size: 13px; color: var(--color-text-muted);">✓ {{ . }}</span>
-      {{ end }}
-    </div>
-  </div>
-</div>
-{{ end }}
-
-<section class="mid-page-cta">
-  <div class="container">
-    <div class="mid-page-cta-number">{{ .Site.Params.phone }}</div>
-    <p class="mid-page-cta-text">{{ .Params.mid_cta_text }}</p>
-    <a href="tel:{{ .Site.Params.phone_raw }}" class="btn btn-primary">{{ .Params.mid_cta_text_button | default "Connect With a Pro in Your Area" }}</a>
-    {{ if .Params.trust_near_cta }}
-    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 12px;">
-      {{ range .Params.trust_near_cta }}
-      <span style="font-size: 12px; opacity: 0.9;">✓ {{ . }}</span>
-      {{ end }}
-    </div>
-    {{ end }}
-    {{ $midMicro := .Params.mid_cta_microcopy | default .Params.cta_microcopy }}
-    {{ if $midMicro }}<p style="font-size: 13px; opacity: 0.9; margin-top: 12px;">{{ $midMicro }}</p>{{ end }}
-    <p style="font-size: 10px; opacity: 0.75; margin-top: 8px;">{{ .Site.Params.tcpa_text | default "By calling, you consent to being contacted by a service professional." }}</p>
-  </div>
-</section>
-
-{{ if .Params.testimonials }}
-<section class="social-proof">
-  <div class="container">
-    <h2 style="text-align: center; margin-bottom: 32px;">{{ .Params.section_headline_2 | default "What Our Customers Say" }}</h2>
-    <div class="grid-2">
-      {{ range .Params.testimonials }}
-      <div class="testimonial-card">
-        <div class="testimonial-stars">{{ .stars }} ⭐ ({{ .rating }}/5)</div>
-        <div class="testimonial-text">"{{ .text }}"</div>
-        <div class="testimonial-author">— {{ .author }}</div>
-        <div class="testimonial-city">{{ .city }}</div>
-      </div>
-      {{ end }}
-    </div>
-  </div>
-</section>
-{{ end }}
-
-<section class="trust-authority">
-  <div class="container">
-    <h2 style="margin-bottom: 32px;">Why You Can Trust Us</h2>
-    {{ if and .Site.Params.has_license .Site.Params.license_number }}
-    <div class="license-info">
-      <div class="license-badge">License #{{ .Site.Params.license_number }}</div>
-      <p><strong>Licensed & Insured Professional</strong></p>
-      <p style="font-size: 14px; color: var(--color-text-muted);">We maintain all required state and local licenses. Our insurance protects you and your property during all service calls.</p>
-    </div>
-    {{ end }}
-    <ul class="guarantee-list">
-      {{ if .Params.guarantees }}
-      {{ range .Params.guarantees }}
-      <li>{{ . }}</li>
-      {{ end }}
-      {{ else }}
-      <li>Professional treatment with proven methods</li>
-      <li>Qualified local technician network</li>
-      <li>Transparent pricing with no surprises</li>
-      <li>Pet and child-safe treatment options</li>
-      <li>100% satisfaction assurance on all service</li>
-      {{ end }}
-    </ul>
-  </div>
-</section>
-
-<section class="service-area">
-  <div class="container">
-    <h2 style="margin-bottom: 16px;">We Service {{ .Params.city }} and Nearby Areas</h2>
-    <p>{{ .Params.service_area_copy }}</p>
-    <div class="city-list">
-      {{ range .Params.nearby_cities }}
-      <a href="/{{ .slug }}/" class="city-pill" style="text-decoration: none; color: var(--color-text);">{{ .name }}</a>
-      {{ end }}
-    </div>
-  </div>
-</section>
-
-<section class="faq">
-  <div class="container">
-    <h2 style="margin-bottom: 32px;">{{ .Params.section_headline_3 | default "Frequently Asked Questions" }}</h2>
-    {{ range .Params.faqs }}
-    <div class="faq-item">
-      <details>
-        <summary>{{ .question }}</summary>
-        <div class="faq-item-content">
-          {{ .answer }}
-          <div class="faq-cta">
-            <a href="tel:{{ $.Site.Params.phone_raw }}">Call us to discuss — {{ $.Site.Params.phone }}</a>
-          </div>
+    <div class="trust-grid">
+        <div class="trust-item">
+            <div class="trust-icon">🏛️</div>
+            <div class="trust-label">State Licensed</div>
+            <div class="trust-value">Verified pros</div>
         </div>
-      </details>
+        <div class="trust-item">
+            <div class="trust-icon">🛡️</div>
+            <div class="trust-label">Fully Insured</div>
+            <div class="trust-value">Coverage verified</div>
+        </div>
+        <div class="trust-item">
+            <div class="trust-icon">⭐</div>
+            <div class="trust-label">Rated</div>
+            <div class="trust-value">{{ .Params.averageRating | default "4.8" }}/5 stars</div>
+        </div>
+        <div class="trust-item">
+            <div class="trust-icon">✓</div>
+            <div class="trust-label">Local Network</div>
+            <div class="trust-value">{{ .Params.city }} based</div>
+        </div>
     </div>
-    {{ end }}
-  </div>
 </section>
 
-<section class="disclaimer">
-  <div class="container">
-    <div class="disclaimer-header">
-      <div class="disclaimer-icon">ℹ️</div>
-      <h3 class="disclaimer-title">Important Disclosure</h3>
+<section id="services">
+    <div class="container">
+        <h2>Residential Pest Services in {{ .Params.city }}</h2>
+        <p>We handle common household pests through our matched-technician network. All services are residential-only and 100% transparent.</p>
+        
+        {{ if .Params.pestServices }}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin-top: 2rem;">
+            {{ range first 6 (default slice .Params.pestServices) }}
+            <div style="background: white; padding: 1.5rem; border-radius: 6px; border: 1px solid #E0DDD5;">
+                <h3 style="color: var(--trust); margin-top: 0;">{{ .name }}</h3>
+                <p>{{ .description }}</p>
+                <span style="display: inline-block; font-size: 0.8rem; background: var(--trust); color: white; padding: 0.3rem 0.6rem; border-radius: 3px; margin-bottom: 1rem;">Residential</span>
+                <br>
+                <a href="tel:+1{{ $.Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn" style="margin-top: 1rem;">
+                    Call for {{ .name }}
+                </a>
+            </div>
+            {{ end }}
+        </div>
+        {{ end }}
     </div>
-    <p class="disclaimer-text">
-      {{ .Params.disclaimer_text }}
-    </p>
-  </div>
 </section>
 
-{{ if .Params.faqs }}
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [
-    {{ range $i, $faq := .Params.faqs }}{{ if $i }},{{ end }}
-    {
-      "@type": "Question",
-      "name": {{ $faq.question | jsonify }},
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": {{ $faq.answer | jsonify }}
-      }
-    }
-    {{ end }}
-  ]
-}
-</script>
-{{ end }}
+<section id="how-it-works">
+    <div class="container">
+        <h2 class="text-center">How It Works</h2>
+        <p class="text-center">Simple, transparent 3-step process.</p>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin-top: 3rem;">
+            <div style="text-align: center;">
+                <div style="font-size: 3rem; font-weight: 700; color: var(--primary); margin-bottom: 1rem;">1</div>
+                <h3>Call Now</h3>
+                <p>Describe your pest problem. Get instant confirmation of coverage and service availability in {{ .Params.city }}.</p>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 3rem; font-weight: 700; color: var(--primary); margin-bottom: 1rem;">2</div>
+                <h3>Get Matched</h3>
+                <p>We match you with a licensed, insured local technician ready to visit your home.</p>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 3rem; font-weight: 700; color: var(--primary); margin-bottom: 1rem;">3</div>
+                <h3>Service Delivered</h3>
+                <p>Technician arrives, completes work, and you pay only for services received—no surprises.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="mid-cta">
+    <div class="mid-cta-content">
+        <h2>Ready to get pest help in {{ .Params.city }}?</h2>
+        <p style="font-size: 1.1rem; margin-bottom: 1rem;">Our network is available 24/7. Call now for immediate service confirmation.</p>
+        <div class="mid-cta-phone">{{ .Params.phoneNumber }}</div>
+        <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn" style="background: var(--cta-primary); font-size: 20px;">
+            📞 Call Now for Local Pest Help
+        </a>
+    </div>
+</section>
+
+<section id="testimonials">
+    <div class="container">
+        <h2 class="text-center">Local Reviews from {{ .Params.city }} Residents</h2>
+        
+        {{ if .Params.testimonials }}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-top: 2rem;">
+            {{ range first 5 (default slice .Params.testimonials) }}
+            <div style="background: white; padding: 1.5rem; border-radius: 6px; border: 1px solid #E0DDD5;">
+                <div style="color: var(--primary); margin-bottom: 0.5rem;">{{ .rating | default "⭐⭐⭐⭐⭐" }}</div>
+                <p style="font-style: italic; margin-bottom: 1rem;">"{{ .quote }}"</p>
+                <strong>{{ .author }}</strong><br>
+                <span style="font-size: 0.9rem; color: var(--text-muted);">{{ .location }}, {{ $.Params.city }}</span>
+            </div>
+            {{ end }}
+        </div>
+        {{ end }}
+    </div>
+</section>
+
+<section id="trust-authority">
+    <div class="container">
+        <h2>Why Choose Local Pest Control in {{ .Params.city }}?</h2>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
+            <div>
+                <h3 style="color: var(--trust);">Licensed & Insured</h3>
+                <p>State-licensed professionals verified before dispatch. Full liability coverage protects your home.</p>
+                
+                <h3 style="color: var(--trust); margin-top: 2rem;">Satisfaction Guaranteed</h3>
+                <ul style="list-style: none; padding-left: 0;">
+                    <li>✓ Work until pest problem solved</li>
+                    <li>✓ Transparent pricing—no hidden fees</li>
+                    <li>✓ 100% family & pet safe methods</li>
+                </ul>
+            </div>
+            <div>
+                <h3 style="color: var(--trust);">Residential-Only Service</h3>
+                <p>We focus exclusively on homeowner pest problems. No commercial kitchens or industrial facilities.</p>
+                
+                <h3 style="color: var(--trust); margin-top: 2rem;">Local Network Transparency</h3>
+                <p>Every technician is licensed and insured independently. You pay only for direct service—no middleman markups.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="service-areas">
+    <div class="container">
+        <h2>Service Areas in {{ .Params.city }}</h2>
+        <p>We serve all residential neighborhoods in {{ .Params.city }} and nearby areas.</p>
+        
+        {{ if .Params.serviceAreas }}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem;">
+            {{ range .Params.serviceAreas }}
+            <div style="padding: 1rem; background: white; border-radius: 4px; border-left: 4px solid var(--trust);">
+                {{ . }}
+            </div>
+            {{ end }}
+        </div>
+        {{ end }}
+    </div>
+</section>
+
+<section id="faq">
+    <div class="container">
+        <h2>Frequently Asked Questions</h2>
+        
+        {{ if .Params.faqs }}
+        <div style="margin-top: 2rem;">
+            {{ range first 8 (default slice .Params.faqs) }}
+            <details style="margin-bottom: 1rem; padding: 1.5rem; background: white; border-radius: 4px; border-left: 4px solid var(--primary); cursor: pointer;">
+                <summary style="font-weight: 700; color: var(--primary); outline: none;">
+                    {{ .question }}
+                </summary>
+                <p style="margin-top: 1rem; color: var(--text); padding-top: 1rem; border-top: 1px solid #E0DDD5;">
+                    {{ .answer }}
+                </p>
+                <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted);">
+                    <em>Still have questions? <a href="tel:+1{{ $.Params.phoneNumber | replaceRE "[^0-9]" "" }}" style="color: var(--primary); font-weight: 600;">Call us now</a> for personalized guidance.</em>
+                </p>
+            </details>
+            {{ end }}
+        </div>
+        {{ end }}
+    </div>
+</section>
+
+<section id="disclaimer">
+    <div class="container">
+        <div style="background: #FEF9F3; padding: 2rem; border-radius: 6px; border-left: 4px solid var(--secondary);">
+            <h3 style="color: var(--primary); margin-top: 0;">💡 Transparency Commitment</h3>
+            <p style="font-size: 0.95rem; color: var(--text);">
+                We connect homeowners with licensed, independent pest control technicians in {{ .Params.city }}. Each technician operates as an independent contractor and maintains their own licensing, insurance, and customer service standards. You pay directly for services rendered—no hidden fees or surprise charges. All residential pest control services are performed in full compliance with Florida Department of Agriculture regulations.
+            </p>
+        </div>
+    </div>
+</section>
 {{ end }}

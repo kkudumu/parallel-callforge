@@ -72,10 +72,11 @@ function createMockLlmClient(): LlmClient {
           "Santa Cruz neighborhoods benefit from local treatment plans.",
         ].join(" ");
         const words = Array.from({ length: 900 }, (_, index) => `quality${index}`).join(" ");
+        const phoneRefs = "Call (555) 123-4567 for same-day service. Call our local Santa Cruz team anytime. Call now for a free inspection.";
         return {
           title: "Santa Cruz Pest Control Services",
           meta_description: "Professional pest control in Santa Cruz, CA. Same-day service available.",
-          content: `Professional pest control services in Santa Cruz. ${cityMentions} ${words}`,
+          content: `Professional pest control services in Santa Cruz. ${phoneRefs} ${cityMentions} ${words}`,
           headings: ["Why Choose Us", "Our Services", "Service Area"],
         } as z.infer<T>;
       }
@@ -257,8 +258,14 @@ describe("Integration: Pipeline", () => {
       }
     }
 
-    // Clear stale checkpoints so Agent 1 re-runs fresh (not skipped by cached "completed" state)
-    try { await db.query("DELETE FROM agent_checkpoints"); } catch (_) { /* ignore */ }
+    // Clear stale checkpoints and test data from prior runs so tests run fresh
+    try {
+      await db.query("DELETE FROM agent_checkpoints");
+      await db.query("DELETE FROM keyword_clusters WHERE niche IN ('pest-control', 'pest-control-agent3-test')");
+      await db.query("DELETE FROM city_keyword_map WHERE niche IN ('pest-control', 'pest-control-agent3-test')");
+    } catch (_) {
+      // Table may not exist yet — migrations above will create it
+    }
   }, 30000);
 
   afterAll(async () => {

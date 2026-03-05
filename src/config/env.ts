@@ -32,6 +32,7 @@ const EnvSchema = z.object({
   INDEXATION_LOOKBACK_DAYS: z.coerce.number().int().min(7).default(30),
   INDEXATION_RATIO_THRESHOLD: z.coerce.number().min(0).max(1).default(0.5),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  DISCORD_WEBHOOK_URL: z.string().optional().transform((v) => v || undefined).pipe(z.string().url().optional()),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -28,6 +28,7 @@ import {
   type SynthesisPromptContext,
 } from "./prompts.js";
 import { readResearchFile } from "./research-reader.js";
+import { withSelfHealing } from "../../shared/self-healing.js";
 
 const AGENT2_COMPETITOR_ANALYSIS_TIMEOUT_MS = 420_000;
 const AGENT2_DESIGN_SPEC_TIMEOUT_MS = 180_000;
@@ -312,12 +313,39 @@ export async function runAgent2(
     console.log("[Agent 2] Step 1: Running competitor analysis...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Competitor analysis", detail: "CRO patterns", timestamp: Date.now() });
     const competitorPrompt = buildCompetitorAnalysisPrompt(config.niche, researchCtx);
-    competitorAnalysis = await llm.call({
-      prompt: competitorPrompt,
-      schema: CompetitorAnalysisSchema,
-      model: "sonnet",
-      timeoutMs: AGENT2_COMPETITOR_ANALYSIS_TIMEOUT_MS,
-      logLabel: "[Agent 2][Step 1][Competitor analysis]",
+    let competitorRepairHint = "";
+    competitorAnalysis = await withSelfHealing({
+      runId: "no-run-id",
+      offerId: config.offerProfile?.offer_id ?? "unknown",
+      agentName: "agent-2",
+      step: "competitor_analysis",
+      fn: async () => {
+        const prompt = competitorRepairHint
+          ? competitorPrompt + `\n\n[Correction guidance from previous attempt: ${competitorRepairHint}]`
+          : competitorPrompt;
+        const result = await llm.call({
+          prompt,
+          schema: CompetitorAnalysisSchema,
+          model: "sonnet",
+          timeoutMs: AGENT2_COMPETITOR_ANALYSIS_TIMEOUT_MS,
+          logLabel: "[Agent 2][Step 1][Competitor analysis]",
+        });
+        await db.query(
+          `INSERT INTO competitor_analyses (niche, analysis)
+           VALUES ($1, $2)
+           ON CONFLICT (niche) DO UPDATE SET
+             analysis = EXCLUDED.analysis,
+             updated_at = now()`,
+          [cacheKey, JSON.stringify(result)]
+        );
+        await checkpoints.mark("competitor_analysis", { patternCount: result.patterns.length });
+        return result;
+      },
+      getRepairContext: (err) =>
+        `Agent 2 Step 1 (competitor analysis) for niche "${config.niche}" failed with: ${err.message}\n\nReturn corrected JSON matching the CompetitorAnalysis schema with fields: patterns (array of {category, findings, recommendation}), top_cta_patterns, trust_signal_types, layout_order.`,
+      applyFix: async (fixedCode) => { competitorRepairHint = fixedCode; },
+      db,
+      llm,
     });
     console.log(`[Agent 2] Found ${competitorAnalysis.patterns.length} CRO patterns`);
     console.log(
@@ -327,17 +355,6 @@ export async function runAgent2(
         .join(" | ")}`
     );
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Patterns found", detail: `${competitorAnalysis.patterns.length} CRO patterns`, timestamp: Date.now() });
-    await db.query(
-      `INSERT INTO competitor_analyses (niche, analysis)
-       VALUES ($1, $2)
-       ON CONFLICT (niche) DO UPDATE SET
-         analysis = EXCLUDED.analysis,
-         updated_at = now()`,
-      [cacheKey, JSON.stringify(competitorAnalysis)]
-    );
-    await checkpoints.mark("competitor_analysis", {
-      patternCount: competitorAnalysis.patterns.length,
-    });
   }
 
   // Step 2: Design specification
@@ -356,44 +373,59 @@ export async function runAgent2(
     console.log("[Agent 2] Step 2: Generating design specification...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Design spec", detail: "Generating specification", timestamp: Date.now() });
     const designPrompt = buildDesignSpecPrompt(config.niche, JSON.stringify(competitorAnalysis, null, 2), researchCtx);
-    designSpec = await llm.call({
-      prompt: designPrompt,
-      schema: DesignSpecSchema,
-      model: "sonnet",
-      timeoutMs: AGENT2_DESIGN_SPEC_TIMEOUT_MS,
-      logLabel: "[Agent 2][Step 2][Design specification]",
+    let designRepairHint = "";
+    designSpec = await withSelfHealing({
+      runId: "no-run-id",
+      offerId: config.offerProfile?.offer_id ?? "unknown",
+      agentName: "agent-2",
+      step: "design_spec",
+      fn: async () => {
+        const prompt = designRepairHint
+          ? designPrompt + `\n\n[Correction guidance from previous attempt: ${designRepairHint}]`
+          : designPrompt;
+        const result = await llm.call({
+          prompt,
+          schema: DesignSpecSchema,
+          model: "sonnet",
+          timeoutMs: AGENT2_DESIGN_SPEC_TIMEOUT_MS,
+          logLabel: "[Agent 2][Step 2][Design specification]",
+        });
+        await db.query(
+          `INSERT INTO design_specs (niche, archetype, layout, components, colors, typography, responsive_breakpoints)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (niche) DO UPDATE SET
+             archetype = EXCLUDED.archetype,
+             layout = EXCLUDED.layout,
+             components = EXCLUDED.components,
+             colors = EXCLUDED.colors,
+             typography = EXCLUDED.typography,
+             responsive_breakpoints = EXCLUDED.responsive_breakpoints,
+             updated_at = now()`,
+          [
+            cacheKey,
+            result.archetype,
+            JSON.stringify(result.layout),
+            JSON.stringify(result.components),
+            JSON.stringify(result.colors),
+            JSON.stringify(result.typography),
+            JSON.stringify(result.responsive_breakpoints),
+          ]
+        );
+        await checkpoints.mark("design_spec", { archetype: result.archetype });
+        return result;
+      },
+      getRepairContext: (err) =>
+        `Agent 2 Step 2 (design spec) for niche "${config.niche}" failed with: ${err.message}\n\nReturn corrected JSON matching the DesignSpec schema with fields: niche, archetype, layout, components, colors, typography, responsive_breakpoints.`,
+      applyFix: async (fixedCode) => { designRepairHint = fixedCode; },
+      db,
+      llm,
     });
     console.log(`[Agent 2] Design archetype: ${designSpec.archetype}`);
     console.log(
       `[Agent 2] Layout sections: ${Object.keys(designSpec.layout).slice(0, 6).join(" | ")}`
     );
-
-    await db.query(
-      `INSERT INTO design_specs (niche, archetype, layout, components, colors, typography, responsive_breakpoints)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (niche) DO UPDATE SET
-         archetype = EXCLUDED.archetype,
-         layout = EXCLUDED.layout,
-         components = EXCLUDED.components,
-         colors = EXCLUDED.colors,
-         typography = EXCLUDED.typography,
-         responsive_breakpoints = EXCLUDED.responsive_breakpoints,
-         updated_at = now()`,
-      [
-        cacheKey,
-        designSpec.archetype,
-        JSON.stringify(designSpec.layout),
-        JSON.stringify(designSpec.components),
-        JSON.stringify(designSpec.colors),
-        JSON.stringify(designSpec.typography),
-        JSON.stringify(designSpec.responsive_breakpoints),
-      ]
-    );
     console.log("[Agent 2] Saved design spec");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Spec saved", detail: "Design specification stored", timestamp: Date.now() });
-    await checkpoints.mark("design_spec", {
-      archetype: designSpec.archetype,
-    });
   }
 
   // Step 3: Copy framework
@@ -412,52 +444,67 @@ export async function runAgent2(
     console.log("[Agent 2] Step 3: Generating copy framework...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Copy framework", detail: "Headlines, CTAs, trust signals", timestamp: Date.now() });
     const copyPrompt = buildCopyFrameworkPrompt(config.niche, researchCtx);
-    copyFramework = await llm.call({
-      prompt: copyPrompt,
-      schema: CopyFrameworkSchema,
-      model: "sonnet",
-      timeoutMs: AGENT2_COPY_FRAMEWORK_TIMEOUT_MS,
-      logLabel: "[Agent 2][Step 3][Copy framework]",
+    let copyRepairHint = "";
+    copyFramework = await withSelfHealing({
+      runId: "no-run-id",
+      offerId: config.offerProfile?.offer_id ?? "unknown",
+      agentName: "agent-2",
+      step: "copy_framework",
+      fn: async () => {
+        const prompt = copyRepairHint
+          ? copyPrompt + `\n\n[Correction guidance from previous attempt: ${copyRepairHint}]`
+          : copyPrompt;
+        const result = await llm.call({
+          prompt,
+          schema: CopyFrameworkSchema,
+          model: "sonnet",
+          timeoutMs: AGENT2_COPY_FRAMEWORK_TIMEOUT_MS,
+          logLabel: "[Agent 2][Step 3][Copy framework]",
+        });
+        await db.query(
+          `INSERT INTO copy_frameworks (
+             niche, headlines, ctas, cta_microcopy, trust_signals, guarantees, reading_level, vertical_angles, faq_templates, pas_scripts
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (niche) DO UPDATE SET
+             headlines = EXCLUDED.headlines,
+             ctas = EXCLUDED.ctas,
+             cta_microcopy = EXCLUDED.cta_microcopy,
+             trust_signals = EXCLUDED.trust_signals,
+             guarantees = EXCLUDED.guarantees,
+             reading_level = EXCLUDED.reading_level,
+             vertical_angles = EXCLUDED.vertical_angles,
+             faq_templates = EXCLUDED.faq_templates,
+             pas_scripts = EXCLUDED.pas_scripts,
+             updated_at = now()`,
+          [
+            cacheKey,
+            JSON.stringify(result.headlines),
+            JSON.stringify(result.ctas),
+            JSON.stringify(result.cta_microcopy),
+            JSON.stringify(result.trust_signals),
+            JSON.stringify(result.guarantees),
+            JSON.stringify(result.reading_level),
+            JSON.stringify(result.vertical_angles),
+            JSON.stringify(result.faq_templates),
+            JSON.stringify(result.pas_scripts),
+          ]
+        );
+        await checkpoints.mark("copy_framework", { headlineCount: result.headlines.length });
+        return result;
+      },
+      getRepairContext: (err) =>
+        `Agent 2 Step 3 (copy framework) for niche "${config.niche}" failed with: ${err.message}\n\nReturn corrected JSON matching the CopyFramework schema with fields: niche, headlines, ctas, cta_microcopy, trust_signals, guarantees, reading_level, vertical_angles, faq_templates, pas_scripts.`,
+      applyFix: async (fixedCode) => { copyRepairHint = fixedCode; },
+      db,
+      llm,
     });
     console.log(
       `[Agent 2] Headline directions: ${copyFramework.headlines.slice(0, 4).join(" | ")}`
     );
     console.log(`[Agent 2] CTA variants: ${copyFramework.ctas.slice(0, 4).join(" | ")}`);
-
-    await db.query(
-      `INSERT INTO copy_frameworks (
-         niche, headlines, ctas, cta_microcopy, trust_signals, guarantees, reading_level, vertical_angles, faq_templates, pas_scripts
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       ON CONFLICT (niche) DO UPDATE SET
-         headlines = EXCLUDED.headlines,
-         ctas = EXCLUDED.ctas,
-         cta_microcopy = EXCLUDED.cta_microcopy,
-         trust_signals = EXCLUDED.trust_signals,
-         guarantees = EXCLUDED.guarantees,
-         reading_level = EXCLUDED.reading_level,
-         vertical_angles = EXCLUDED.vertical_angles,
-         faq_templates = EXCLUDED.faq_templates,
-         pas_scripts = EXCLUDED.pas_scripts,
-         updated_at = now()`,
-      [
-        cacheKey,
-        JSON.stringify(copyFramework.headlines),
-        JSON.stringify(copyFramework.ctas),
-        JSON.stringify(copyFramework.cta_microcopy),
-        JSON.stringify(copyFramework.trust_signals),
-        JSON.stringify(copyFramework.guarantees),
-        JSON.stringify(copyFramework.reading_level),
-        JSON.stringify(copyFramework.vertical_angles),
-        JSON.stringify(copyFramework.faq_templates),
-        JSON.stringify(copyFramework.pas_scripts),
-      ]
-    );
     console.log("[Agent 2] Saved copy framework");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Copy saved", detail: "Copy framework stored", timestamp: Date.now() });
-    await checkpoints.mark("copy_framework", {
-      headlineCount: copyFramework.headlines.length,
-    });
   }
 
   // Step 4: Schema templates (JSON-LD)
@@ -476,32 +523,47 @@ export async function runAgent2(
     console.log("[Agent 2] Step 4: Generating schema templates...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Schema templates", detail: "JSON-LD generation", timestamp: Date.now() });
     const schemaPrompt = buildSchemaTemplatePrompt(config.niche, researchCtx);
-    schemaTemplates = await llm.call({
-      prompt: schemaPrompt,
-      schema: SchemaTemplateSchema,
-      model: "haiku",
-      timeoutMs: AGENT2_SCHEMA_TEMPLATES_TIMEOUT_MS,
-      logLabel: "[Agent 2][Step 4][Schema templates]",
+    let schemaRepairHint = "";
+    schemaTemplates = await withSelfHealing({
+      runId: "no-run-id",
+      offerId: config.offerProfile?.offer_id ?? "unknown",
+      agentName: "agent-2",
+      step: "schema_templates",
+      fn: async () => {
+        const prompt = schemaRepairHint
+          ? schemaPrompt + `\n\n[Correction guidance from previous attempt: ${schemaRepairHint}]`
+          : schemaPrompt;
+        const result = await llm.call({
+          prompt,
+          schema: SchemaTemplateSchema,
+          model: "haiku",
+          timeoutMs: AGENT2_SCHEMA_TEMPLATES_TIMEOUT_MS,
+          logLabel: "[Agent 2][Step 4][Schema templates]",
+        });
+        await db.query(
+          `INSERT INTO schema_templates (niche, jsonld_templates)
+           VALUES ($1, $2)
+           ON CONFLICT (niche) DO UPDATE SET
+             jsonld_templates = EXCLUDED.jsonld_templates,
+             updated_at = now()`,
+          [cacheKey, JSON.stringify(result.jsonld_templates)]
+        );
+        await checkpoints.mark("schema_templates", { templateTypes: Object.keys(result.jsonld_templates).length });
+        return result;
+      },
+      getRepairContext: (err) =>
+        `Agent 2 Step 4 (schema templates) for niche "${config.niche}" failed with: ${err.message}\n\nReturn corrected JSON matching the SchemaTemplate schema with fields: niche, jsonld_templates (record of schema type to JSON-LD template object).`,
+      applyFix: async (fixedCode) => { schemaRepairHint = fixedCode; },
+      db,
+      llm,
     });
     console.log(
       `[Agent 2] Schema template types: ${Object.keys(schemaTemplates.jsonld_templates)
         .slice(0, 6)
         .join(" | ")}`
     );
-
-    await db.query(
-      `INSERT INTO schema_templates (niche, jsonld_templates)
-       VALUES ($1, $2)
-       ON CONFLICT (niche) DO UPDATE SET
-         jsonld_templates = EXCLUDED.jsonld_templates,
-         updated_at = now()`,
-      [cacheKey, JSON.stringify(schemaTemplates.jsonld_templates)]
-    );
     console.log("[Agent 2] Saved schema templates");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Schemas saved", detail: "JSON-LD templates stored", timestamp: Date.now() });
-    await checkpoints.mark("schema_templates", {
-      templateTypes: Object.keys(schemaTemplates.jsonld_templates).length,
-    });
   }
 
   // Step 5: Seasonal calendar
@@ -520,12 +582,39 @@ export async function runAgent2(
     console.log("[Agent 2] Step 5: Generating seasonal calendar...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Seasonal calendar", detail: "12-month planning", timestamp: Date.now() });
     const seasonalPrompt = buildSeasonalCalendarPrompt(config.niche, researchCtx);
-    seasonalCalendar = await llm.call({
-      prompt: seasonalPrompt,
-      schema: SeasonalCalendarSchema,
-      model: "sonnet",
-      timeoutMs: AGENT2_SEASONAL_CALENDAR_TIMEOUT_MS,
-      logLabel: "[Agent 2][Step 5][Seasonal calendar]",
+    let seasonalRepairHint = "";
+    seasonalCalendar = await withSelfHealing({
+      runId: "no-run-id",
+      offerId: config.offerProfile?.offer_id ?? "unknown",
+      agentName: "agent-2",
+      step: "seasonal_calendar",
+      fn: async () => {
+        const prompt = seasonalRepairHint
+          ? seasonalPrompt + `\n\n[Correction guidance from previous attempt: ${seasonalRepairHint}]`
+          : seasonalPrompt;
+        const result = await llm.call({
+          prompt,
+          schema: SeasonalCalendarSchema,
+          model: "sonnet",
+          timeoutMs: AGENT2_SEASONAL_CALENDAR_TIMEOUT_MS,
+          logLabel: "[Agent 2][Step 5][Seasonal calendar]",
+        });
+        await db.query(
+          `INSERT INTO seasonal_calendars (niche, months)
+           VALUES ($1, $2)
+           ON CONFLICT (niche) DO UPDATE SET
+             months = EXCLUDED.months,
+             updated_at = now()`,
+          [cacheKey, JSON.stringify(result.months)]
+        );
+        await checkpoints.mark("seasonal_calendar", { monthCount: result.months.length });
+        return result;
+      },
+      getRepairContext: (err) =>
+        `Agent 2 Step 5 (seasonal calendar) for niche "${config.niche}" failed with: ${err.message}\n\nReturn corrected JSON matching the SeasonalCalendar schema with fields: niche, months (array of {month, name, primary_pests, content_topics, messaging_priority, seasonal_keywords, region_overrides?}).`,
+      applyFix: async (fixedCode) => { seasonalRepairHint = fixedCode; },
+      db,
+      llm,
     });
     console.log(
       `[Agent 2] Seasonal focus: ${seasonalCalendar.months
@@ -533,19 +622,7 @@ export async function runAgent2(
         .map((month) => `${month.name}:${month.primary_pests.slice(0, 2).join("/")}`)
         .join(" | ")}`
     );
-
-    await db.query(
-      `INSERT INTO seasonal_calendars (niche, months)
-       VALUES ($1, $2)
-       ON CONFLICT (niche) DO UPDATE SET
-         months = EXCLUDED.months,
-         updated_at = now()`,
-      [cacheKey, JSON.stringify(seasonalCalendar.months)]
-    );
     console.log("[Agent 2] Saved seasonal calendar");
-    await checkpoints.mark("seasonal_calendar", {
-      monthCount: seasonalCalendar.months.length,
-    });
   }
 
   await checkpoints.mark("completed", {

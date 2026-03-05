@@ -1,6 +1,14 @@
 {
   "pest_services": [
     {
+      "slug": "rodent-control-lenexa",
+      "name": "Rodent Control   Lenexa"
+    },
+    {
+      "slug": "silverfish-control-lenexa",
+      "name": "Silverfish Control   Lenexa"
+    },
+    {
       "slug": "rodent-control",
       "name": "Rodent Control"
     },
@@ -9,31 +17,23 @@
       "name": "Silverfish Control"
     },
     {
-      "slug": "ant-control",
-      "name": "Ant Control"
+      "slug": "shawnee-rodent-control",
+      "name": "Shawnee Rodent Control"
     },
     {
-      "slug": "spider-control",
-      "name": "Spider Control"
+      "slug": "shawnee-silverfish-control",
+      "name": "Shawnee Silverfish Control"
     },
     {
-      "slug": "cockroach-control",
-      "name": "Cockroach Control"
+      "slug": "rodent-control-services",
+      "name": "Rodent Control Services"
     },
     {
-      "slug": "termite-control",
-      "name": "Termite Control"
+      "slug": "silverfish-control-services",
+      "name": "Silverfish Control Services"
     }
   ],
   "service_cities": [
-    {
-      "name": "Athens",
-      "slug": "athens"
-    },
-    {
-      "name": "Deland",
-      "slug": "deland"
-    },
     {
       "name": "Lenexa",
       "slug": "lenexa"
@@ -45,6 +45,14 @@
     {
       "name": "Shawnee",
       "slug": "shawnee"
+    },
+    {
+      "name": "Athens",
+      "slug": "athens"
+    },
+    {
+      "name": "Deland",
+      "slug": "deland"
     }
   ]
 }

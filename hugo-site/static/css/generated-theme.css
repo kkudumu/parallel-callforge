@@ -1,11 +1,28 @@
 :root {
-  --color-primary: #C8290F;
-  --color-primary-dark: #C8290F;
-  --color-secondary: #1A5C2A;
-  --color-bg-alt: #F7F7F5;
-  --color-success: #1A1A1A;
-  --font-heading: Inter, system-ui, -apple-system, sans-serif;
-  --font-body: Inter, system-ui, -apple-system, sans-serif;
+  --color-primary: #123524;
+  --color-primary-dark: #123524;
+  --color-secondary: #E7D8B1;
+  --color-bg-alt: #FFFDF8;
+  --color-success: #1F2933;
+  --color-cta-primary: #D95F0E;
+  --color-cta-primary-hover: #B94F0A;
+  --color-urgency: #B42318;
+  --color-text: #1F2933;
+  --color-text-muted: #5B6870;
+  --color-trust: #2F7A3E;
+  --color-background: #F7F4EC;
+  --color-surface: #FFFDF8;
+  --color-border: #E8E8E8;
+  --font-heading: 'Archivo Narrow', 'Arial Narrow', sans-serif;
+  --font-body: 'Public Sans', 'Helvetica Neue', sans-serif;
+  --font-size-body-desktop: 18px;
+  --font-size-body-mobile: 16px;
+  --font-size-cta: 20px;
+  --bp-mobile: 390px;
+  --bp-phablet: 480px;
+  --bp-tablet: 768px;
+  --bp-laptop: 1024px;
+  --bp-desktop: 1280px;
 }
 
 .brand-shell {
@@ -163,7 +180,7 @@
 .faq-highlight {
   padding: 28px;
   border-radius: 24px;
-  background: linear-gradient(135deg, #1A5C2A 0%, #C8290F 100%);
+  background: linear-gradient(135deg, #E7D8B1 0%, #123524 100%);
   color: #fff;
 }
 
@@ -178,7 +195,7 @@
 }
 
 .cta-section-premium {
-  background: linear-gradient(135deg, #1A5C2A 0%, #C8290F 100%);
+  background: linear-gradient(135deg, #E7D8B1 0%, #123524 100%);
 }
 
 .mini-list {
@@ -220,4 +237,35 @@
     width: 100%;
     text-align: center;
   }
+}
+
+@media (max-width: 767px) {
+  body {
+    font-size: var(--font-size-body-mobile, 14px);
+  }
+}
+
+@media (min-width: 768px) {
+  body {
+    font-size: var(--font-size-body-desktop, 16px);
+  }
+}
+
+/* Agent-2 Responsive Breakpoints */
+@media (min-width: 480px) {
+  .container { padding: 0 20px; }
+}
+
+@media (min-width: 768px) {
+  .container { padding: 0 24px; }
+  .hero-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (min-width: 1024px) {
+  .container { padding: 0 32px; }
+  .content-grid { grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr); align-items: start; }
+}
+
+@media (min-width: 1280px) {
+  .container { max-width: 1440px; }
 }
