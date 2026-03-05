@@ -52,7 +52,7 @@ export function createHugoManager(hugoSitePath: string): HugoManager {
     }
 
     if (typeof value === "string") {
-      return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+      return `"${value.replace(/\\/g, "\\\\").replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/"/g, '\\"')}"`;
     }
 
     if (typeof value === "number" || typeof value === "boolean") {
