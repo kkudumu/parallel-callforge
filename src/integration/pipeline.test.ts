@@ -256,6 +256,9 @@ describe("Integration: Pipeline", () => {
         throw err;
       }
     }
+
+    // Clear stale checkpoints so Agent 1 re-runs fresh (not skipped by cached "completed" state)
+    try { await db.query("DELETE FROM agent_checkpoints"); } catch (_) { /* ignore */ }
   }, 30000);
 
   afterAll(async () => {
@@ -270,6 +273,7 @@ describe("Integration: Pipeline", () => {
       await db.query("DELETE FROM pages");
       await db.query("DELETE FROM keyword_clusters");
       await db.query("DELETE FROM city_keyword_map");
+      await db.query("DELETE FROM agent_checkpoints");
     } catch (_) {
       // Ignore cleanup errors
     }
