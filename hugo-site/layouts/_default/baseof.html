@@ -1,481 +1,555 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ .Title }} | {{ .Site.Title }}</title>
-  <meta name="description" content="{{ .Description }}">
-  <meta name="robots" content="index, follow">
-  <link rel="canonical" href="{{ .Permalink }}">
-  <meta property="og:title" content="{{ .Title }}">
-  <meta property="og:description" content="{{ .Description }}">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="{{ .Permalink }}">
-  <style>
-    :root {
-      --color-cta-primary: var(--color-cta-primary);
-      --color-cta-primary-hover: var(--color-cta-primary-hover);
-      --color-trust: var(--color-trust);
-      --color-urgency: #C8290F;
-      --color-text: var(--color-text);
-      --color-text-muted: var(--color-text-muted);
-      --color-background: var(--color-background);
-      --color-surface: var(--color-surface);
-      --color-border: var(--color-border);
-      --font-size-body-desktop: 17px;
-      --font-size-body-mobile: 16px;
-      --font-size-cta: 18px;
-    }
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html {
-      scroll-behavior: smooth;
-    }
-    body {
-      font-family: Inter, system-ui, -apple-system, sans-serif;
-      color: var(--color-text);
-      background-color: var(--color-background);
-      font-size: 16px;
-      line-height: 1.6;
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 16px;
-    }
-    @media (min-width: 768px) {
-      .container {
-        padding: 0 24px;
-      }
-    }
-    @media (min-width: 1024px) {
-      .container {
-        padding: 0 32px;
-      }
-    }
-    /* Typography */
-    h1 {
-      font-size: 28px;
-      font-weight: 700;
-      line-height: 1.2;
-      margin-bottom: 16px;
-    }
-    @media (min-width: 768px) {
-      h1 {
-        font-size: 36px;
-      }
-    }
-    @media (min-width: 1024px) {
-      h1 {
-        font-size: 42px;
-      }
-    }
-    h2 {
-      font-size: 24px;
-      font-weight: 700;
-      line-height: 1.3;
-      margin-bottom: 16px;
-    }
-    @media (min-width: 768px) {
-      h2 {
-        font-size: 32px;
-      }
-    }
-    h3 {
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 12px;
-    }
-    p {
-      font-size: 16px;
-      line-height: 1.6;
-      margin-bottom: 12px;
-      color: var(--color-text);
-    }
-    @media (min-width: 768px) {
-      p {
-        font-size: 17px;
-      }
-    }
-    /* Button Styles */
-    .btn, a.btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px 24px;
-      min-height: 60px;
-      font-size: 18px;
-      font-weight: 600;
-      text-decoration: none;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-      gap: 8px;
-      white-space: nowrap;
-    }
-    .btn-primary {
-      background-color: var(--color-cta-primary);
-      color: var(--color-background);
-      width: 100%;
-    }
-    .btn-primary:hover {
-      background-color: var(--color-cta-primary-hover);
-    }
-    @media (min-width: 768px) {
-      .btn-primary {
-        width: auto;
-        min-width: 240px;
-      }
-    }
-    .btn-secondary {
-      background-color: var(--color-trust);
-      color: var(--color-background);
-    }
-    .btn-secondary:hover {
-      background-color: #1A5C2A;
-    }
-    /* Sticky Call Bar */
-    .sticky-call-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 56px;
-      background-color: var(--color-cta-primary);
-      color: var(--color-background);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      padding: 0 16px;
-      z-index: 1000;
-      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.12);
-    }
-    @media (min-width: 768px) {
-      .sticky-call-bar {
-        position: static;
-        display: none;
-      }
-    }
-    .sticky-call-bar__icon {
-      width: 24px;
-      height: 24px;
-      flex-shrink: 0;
-    }
-    .sticky-call-bar__content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .sticky-call-bar__urgency {
-      font-size: 12px;
-      font-weight: 500;
-    }
-    .sticky-call-bar__number {
-      font-size: 16px;
-      font-weight: 700;
-    }
-    .sticky-call-bar__link {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      text-decoration: none;
-      color: var(--color-background);
-    }
-    /* Header */
-    header {
-      background-color: var(--color-background);
-      border-bottom: 1px solid var(--color-border);
-      padding: 16px 0;
-      position: relative;
-      z-index: 100;
-    }
-    .header-content {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .logo {
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--color-text);
-      text-decoration: none;
-    }
-    .header-phone {
-      display: none;
-    }
-    @media (min-width: 768px) {
-      .header-phone {
-        display: block;
-        font-size: 18px;
-        font-weight: 600;
-        color: var(--color-cta-primary);
-      }
-      .call-recording-note {
-        display: block !important;
-      }
-    }
-    .nav {
-      display: flex;
-      gap: 24px;
-      align-items: center;
-    }
-    .nav a {
-      color: var(--color-text);
-      text-decoration: none;
-      font-size: 16px;
-      transition: color 0.2s;
-    }
-    .nav a:hover {
-      color: var(--color-cta-primary);
-    }
-    /* Footer */
-    footer {
-      background-color: var(--color-surface);
-      padding: 40px 0 56px;
-    }
-    @media (min-width: 768px) {
-      footer {
-        padding: 60px 0 40px;
-      }
-    }
-    .footer-content {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 32px;
-    }
-    @media (min-width: 768px) {
-      .footer-content {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    @media (min-width: 1024px) {
-      .footer-content {
-        grid-template-columns: repeat(4, 1fr);
-      }
-    }
-    .footer-section h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 16px;
-    }
-    .footer-section ul {
-      list-style: none;
-    }
-    .footer-section li {
-      margin-bottom: 8px;
-    }
-    .footer-section a {
-      color: var(--color-text-muted);
-      text-decoration: none;
-      font-size: 14px;
-      transition: color 0.2s;
-    }
-    .footer-section a:hover {
-      color: var(--color-cta-primary);
-    }
-    .nap-block {
-      margin-bottom: 24px;
-    }
-    .nap-block p {
-      font-size: 14px;
-      margin-bottom: 8px;
-    }
-    .footer-phone {
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--color-cta-primary);
-      margin-bottom: 12px;
-    }
-    .trust-icons-row {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-top: 24px;
-    }
-    .trust-icon {
-      width: 48px;
-      height: 48px;
-      background-color: var(--color-background);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      text-align: center;
-      padding: 8px;
-      font-weight: 600;
-      color: var(--color-trust);
-    }
-    /* Spacing */
-    section {
-      padding: 32px 0;
-    }
-    @media (min-width: 768px) {
-      section {
-        padding: 48px 0;
-      }
-    }
-    @media (min-width: 1024px) {
-      section {
-        padding: 64px 0;
-      }
-    }
-    /* Layout Helpers */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 24px;
-    }
-    @media (min-width: 768px) {
-      .grid-2 {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    .grid-3 {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 20px;
-    }
-    @media (min-width: 768px) {
-      .grid-3 {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    @media (min-width: 1024px) {
-      .grid-3 {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-    .grid-4 {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-    }
-    @media (min-width: 768px) {
-      .grid-4 {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 20px;
-      }
-    }
-    @media (min-width: 1024px) {
-      .grid-4 {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 24px;
-      }
-    }
-    /* Loading optimization */
-    img {
-      max-width: 100%;
-      height: auto;
-      display: block;
-    }
-  </style>
-  <link rel="stylesheet" href="/css/main.css">
-  <link rel="stylesheet" href="/css/generated-theme.css">
-  {{ block "additional-styles" . }}{{ end }}
-  {{ if .Params.schema_template }}
-  <script type="application/ld+json">
-  {{ .Params.schema_template | jsonify | safeHTML }}
-  </script>
-  {{ end }}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .Title }} | Pest Control Services</title>
+    <meta name="description" content="{{ .Description }}">
+    <link rel="stylesheet" href="/css/generated-theme.css">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Public Sans', 'Helvetica Neue', sans-serif;
+            color: var(--color-text);
+            background: var(--color-background);
+            line-height: 1.6;
+            font-size: 16px;
+        }
+        
+        @media (min-width: 768px) {
+            body { font-size: 18px; }
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Archivo Narrow', 'Arial Narrow', sans-serif;
+            line-height: 1.2;
+            margin: 1em 0 0.5em 0;
+        }
+        
+        h1 { font-size: 2.5rem; color: var(--color-primary); }
+        h2 { font-size: 2rem; color: var(--color-primary); }
+        h3 { font-size: 1.5rem; color: var(--color-primary); }
+        
+        @media (min-width: 768px) {
+            h1 { font-size: 3.5rem; }
+            h2 { font-size: 2.5rem; }
+        }
+        
+        p { margin-bottom: 1em; }
+        a { color: var(--color-primary); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            .container { padding: 0 2rem; }
+        }
+        
+        /* Button Styles */
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: var(--color-cta-primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 18px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: var(--color-cta-primary-hover);
+            text-decoration: none;
+        }
+        
+        .btn-full {
+            width: 100%;
+        }
+        
+        .btn-phone {
+            background: var(--color-urgency);
+        }
+        
+        .btn-phone:hover {
+            background: #A01810;
+        }
+        
+        /* Header */
+        header {
+            background: white;
+            border-bottom: 1px solid #E0DDD5;
+            padding: 1rem 1rem;
+            position: relative;
+            z-index: 99;
+        }
+        
+        @media (min-width: 768px) {
+            header { padding: 1.5rem 2rem; }
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+        
+        .logo {
+            font-family: 'Archivo Narrow', 'Arial Narrow', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--color-primary);
+        }
+        
+        .header-phone {
+            display: none;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.25rem;
+        }
+        
+        @media (min-width: 768px) {
+            .header-phone {
+                display: flex;
+            }
+        }
+        
+        .header-phone-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+        }
+        
+        .header-phone-number {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--color-primary);
+        }
+        
+        /* Sticky Call Bar - Mobile Only */
+        .sticky-call-bar {
+            display: flex;
+            gap: 0.5rem;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--color-urgency);
+            padding: 0.5rem;
+            z-index: 100;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+        }
+        
+        @media (min-width: 768px) {
+            .sticky-call-bar {
+                display: none;
+            }
+        }
+        
+        .sticky-call-bar .btn {
+            flex: 1;
+            font-size: 16px;
+            min-height: 56px;
+            background: var(--color-urgency);
+            color: white;
+        }
+        
+        .sticky-call-bar .btn:hover {
+            background: #A01810;
+        }
+        
+        /* Content padding for sticky bar */
+        @media (max-width: 767px) {
+            body {
+                padding-bottom: 70px;
+            }
+        }
+        
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--color-primary) 0%, #1a4a2f 100%);
+            color: white;
+            padding: 3rem 1rem;
+            text-align: center;
+        }
+        
+        @media (min-width: 768px) {
+            .hero {
+                padding: 5rem 2rem;
+            }
+        }
+        
+        .hero h1 {
+            color: white;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        @media (min-width: 768px) {
+            .hero h1 { font-size: 3.5rem; }
+        }
+        
+        .hero-subhead {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            line-height: 1.4;
+        }
+        
+        @media (min-width: 768px) {
+            .hero-subhead { font-size: 1.5rem; }
+        }
+        
+        .hero-cta {
+            background: var(--color-cta-primary);
+            margin-bottom: 2rem;
+            font-size: 20px;
+        }
+        
+        .hero-cta:hover {
+            background: var(--color-cta-primary-hover);
+        }
+        
+        .hero-bullets {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 2rem;
+            align-items: center;
+        }
+        
+        @media (min-width: 768px) {
+            .hero-bullets {
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+        
+        .hero-bullet {
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .hero-bullet::before {
+            content: "✓";
+            font-weight: bold;
+            color: var(--color-secondary);
+        }
+        
+        /* Trust Bar */
+        .trust-bar {
+            background: white;
+            padding: 2rem 1rem;
+            border-top: 3px solid var(--color-trust);
+        }
+        
+        @media (min-width: 768px) {
+            .trust-bar {
+                padding: 2rem;
+            }
+        }
+        
+        .trust-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+        
+        @media (min-width: 768px) {
+            .trust-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        .trust-item {
+            text-align: center;
+        }
+        
+        .trust-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .trust-label {
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            font-weight: 600;
+        }
+        
+        .trust-value {
+            font-size: 1.1rem;
+            color: var(--color-primary);
+            font-weight: 700;
+        }
+        
+        /* Main Content */
+        main {
+            background: var(--color-surface);
+        }
+        
+        section {
+            padding: 3rem 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            section {
+                padding: 4rem 2rem;
+            }
+        }
+        
+        /* Mid-Page CTA Block */
+        .mid-cta {
+            background: var(--color-primary);
+            color: white;
+            text-align: center;
+            margin: 3rem 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            .mid-cta {
+                margin: 4rem 2rem;
+            }
+        }
+        
+        .mid-cta-content {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 3rem 1rem;
+        }
+        
+        .mid-cta h2 {
+            color: white;
+            margin-bottom: 1rem;
+        }
+        
+        .mid-cta-phone {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 1rem 0;
+            color: var(--color-secondary);
+        }
+        
+        @media (min-width: 768px) {
+            .mid-cta-phone {
+                font-size: 3rem;
+            }
+        }
+        
+        .mid-cta .btn {
+            background: var(--color-cta-primary);
+            margin-top: 1.5rem;
+            font-size: 20px;
+        }
+        
+        .mid-cta .btn:hover {
+            background: var(--color-cta-primary-hover);
+        }
+        
+        /* Footer */
+        footer {
+            background: var(--color-primary);
+            color: white;
+            padding: 2rem 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            footer {
+                padding: 3rem 2rem;
+            }
+        }
+        
+        .footer-content {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+        
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        @media (min-width: 768px) {
+            .footer-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        .footer-section h3 {
+            color: white;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .footer-section ul {
+            list-style: none;
+        }
+        
+        .footer-section li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .footer-section a {
+            color: var(--color-secondary);
+        }
+        
+        .footer-section a:hover {
+            color: white;
+        }
+        
+        .footer-nap {
+            font-size: 0.9rem;
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+        }
+        
+        .footer-phone {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--color-secondary);
+            margin: 1rem 0;
+        }
+        
+        .footer-divider {
+            border-top: 1px solid rgba(255,255,255,0.2);
+            padding-top: 1.5rem;
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.8);
+        }
+        
+        .footer-badges {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        
+        .footer-badge {
+            width: 50px;
+            height: 50px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        
+        /* Utility Classes */
+        .text-center { text-align: center; }
+        .mt-2 { margin-top: 2rem; }
+        .mb-2 { margin-bottom: 2rem; }
+    </style>
 </head>
 <body>
-  <a href="#main-content" class="skip-link" style="position: absolute; top: -40px; left: 0; background: var(--color-cta-primary); color: white; padding: 8px; z-index: 100;">Skip to main content</a>
-  
-  <header role="banner">
-    <div class="container">
-      <div class="header-content">
-        <a href="{{ .Site.BaseURL }}" class="logo">{{ .Site.Params.business_name }}</a>
-        <div class="nav">
-          <a href="tel:{{ .Site.Params.phone_raw }}" class="header-phone" style="text-decoration: none; color: var(--color-cta-primary);">{{ .Site.Params.phone }}</a>
-          <span class="call-recording-note" style="display: none; font-size: 11px; color: var(--color-text-muted);">Calls may be recorded</span>
-        </div>
-      </div>
+    {{ block "sticky-call" . }}
+    <div class="sticky-call-bar">
+        <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn btn-full">
+            📞 Call Now
+        </a>
     </div>
-  </header>
-
-  <div class="sticky-call-bar" id="sticky-call-bar">
-    <svg class="sticky-call-bar__icon" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M17.92 7.02C17.45 6.18 16.84 5.48 16.07 4.9M19.07 11.07C19.54 10.23 19.93 9.32 20.16 8.37M21 16.92v3.5c0 1.08-.892 2-2 2-.59 0-1.12-.147-1.6-.38-1.95-.88-3.63-2.24-4.8-3.97-.5-.75-.88-1.58-1.11-2.49-.1-.39-.15-.8-.15-1.23v-2c0-1.1.9-2 2-2h2.5c1.1 0 2 .9 2 2 0 .5-.1 1-.27 1.46"/>
-    </svg>
-    <div class="sticky-call-bar__content">
-      <div class="sticky-call-bar__urgency">{{ .Params.sticky_cta_text | default "Call Now" }}</div>
-      <div class="sticky-call-bar__number">{{ .Site.Params.phone }}</div>
-      <div class="sticky-recording-note" style="font-size: 10px; opacity: 0.8;">Calls may be recorded</div>
-    </div>
-    <a href="tel:{{ .Site.Params.phone_raw }}" class="sticky-call-bar__link"></a>
-  </div>
-
-  <main id="main-content">
-    {{ block "main" . }}{{ end }}
-  </main>
-
-  <footer role="contentinfo">
-    <div class="container">
-      <div class="footer-content">
-        <div class="footer-section">
-          <div class="nap-block">
-            <h3>{{ .Site.Params.business_name }}</h3>
-            <p>{{ .Site.Params.address }}</p>
-            <p>{{ .Site.Params.service_area }}</p>
-            <div class="footer-phone">
-              <a href="tel:{{ .Site.Params.phone_raw }}" style="color: var(--color-cta-primary); text-decoration: none;">{{ .Site.Params.phone }}</a>
+    {{ end }}
+    
+    {{ block "header" . }}
+    <header>
+        <div class="header-content">
+            <div class="logo">PestControl.Local</div>
+            <div class="header-phone">
+                <span class="header-phone-label">24/7 Local Service</span>
+                <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="header-phone-number">
+                    {{ .Params.phoneNumber }}
+                </a>
             </div>
-          </div>
         </div>
-        <div class="footer-section">
-          <h3>Pest Services</h3>
-          <ul>
-            {{ range .Site.Data.nav.pest_services }}
-            <li><a href="/{{ $.Page.Params.city | urlize }}/{{ .slug }}/">{{ .name }}</a></li>
-            {{ end }}
-          </ul>
+    </header>
+    {{ end }}
+    
+    {{ block "main" . }}
+    <main>
+        {{ .Content }}
+    </main>
+    {{ end }}
+    
+    {{ block "footer" . }}
+    <footer>
+        <div class="footer-content">
+            <div class="footer-grid">
+                <div class="footer-section">
+                    <h3>Contact</h3>
+                    <div class="footer-nap">
+                        <strong>{{ .Params.businessName | default "Local Pest Control" }}</strong><br>
+                        {{ .Params.address }}<br>
+                        <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="footer-phone">
+                            {{ .Params.phoneNumber }}
+                        </a>
+                    </div>
+                    <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn btn-full">
+                        Call Now
+                    </a>
+                </div>
+                
+                <div class="footer-section">
+                    <h3>Service Areas</h3>
+                    <ul>
+                        {{ with .Params.serviceAreas }}
+                            {{ range first 8 . }}
+                                <li><a href="#{{ . | lower | replaceRE " " "-" }}">{{ . }}</a></li>
+                            {{ end }}
+                        {{ end }}
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h3>Resources</h3>
+                    <ul>
+                        <li><a href="/">Home</a></li>
+                        <li><a href="/about">About</a></li>
+                        <li><a href="/privacy">Privacy Policy</a></li>
+                        <li><a href="/terms">Terms of Service</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer-badges">
+                <div class="footer-badge">🏆</div>
+                <div class="footer-badge">⭐</div>
+                <div class="footer-badge">✓</div>
+                <div class="footer-badge">🛡️</div>
+            </div>
+            
+            <div class="footer-divider">
+                &copy; {{ now.Year }} {{ .Params.businessName | default "Local Pest Control" }}. Licensed & Insured. All rights reserved.
+            </div>
         </div>
-        <div class="footer-section">
-          <h3>Service Areas</h3>
-          <ul>
-            {{ range .Site.Data.nav.service_cities }}
-            <li><a href="/{{ .slug }}/">{{ .name }}</a></li>
-            {{ end }}
-          </ul>
-        </div>
-        <div class="footer-section">
-          <h3>Company</h3>
-          <ul>
-            <li><a href="/about/">About Us</a></li>
-            <li><a href="{{ .Site.Params.terms_url | default "/disclaimer/" }}">Disclaimer</a></li>
-            <li><a href="{{ .Site.Params.privacy_policy_url | default "/privacy/" }}">Privacy Policy</a></li>
-            <li><a href="{{ .Site.Params.do_not_sell_url | default "/do-not-sell/" }}">Do Not Sell My Info</a></li>
-            <li><a href="/contact/">Contact</a></li>
-          </ul>
-          {{ if .Site.Params.license_disclaimer }}<p style="font-size: 11px; color: var(--color-text-muted); margin-top: 12px;">{{ .Site.Params.license_disclaimer }}</p>{{ end }}
-          <div class="trust-icons-row">
-            {{ if .Site.Params.has_license }}<div class="trust-icon">Licensed</div>{{ end }}
-            <div class="trust-icon">Insured</div>
-            <div class="trust-icon">⭐{{ .Site.Params.review_rating | default "5.0" }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    // Mobile body padding for sticky bar
-    if (window.innerWidth < 768) {
-      document.body.style.paddingBottom = '56px';
-    }
-    // Smooth scroll behavior polyfill
-    if (!('scrollBehavior' in document.documentElement.style)) {
-      document.documentElement.style.scrollBehavior = 'auto';
-    }
-  </script>
+    </footer>
+    {{ end }}
+    
+    {{ block "structured-data" . }}
+    {{ if .Params.structuredData }}
+    <script type="application/ld+json">
+    {{ .Params.structuredData | jsonify | safeJS }}
+    </script>
+    {{ end }}
+    {{ end }}
 </body>
 </html>
