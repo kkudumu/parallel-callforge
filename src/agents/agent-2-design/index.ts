@@ -73,6 +73,8 @@ export interface Agent2Config {
   offerProfile?: OfferProfile | null;
   verticalProfile?: VerticalProfile | null;
   forceRefresh?: boolean;
+  researchEnabled?: boolean;
+  runId?: string;
 }
 
 async function hasFreshDesignResearch(niche: string, db: DbClient): Promise<boolean> {
@@ -256,6 +258,7 @@ export async function runAgent2(
   llm: LlmClient,
   db: DbClient
 ): Promise<void> {
+  try {
   const cacheKey = normalizeNiche(config.niche);
   const checkpointScope = buildCheckpointScope([
     cacheKey,
@@ -298,6 +301,18 @@ export async function runAgent2(
   // Phase 1: Deep research via Agent SDK subagents
   const researchDir = join("tmp", "agent2-research", config.offerProfile?.offer_id ?? cacheKey);
   let researchCtx: SynthesisPromptContext = {};
+  const logDeepResearchDegraded = (reason: string) => {
+    console.error(
+      `[Agent 2][DEEP_RESEARCH_DEGRADED] ${config.niche} | researchDir=${researchDir} | reason=${reason} | proceeding_without_research_context=true`
+    );
+    eventBus.emitEvent({
+      type: "agent_step",
+      agent: "agent-2",
+      step: "Research degraded",
+      detail: reason,
+      timestamp: Date.now(),
+    });
+  };
   const runDeepResearch = async (): Promise<void> => {
     console.log("[Agent 2] Phase 1: Running deep research...");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Deep research", detail: "Spawning subagents", timestamp: Date.now() });
@@ -315,8 +330,7 @@ export async function runAgent2(
 
       const validCount = countResearchDocuments(researchCtx);
       if (validCount === 0) {
-        console.warn("[Agent 2] Deep research produced no valid files; proceeding without research context");
-        eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research degraded", detail: "No valid findings", timestamp: Date.now() });
+        logDeepResearchDegraded("No valid findings were produced by deep research");
         researchCtx = {};
         return;
       }
@@ -329,17 +343,21 @@ export async function runAgent2(
       eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research complete", detail: "Phase 2: synthesis", timestamp: Date.now() });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      console.warn(`[Agent 2] Deep research failed: ${reason}. Proceeding without research context.`);
-      eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research degraded", detail: reason, timestamp: Date.now() });
+      logDeepResearchDegraded(reason);
       researchCtx = {};
     }
   };
 
-  if (!config.forceRefresh && checkpoints.has("research_complete")) {
+  if (config.researchEnabled === false) {
+    console.log("[Agent 2] Deep research disabled via config, skipping");
+    eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research skipped", detail: "Disabled via AGENT2_RESEARCH_ENABLED=false", timestamp: Date.now() });
+  } else if (!config.forceRefresh && checkpoints.has("research_complete")) {
     console.log("[Agent 2] Reusing checkpointed research findings");
     const reloaded = loadValidatedResearchContext(researchDir);
     if (reloaded.validCount === 0) {
-      console.warn("[Agent 2] Checkpointed research files were missing/invalid; re-running deep research");
+      console.error(
+        `[Agent 2][RESEARCH_CHECKPOINT_INVALID] ${config.niche} | researchDir=${researchDir} | action=re_run_deep_research`
+      );
       await runDeepResearch();
     } else {
       researchCtx = reloaded.context;
@@ -367,7 +385,7 @@ export async function runAgent2(
     const competitorPrompt = buildCompetitorAnalysisPrompt(config.niche, researchCtx);
     let competitorRepairHint = "";
     competitorAnalysis = await withSelfHealing({
-      runId: "no-run-id",
+      runId: config.runId ?? "no-run-id",
       offerId: config.offerProfile?.offer_id ?? "unknown",
       agentName: "agent-2",
       step: "competitor_analysis",
@@ -427,7 +445,7 @@ export async function runAgent2(
     const designPrompt = buildDesignSpecPrompt(config.niche, JSON.stringify(competitorAnalysis, null, 2), researchCtx);
     let designRepairHint = "";
     designSpec = await withSelfHealing({
-      runId: "no-run-id",
+      runId: config.runId ?? "no-run-id",
       offerId: config.offerProfile?.offer_id ?? "unknown",
       agentName: "agent-2",
       step: "design_spec",
@@ -498,7 +516,7 @@ export async function runAgent2(
     const copyPrompt = buildCopyFrameworkPrompt(config.niche, researchCtx);
     let copyRepairHint = "";
     copyFramework = await withSelfHealing({
-      runId: "no-run-id",
+      runId: config.runId ?? "no-run-id",
       offerId: config.offerProfile?.offer_id ?? "unknown",
       agentName: "agent-2",
       step: "copy_framework",
@@ -577,7 +595,7 @@ export async function runAgent2(
     const schemaPrompt = buildSchemaTemplatePrompt(config.niche, researchCtx);
     let schemaRepairHint = "";
     schemaTemplates = await withSelfHealing({
-      runId: "no-run-id",
+      runId: config.runId ?? "no-run-id",
       offerId: config.offerProfile?.offer_id ?? "unknown",
       agentName: "agent-2",
       step: "schema_templates",
@@ -636,7 +654,7 @@ export async function runAgent2(
     const seasonalPrompt = buildSeasonalCalendarPrompt(config.niche, researchCtx);
     let seasonalRepairHint = "";
     seasonalCalendar = await withSelfHealing({
-      runId: "no-run-id",
+      runId: config.runId ?? "no-run-id",
       offerId: config.offerProfile?.offer_id ?? "unknown",
       agentName: "agent-2",
       step: "seasonal_calendar",
@@ -690,4 +708,14 @@ export async function runAgent2(
   }
 
   console.log("[Agent 2] Design research complete");
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    eventBus.emitEvent({
+      type: "agent_error",
+      agent: "agent-2",
+      error: reason,
+      timestamp: Date.now(),
+    });
+    throw error;
+  }
 }

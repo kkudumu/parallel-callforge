@@ -44,6 +44,33 @@ const HugoTemplateResponseSchema = z.object({
   service_subpage: z.string().min(50),
 });
 
+const PageBriefSchema = z.object({
+  angle: z.string().min(10),
+  section_plan: z.array(z.string()).min(4).max(12),
+  local_emphasis: z.array(z.string()).min(1).max(8),
+  seasonal_angle: z.string().min(5),
+  faq_themes: z.array(z.string()).min(2).max(8),
+  banned_reminders: z.array(z.string()).max(12).default([]),
+});
+
+const ContentBlocksSchema = z.object({
+  intro: z.string().min(20),
+  local_conditions: z.string().min(20),
+  seasonal_timing: z.string().min(20),
+  service_process: z.string().min(20),
+  trust_support: z.string().min(20),
+  cta_support: z.string().min(20),
+  faq_answers: z.array(
+    z.object({
+      question: z.string().min(8),
+      answer: z.string().min(20),
+    })
+  ).min(2).max(8),
+});
+
+type PageBrief = z.infer<typeof PageBriefSchema>;
+type ContentBlocks = z.infer<typeof ContentBlocksSchema>;
+
 export interface Agent3Config {
   niche: string;
   offerProfile?: OfferProfile | null;
@@ -63,6 +90,7 @@ export interface Agent3Config {
   minIndexationRatio?: number;
   ignoreIndexationKillSwitch?: boolean;
   runId?: string;
+  cityConcurrency?: number;
 }
 
 const DEFAULT_CONFIG: Partial<Agent3Config> = {
@@ -76,11 +104,14 @@ const DEFAULT_CONFIG: Partial<Agent3Config> = {
   indexationMinPageAgeDays: 21,
   indexationLookbackDays: 30,
   minIndexationRatio: 0.5,
+  cityConcurrency: 2,
 };
 
 const AGENT3_TEMPLATE_TIMEOUT_MS = 180_000;
 const AGENT3_CONTENT_TIMEOUT_MS = 300_000;
 const AGENT3_SUBPAGE_CONCURRENCY = 2;
+const AGENT3_DEFAULT_CITY_CONCURRENCY = 2;
+const AGENT3_BATCH_SIMILARITY_MAX = 0.74;
 
 async function getLimiterSnapshot(limiter: Bottleneck): Promise<{
   queued: number;
@@ -187,6 +218,269 @@ async function mapWithConcurrency<T>(
 
   const workerCount = Math.max(1, Math.min(concurrency, items.length));
   await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+}
+
+interface PagePacket {
+  offerId: string;
+  vertical: string;
+  pageType: "hub" | "service";
+  routeKey: string;
+  city: string;
+  state: string;
+  targetKeyword: string;
+  phone: string;
+  serviceType?: string;
+  blockedTerms: string[];
+  requiredDisclaimer: string;
+  ctaVariants: string[];
+  trustSignals: string[];
+  seasonalSignals: string[];
+  localFacts: string[];
+  wordCountTarget: number;
+}
+
+function buildPagePacket(input: {
+  offerId: string;
+  vertical: string;
+  pageType: "hub" | "service";
+  routeKey: string;
+  city: string;
+  state: string;
+  targetKeyword: string;
+  phone: string;
+  serviceType?: string;
+  blockedTerms: string[];
+  requiredDisclaimer: string;
+  ctaVariants: string[];
+  trustSignals: string[];
+  seasonalSignals: string[];
+  localFacts: string[];
+  wordCountTarget: number;
+}): PagePacket {
+  return {
+    offerId: input.offerId,
+    vertical: input.vertical,
+    pageType: input.pageType,
+    routeKey: input.routeKey,
+    city: input.city,
+    state: input.state,
+    targetKeyword: input.targetKeyword,
+    phone: input.phone,
+    serviceType: input.serviceType,
+    blockedTerms: input.blockedTerms.slice(0, 25),
+    requiredDisclaimer: input.requiredDisclaimer,
+    ctaVariants: input.ctaVariants.slice(0, 6),
+    trustSignals: input.trustSignals.slice(0, 8),
+    seasonalSignals: input.seasonalSignals.slice(0, 8),
+    localFacts: input.localFacts.slice(0, 8),
+    wordCountTarget: input.wordCountTarget,
+  };
+}
+
+function buildBriefPrompt(packet: PagePacket): string {
+  return `Create a compact page brief for a local lead-gen page.
+
+Return JSON only.
+
+PACKET:
+${JSON.stringify(packet, null, 2)}
+
+Rules:
+- Keep recommendations specific to this city/service packet.
+- Do not invent regulations, pricing, or license claims.
+- Keep section plan practical for conversion copy and SEO.
+- Include reminders for blocked terms and disclaimer safety.`;
+}
+
+function buildContentBlocksPrompt(packet: PagePacket, brief: PageBrief): string {
+  return `Generate focused content blocks for one local page.
+
+Return JSON only.
+
+PACKET:
+${JSON.stringify(packet, null, 2)}
+
+BRIEF:
+${JSON.stringify(brief, null, 2)}
+
+Rules:
+- Write plain prose only (no markdown headings).
+- Keep references local to ${packet.city}, ${packet.state}.
+- Avoid blocked terms and avoid legal/service guarantees.
+- No forms, no fake testimonials, no fabricated numbers.`;
+}
+
+function buildHybridContext(brief: PageBrief, blocks: ContentBlocks): string {
+  return [
+    "Hybrid brief (authoritative pre-write plan):",
+    JSON.stringify(brief),
+    "",
+    "Hybrid variable content blocks (authoritative facts/prose to weave in):",
+    JSON.stringify(blocks),
+  ].join("\n");
+}
+
+function titleCase(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function safeHeading(value: string, fallback: string): string {
+  const cleaned = value.replace(/[#*_`]/g, "").trim();
+  return cleaned.length > 2 ? cleaned : fallback;
+}
+
+function limitMeta(value: string, max = 160): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (compact.length <= max) return compact;
+  return `${compact.slice(0, max - 3).trim()}...`;
+}
+
+function assemblePageFromHybrid(
+  packet: PagePacket,
+  brief: PageBrief,
+  blocks: ContentBlocks
+): z.infer<typeof ContentResponseSchema> {
+  const safeSections: string[] = Array.isArray((brief as any)?.section_plan)
+    ? (brief as any).section_plan.filter((value: unknown): value is string => typeof value === "string")
+    : [];
+  const sectionPlan = safeSections.length > 0
+    ? safeSections.slice(0, 8)
+    : [
+        "Local Conditions",
+        "Seasonal Timing",
+        "Service Process",
+        "Why Locals Trust This Service",
+        "Get Help Today",
+      ];
+  const safeFaqAnswers: Array<{ question: string; answer: string }> = Array.isArray((blocks as any)?.faq_answers)
+    ? (blocks as any).faq_answers.filter(
+        (item: unknown): item is { question: string; answer: string } =>
+          Boolean(
+            item &&
+            typeof (item as any).question === "string" &&
+            typeof (item as any).answer === "string"
+          )
+      )
+    : [];
+  const safeLocalEmphasis: string[] = Array.isArray((brief as any)?.local_emphasis)
+    ? (brief as any).local_emphasis.filter((value: unknown): value is string => typeof value === "string")
+    : [];
+  const safeSeasonalAngle = typeof (brief as any)?.seasonal_angle === "string"
+    ? (brief as any).seasonal_angle
+    : "";
+  const intro = typeof (blocks as any)?.intro === "string" ? (blocks as any).intro : "";
+  const localConditions = typeof (blocks as any)?.local_conditions === "string" ? (blocks as any).local_conditions : "";
+  const seasonalTiming = typeof (blocks as any)?.seasonal_timing === "string" ? (blocks as any).seasonal_timing : "";
+  const serviceProcess = typeof (blocks as any)?.service_process === "string" ? (blocks as any).service_process : "";
+  const trustSupport = typeof (blocks as any)?.trust_support === "string" ? (blocks as any).trust_support : "";
+  const ctaSupport = typeof (blocks as any)?.cta_support === "string" ? (blocks as any).cta_support : "";
+  const headings = sectionPlan.map((heading, index) =>
+    safeHeading(heading, `Section ${index + 1}`)
+  );
+  const pageLabel = packet.pageType === "hub"
+    ? titleCase(packet.targetKeyword)
+    : `${titleCase(packet.serviceType ?? packet.targetKeyword)} in ${packet.city}, ${packet.state}`;
+  const title = packet.pageType === "hub"
+    ? `${packet.city} ${titleCase(packet.targetKeyword)}`
+    : `${packet.city} ${titleCase(packet.serviceType ?? packet.targetKeyword)} Services`;
+
+  const contentParts: string[] = [
+    intro,
+    `## ${headings[0] ?? "Local Conditions"}`,
+    localConditions,
+    `## ${headings[1] ?? "Seasonal Timing"}`,
+    seasonalTiming,
+    `## ${headings[2] ?? "Service Process"}`,
+    serviceProcess,
+    `## ${headings[3] ?? "Why Locals Trust This Service"}`,
+    trustSupport,
+    `## ${headings[4] ?? "Get Help Today"}`,
+    `${ctaSupport}\n\nCall now: ${packet.phone}`,
+  ];
+
+  if (safeFaqAnswers.length > 0) {
+    contentParts.push("## Frequently Asked Questions");
+    for (const faq of safeFaqAnswers) {
+      contentParts.push(`### ${safeHeading(faq.question, "Common Question")}`);
+      contentParts.push(faq.answer);
+    }
+  }
+
+  const localEmphasis = safeLocalEmphasis.slice(0, 4).join(", ");
+  const seasonalAngle = safeSeasonalAngle.trim();
+  const metaDescription = limitMeta(
+    `${pageLabel}. ${seasonalAngle}. Serving ${packet.city}, ${packet.state}. Call ${packet.phone} for local help. ${localEmphasis ? `Focus: ${localEmphasis}.` : ""}`
+  );
+
+  return {
+    title,
+    meta_description: metaDescription,
+    content: contentParts.join("\n\n"),
+    headings,
+    faq: safeFaqAnswers,
+  };
+}
+
+function runQualityGateCached(
+  cache: Map<string, ReturnType<typeof runQualityGate>>,
+  args: Parameters<typeof runQualityGate>
+): ReturnType<typeof runQualityGate> {
+  const key = computeCacheFingerprint(["agent3-quality-v1", args]);
+  const cached = cache.get(key);
+  if (cached) {
+    return cached;
+  }
+  const result = runQualityGate(...args);
+  cache.set(key, result);
+  return result;
+}
+
+function normalizeForSimilarity(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[0-9]/g, " ")
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 4);
+}
+
+function jaccardSimilarity(left: string[], right: string[]): number {
+  if (left.length === 0 || right.length === 0) return 0;
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  let intersection = 0;
+  for (const token of leftSet) {
+    if (rightSet.has(token)) intersection += 1;
+  }
+  const union = new Set([...leftSet, ...rightSet]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function findMostSimilarContent(
+  existing: Array<{ routeKey: string; tokens: string[] }>,
+  content: string
+): { routeKey: string; similarity: number } | null {
+  const candidateTokens = normalizeForSimilarity(content);
+  if (candidateTokens.length === 0 || existing.length === 0) {
+    return null;
+  }
+
+  let best: { routeKey: string; similarity: number } | null = null;
+  for (const item of existing) {
+    const similarity = jaccardSimilarity(candidateTokens, item.tokens);
+    if (!best || similarity > best.similarity) {
+      best = {
+        routeKey: item.routeKey,
+        similarity,
+      };
+    }
+  }
+  return best;
 }
 
 interface DesignSystemContext {
@@ -790,17 +1084,30 @@ function generateTestimonials(
     .replace(/\{service\}/gi, serviceLabel)
     .replace(/\{city\}/gi, city);
 
-  const templates = [
+  const allTemplates = [
     `Called about a ${serviceLabel.toLowerCase()} problem and they had someone out the same day. The technician was ${trustAngle}, thorough, and explained everything. Highly recommend for anyone in ${city}.`,
     `We were dealing with ${serviceLabel.toLowerCase()} issues for weeks before we called. The tech arrived on time, treated the whole house, and we haven't seen a single one since. ${guaranteeMention.charAt(0).toUpperCase() + guaranteeMention.slice(1)}.`,
     `Fast response, fair pricing, and effective treatment. The ${serviceLabel.toLowerCase()} problem in our kitchen is completely gone. Great service for ${city} homeowners.`,
+    `Our neighbor recommended them for ${serviceLabel.toLowerCase()} and I'm glad we called. Very ${trustAngle} crew — they even followed up a week later to make sure the treatment held. Will use again.`,
+    `Had a serious ${serviceLabel.toLowerCase()} situation in our garage and these guys handled it quickly. They were upfront about pricing and the technician really knew his stuff. ${city} locals should give them a try.`,
+    `I've used three different companies for ${serviceLabel.toLowerCase()} over the years and this is by far the best experience. Prompt, ${trustAngle}, and actually effective. No more repeat visits.`,
   ];
 
-  return templates.slice(0, 3).map((text, i) => ({
+  // Deterministic but varied selection based on city+service combination
+  const seed = (city + (pestType ?? "")).split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const startIdx = seed % allTemplates.length;
+  const selected = [
+    allTemplates[startIdx % allTemplates.length],
+    allTemplates[(startIdx + 1) % allTemplates.length],
+    allTemplates[(startIdx + 2) % allTemplates.length],
+  ];
+  const nameStart = seed % firstNames.length;
+  const ratings = ["5.0", "5.0", "4.8", "4.9"];
+  return selected.map((text, i) => ({
     stars: "★★★★★",
-    rating: i === 2 ? "4.8" : "5.0",
+    rating: ratings[(seed + i) % ratings.length],
     text,
-    author: `${firstNames[i % firstNames.length]} ${lastInitials[i % lastInitials.length]}.`,
+    author: `${firstNames[(nameStart + i) % firstNames.length]} ${lastInitials[(nameStart + i) % lastInitials.length]}.`,
     city,
   }));
 }
@@ -2114,6 +2421,167 @@ function applyOfferContentRules(
   };
 }
 
+async function generatePageBrief(
+  packet: PagePacket,
+  llm: LlmClient,
+  cache: Map<string, PageBrief>,
+  db: DbClient,
+  runId: string,
+  offerId: string,
+  niche: string
+): Promise<PageBrief> {
+  const key = computeCacheFingerprint(["agent3-brief-v1", packet]);
+  const cached = cache.get(key);
+  if (cached) {
+    console.log(`[Agent 3][Stage][Brief] Cache hit for ${packet.routeKey}`);
+    return cached;
+  }
+
+  const persisted = await db.query<{ brief_json: unknown }>(
+    "SELECT brief_json FROM agent3_page_brief_cache WHERE cache_key = $1 LIMIT 1",
+    [key]
+  );
+  if (persisted.rows.length > 0) {
+    try {
+      const parsed = PageBriefSchema.parse(asObject(persisted.rows[0].brief_json, {}));
+      cache.set(key, parsed);
+      console.log(`[Agent 3][Stage][Brief] DB cache hit for ${packet.routeKey}`);
+      return parsed;
+    } catch {
+      // fall through and regenerate
+    }
+  }
+
+  console.log(`[Agent 3][Stage][Brief] Generating brief for ${packet.routeKey}`);
+  const prompt = buildBriefPrompt(packet);
+  let repairHint = "";
+  const result = await withSelfHealing({
+    runId,
+    offerId,
+    agentName: "agent-3",
+    step: "hybrid_brief",
+    city: packet.city,
+    state: packet.state,
+    fn: async () =>
+      llm.call({
+        prompt: repairHint
+          ? `${prompt}\n\n[Correction guidance from previous attempt: ${repairHint}]`
+          : prompt,
+        schema: PageBriefSchema,
+        model: "haiku",
+        timeoutMs: 90_000,
+        logLabel: `[Agent 3][Brief][${packet.routeKey}]`,
+      }),
+    getRepairContext: (err) =>
+      `Agent 3 hybrid brief stage failed for route ${packet.routeKey} with: ${err.message}\nReturn corrected JSON matching PageBriefSchema exactly.`,
+    applyFix: async (fixedCode) => {
+      repairHint = fixedCode;
+    },
+    db,
+    llm,
+  });
+  cache.set(key, result);
+  await db.query(
+    `INSERT INTO agent3_page_brief_cache
+     (cache_key, niche, route_key, page_type, packet_fingerprint, brief_json, cache_provider, cache_version, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, 'llm', 'v1', now())
+     ON CONFLICT (cache_key) DO UPDATE SET
+       brief_json = EXCLUDED.brief_json,
+       updated_at = now()`,
+    [
+      key,
+      normalizeNiche(niche),
+      packet.routeKey,
+      packet.pageType,
+      computeCacheFingerprint(["packet", packet]),
+      JSON.stringify(result),
+    ]
+  );
+  console.log(`[Agent 3][Stage][Brief] Completed for ${packet.routeKey}`);
+  return result;
+}
+
+async function generateContentBlocks(
+  packet: PagePacket,
+  brief: PageBrief,
+  llm: LlmClient,
+  cache: Map<string, ContentBlocks>,
+  db: DbClient,
+  runId: string,
+  offerId: string,
+  niche: string
+): Promise<ContentBlocks> {
+  const key = computeCacheFingerprint(["agent3-blocks-v1", packet, brief]);
+  const cached = cache.get(key);
+  if (cached) {
+    console.log(`[Agent 3][Stage][Blocks] Cache hit for ${packet.routeKey}`);
+    return cached;
+  }
+
+  const persisted = await db.query<{ blocks_json: unknown }>(
+    "SELECT blocks_json FROM agent3_content_block_cache WHERE cache_key = $1 LIMIT 1",
+    [key]
+  );
+  if (persisted.rows.length > 0) {
+    try {
+      const parsed = ContentBlocksSchema.parse(asObject(persisted.rows[0].blocks_json, {}));
+      cache.set(key, parsed);
+      console.log(`[Agent 3][Stage][Blocks] DB cache hit for ${packet.routeKey}`);
+      return parsed;
+    } catch {
+      // fall through and regenerate
+    }
+  }
+
+  console.log(`[Agent 3][Stage][Blocks] Generating blocks for ${packet.routeKey}`);
+  const prompt = buildContentBlocksPrompt(packet, brief);
+  let repairHint = "";
+  const result = await withSelfHealing({
+    runId,
+    offerId,
+    agentName: "agent-3",
+    step: "hybrid_blocks",
+    city: packet.city,
+    state: packet.state,
+    fn: async () =>
+      llm.call({
+        prompt: repairHint
+          ? `${prompt}\n\n[Correction guidance from previous attempt: ${repairHint}]`
+          : prompt,
+        schema: ContentBlocksSchema,
+        model: "haiku",
+        timeoutMs: 120_000,
+        logLabel: `[Agent 3][Blocks][${packet.routeKey}]`,
+      }),
+    getRepairContext: (err) =>
+      `Agent 3 hybrid content-block stage failed for route ${packet.routeKey} with: ${err.message}\nReturn corrected JSON matching ContentBlocksSchema exactly.`,
+    applyFix: async (fixedCode) => {
+      repairHint = fixedCode;
+    },
+    db,
+    llm,
+  });
+  cache.set(key, result);
+  await db.query(
+    `INSERT INTO agent3_content_block_cache
+     (cache_key, niche, route_key, page_type, packet_fingerprint, blocks_json, cache_provider, cache_version, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, 'llm', 'v1', now())
+     ON CONFLICT (cache_key) DO UPDATE SET
+       blocks_json = EXCLUDED.blocks_json,
+       updated_at = now()`,
+    [
+      key,
+      normalizeNiche(niche),
+      packet.routeKey,
+      packet.pageType,
+      computeCacheFingerprint(["packet", packet]),
+      JSON.stringify(result),
+    ]
+  );
+  console.log(`[Agent 3][Stage][Blocks] Completed for ${packet.routeKey}`);
+  return result;
+}
+
 export async function runAgent3(
   config: Agent3Config,
   llm: LlmClient,
@@ -2137,6 +2605,55 @@ export async function runAgent3(
   const buildRecord = await createSiteBuildRecord(db, cfg);
   const hugo = createHugoManager(cfg.hugoSitePath);
   let cityRows: any[] = [];
+  const briefCache = new Map<string, PageBrief>();
+  const blocksCache = new Map<string, ContentBlocks>();
+  const validationCache = new Map<string, ReturnType<typeof runQualityGate>>();
+  const batchSimilarityHistory: {
+    hub: Array<{ routeKey: string; tokens: string[] }>;
+    service: Array<{ routeKey: string; tokens: string[] }>;
+  } = {
+    hub: [],
+    service: [],
+  };
+
+  // Seed similarity guard with existing content for cross-run diversity
+  const contentDir = path.join(cfg.hugoSitePath, "content");
+  if (fs.existsSync(contentDir)) {
+    try {
+      const cityDirs = fs.readdirSync(contentDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory());
+      for (const dir of cityDirs) {
+        const hubPath = path.join(contentDir, dir.name, "_index.md");
+        if (fs.existsSync(hubPath)) {
+          const hubContent = fs.readFileSync(hubPath, "utf-8");
+          const tokens = normalizeForSimilarity(hubContent);
+          if (tokens.length > 0) {
+            batchSimilarityHistory.hub.push({ routeKey: dir.name, tokens });
+          }
+        }
+        const subFiles = fs.readdirSync(path.join(contentDir, dir.name))
+          .filter((f) => f.endsWith(".md") && f !== "_index.md");
+        for (const subFile of subFiles) {
+          const subPath = path.join(contentDir, dir.name, subFile);
+          const subContent = fs.readFileSync(subPath, "utf-8");
+          const tokens = normalizeForSimilarity(subContent);
+          if (tokens.length > 0) {
+            batchSimilarityHistory.service.push({
+              routeKey: `${dir.name}/${subFile.replace(".md", "")}`,
+              tokens,
+            });
+          }
+        }
+      }
+      if (batchSimilarityHistory.hub.length > 0 || batchSimilarityHistory.service.length > 0) {
+        console.log(
+          `[Agent 3] Seeded similarity guard with ${batchSimilarityHistory.hub.length} existing hubs, ${batchSimilarityHistory.service.length} existing subpages`
+        );
+      }
+    } catch (seedErr) {
+      console.warn(`[Agent 3] Failed to seed similarity guard: ${seedErr instanceof Error ? seedErr.message : seedErr}`);
+    }
+  }
 
   try {
     hugo.ensureProject();
@@ -2224,7 +2741,30 @@ export async function runAgent3(
       }
     }
 
-    for (const cityRow of cityRows) {
+    // Reserve new-city slots synchronously so concurrent workers do not overrun cap.
+    const reserveNewCitySlot = (isExistingCity: boolean): boolean => {
+      if (isExistingCity || !cfg.enforceNewCityCap) {
+        return true;
+      }
+      if (newCitySlotsRemaining <= 0) {
+        return false;
+      }
+      newCitySlotsRemaining -= 1;
+      return true;
+    };
+
+    const cityConcurrency = Math.max(
+      1,
+      Math.min(
+        6,
+        Number.isFinite(cfg.cityConcurrency)
+          ? Number(cfg.cityConcurrency)
+          : AGENT3_DEFAULT_CITY_CONCURRENCY
+      )
+    );
+    console.log(`[Agent 3] Processing ${cityRows.length} cities with concurrency=${cityConcurrency}`);
+
+    await mapWithConcurrency(cityRows, cityConcurrency, async (cityRow) => {
       const processCity = async () => {
         const { city, state } = cityRow;
         const citySlug = slugify(city);
@@ -2233,14 +2773,9 @@ export async function runAgent3(
           [citySlug, cfg.niche]
         );
         const isExistingCity = existingPageResult.rows.length > 0;
-        if (!isExistingCity) {
-          if (cfg.enforceNewCityCap && newCitySlotsRemaining <= 0) {
-            console.warn(`[Agent 3] Skipping ${city}, ${state}; weekly new-city cap reached.`);
-            return;
-          }
-          if (cfg.enforceNewCityCap) {
-            newCitySlotsRemaining -= 1;
-          }
+        if (!reserveNewCitySlot(isExistingCity)) {
+          console.warn(`[Agent 3] Skipping ${city}, ${state}; weekly new-city cap reached.`);
+          return;
         }
 
         const routeAssignments = deriveRouteAssignments(cityRow.url_mapping, citySlug);
@@ -2314,7 +2849,51 @@ export async function runAgent3(
         } else {
           console.log(`[Agent 3] Generating hub page for ${city}...`);
           eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Hub page", detail: city, timestamp: Date.now() });
-          const hubPrompt = strategy.getCityHubPrompt(
+          const hubPacket = buildPagePacket({
+            offerId: cfg.offerProfile?.offer_id ?? cfg.niche,
+            vertical: cfg.verticalProfile?.vertical_key ?? cfg.offerProfile?.vertical ?? cfg.niche,
+            pageType: "hub",
+            routeKey: `${citySlug}/`,
+            city,
+            state,
+            targetKeyword: hubKeyword,
+            phone: cfg.phone ?? "",
+            blockedTerms: [
+              ...(cfg.offerProfile?.constraints?.banned_phrases ?? []),
+              ...(designSystem.readingLevel.banned_phrases ?? []),
+            ],
+            requiredDisclaimer: cfg.offerProfile?.constraints?.required_disclaimer?.trim() ?? "",
+            ctaVariants: designSystem.copyFramework.ctas,
+            trustSignals: designSystem.copyFramework.trust_signals,
+            seasonalSignals: hubSeasonalSummaryText.split("|").map((entry) => entry.trim()).filter(Boolean),
+            localFacts: [
+              `City: ${city}, ${state}`,
+              `Approved routes: ${approvedRoutes.join(", ") || "none"}`,
+              `Cluster count: ${orderedClusters.length}`,
+            ],
+            wordCountTarget: cfg.minWordCountHub ?? 800,
+          });
+          const hubBrief = await generatePageBrief(
+            hubPacket,
+            llm,
+            briefCache,
+            db,
+            cfg.runId ?? "no-run-id",
+            cfg.offerProfile?.offer_id ?? cfg.niche,
+            cfg.niche
+          );
+          const hubBlocks = await generateContentBlocks(
+            hubPacket,
+            hubBrief,
+            llm,
+            blocksCache,
+            db,
+            cfg.runId ?? "no-run-id",
+            cfg.offerProfile?.offer_id ?? cfg.niche,
+            cfg.niche
+          );
+          const hubHybridContext = buildHybridContext(hubBrief, hubBlocks);
+          const baseHubPrompt = strategy.getCityHubPrompt(
             {
               city,
               state,
@@ -2340,6 +2919,7 @@ export async function runAgent3(
             },
             strategyContext
           );
+          const hubPrompt = `${baseHubPrompt}\n\n${hubHybridContext}`;
           const hubReplacements = {
             city,
             state,
@@ -2350,20 +2930,8 @@ export async function runAgent3(
             name: city,
           };
           const hubLogLabel = `[Agent 3][Hub page][${city}]`;
-          const hubLogger = createVerboseProviderLogger(hubLogLabel);
-          let rawHubContent;
-          try {
-            rawHubContent = await llm.call({
-              prompt: hubPrompt,
-              schema: ContentResponseSchema,
-              model: "sonnet",
-              timeoutMs: AGENT3_CONTENT_TIMEOUT_MS,
-              logLabel: hubLogLabel,
-              onOutput: (chunk, stream) => hubLogger.onOutput(chunk, stream),
-            });
-          } finally {
-            hubLogger.flush();
-          }
+          console.log(`[Agent 3][Stage][Assemble] Assembling deterministic hub content for ${citySlug}/`);
+          const rawHubContent = assemblePageFromHybrid(hubPacket, hubBrief, hubBlocks);
           const hubContent = applyOfferContentRules(
             resolveGeneratedContentPlaceholders(rawHubContent, hubReplacements),
             cfg.offerProfile
@@ -2383,12 +2951,48 @@ export async function runAgent3(
           );
 
           let finalHubContent = hubContent;
+          const hubRouteKey = `${citySlug}/`;
+          const similarHub = findMostSimilarContent(
+            batchSimilarityHistory.hub,
+            finalHubContent.content
+          );
+          if (similarHub && similarHub.similarity > AGENT3_BATCH_SIMILARITY_MAX) {
+            console.warn(
+              `[Agent 3][DIVERSITY_GUARD] hub ${hubRouteKey} is too similar to ${similarHub.routeKey} (score=${similarHub.similarity.toFixed(2)}). Attempting repair.`
+            );
+            const diversified = await repairContentForQa(llm, {
+              prompt: hubPrompt,
+              content: finalHubContent,
+              city,
+              minWordCount: designSystem.designSpec.layout?.content_rules?.city_hub_words?.min ?? cfg.minWordCountHub!,
+              supplementalTexts: [JSON.stringify(hubSchemaTemplate)],
+              failures: ["low_uniqueness", "repeated_sentences"],
+              logLabel: `[Agent 3][Hub diversity repair][${city}]`,
+              replacements: hubReplacements,
+              phoneMinMentions: designSystem.designSpec.layout?.conversion_strategy?.phone_mentions_min ?? 3,
+              readingLevel: designSystem.readingLevel,
+              sectionRules: (designSystem.designSpec.layout?.section_rules ?? []) as SectionRule[],
+              metadata: {
+                title: finalHubContent.title,
+                description: finalHubContent.meta_description,
+                heroImageAlt: `${hubKeyword} pest control in ${city}`,
+                targetKeyword: hubKeyword,
+              },
+            });
+            finalHubContent = diversified.content;
+            const recheck = findMostSimilarContent(batchSimilarityHistory.hub, finalHubContent.content);
+            if (recheck && recheck.similarity > AGENT3_BATCH_SIMILARITY_MAX) {
+              throw new Error(
+                `Diversity guard failed for ${hubRouteKey}; still too similar to ${recheck.routeKey} (${recheck.similarity.toFixed(2)})`
+              );
+            }
+          }
           const minHubWords = designSystem.designSpec.layout?.content_rules?.city_hub_words?.min ?? cfg.minWordCountHub!;
           console.log(`[Agent 3] Hub word count minimum: ${minHubWords} (source: ${designSystem.designSpec.layout?.content_rules?.city_hub_words?.min ? "agent-2 content_rules" : "config"})`);
           const hubPhoneMin = designSystem.designSpec.layout?.conversion_strategy?.phone_mentions_min ?? 3;
           const hubSectionRules = (designSystem.designSpec.layout?.section_rules ?? []) as SectionRule[];
           const hubHeroImageAlt = `${hubKeyword} pest control in ${city}`;
-          let hubQuality = runQualityGate(
+          let hubQuality = runQualityGateCached(validationCache, [
             finalHubContent.content,
             city,
             minHubWords,
@@ -2406,7 +3010,7 @@ export async function runAgent3(
               heroImageAlt: hubHeroImageAlt,
               targetKeyword: hubKeyword,
             }
-          );
+          ]);
           if (hubQuality.warnings.length > 0) {
             console.warn(`[Agent 3] Hub page QA warnings for ${city}: ${hubQuality.warnings.join("; ")}`);
           }
@@ -2443,8 +3047,37 @@ export async function runAgent3(
             hubQuality = repaired.quality;
             if (!hubQuality.passed) {
               console.warn(
-                `[Agent 3] Hub page QA still has failures after repair for ${city}: ${hubQuality.failures.join(", ")} — publishing best-available content`
+                `[Agent 3] Hub page QA still has failures after 1st repair for ${city}: ${hubQuality.failures.join(", ")}; attempting 2nd repair`
               );
+              const repaired2 = await repairContentForQa(llm, {
+                prompt: hubPrompt,
+                content: finalHubContent,
+                city,
+                minWordCount: minHubWords,
+                supplementalTexts: [JSON.stringify(hubSchemaTemplate)],
+                failures: hubQuality.failures,
+                bannedPhrasesFound: hubQuality.metrics.bannedPhrasesFound,
+                logLabel: `[Agent 3][Hub page repair 2][${city}]`,
+                replacements: hubReplacements,
+                phoneMinMentions: hubPhoneMin,
+                readingLevel: designSystem.readingLevel,
+                sectionRules: hubSectionRules,
+                metadata: {
+                  title: finalHubContent.title,
+                  description: finalHubContent.meta_description,
+                  heroImageAlt: hubHeroImageAlt,
+                  targetKeyword: hubKeyword,
+                },
+              });
+              finalHubContent = repaired2.content;
+              hubQuality = repaired2.quality;
+              if (!hubQuality.passed) {
+                console.warn(
+                  `[Agent 3] Hub page QA still has failures after 2nd repair for ${city}: ${hubQuality.failures.join(", ")} — publishing best-available content`
+                );
+              } else {
+                console.log(`[Agent 3] Hub page 2nd repair passed QA for ${city}`);
+              }
             } else {
               console.log(`[Agent 3] Hub page repair passed QA for ${city}`);
             }
@@ -2622,12 +3255,17 @@ export async function runAgent3(
             slug: citySlug,
             city,
           });
+          batchSimilarityHistory.hub.push({
+            routeKey: hubRouteKey,
+            tokens: normalizeForSimilarity(finalHubContent.content),
+          });
         }
 
         await mapWithConcurrency(
           serviceClusterTypes.slice(0, 5),
           AGENT3_SUBPAGE_CONCURRENCY,
           async (cluster) => {
+          try {
           const pestType = cluster.cluster_name;
           const pestSlug = resolveServiceSlug(cluster, routeAssignments);
           const subpageCheckpointKey = `subpage:${citySlug}/${pestSlug}`;
@@ -2653,7 +3291,53 @@ export async function runAgent3(
           console.log(`[Agent 3] Generating subpage: ${city}/${pestType}...`);
           eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Subpage", detail: `${city}/${pestType}`, timestamp: Date.now() });
 
-          const subPrompt = strategy.getServiceSubpagePrompt(
+          const subPacket = buildPagePacket({
+            offerId: cfg.offerProfile?.offer_id ?? cfg.niche,
+            vertical: cfg.verticalProfile?.vertical_key ?? cfg.offerProfile?.vertical ?? cfg.niche,
+            pageType: "service",
+            routeKey: `${citySlug}/${pestSlug}/`,
+            city,
+            state,
+            targetKeyword: cluster.primary_keyword,
+            phone: cfg.phone ?? "",
+            serviceType: pestType,
+            blockedTerms: [
+              ...(cfg.offerProfile?.constraints?.banned_phrases ?? []),
+              ...(designSystem.readingLevel.banned_phrases ?? []),
+            ],
+            requiredDisclaimer: cfg.offerProfile?.constraints?.required_disclaimer?.trim() ?? "",
+            ctaVariants: designSystem.copyFramework.ctas,
+            trustSignals: designSystem.copyFramework.trust_signals,
+            seasonalSignals: serviceSeasonalSummaryText.split("|").map((entry) => entry.trim()).filter(Boolean),
+            localFacts: [
+              `City: ${city}, ${state}`,
+              `Service: ${pestType}`,
+              `Approved URL slug: /${citySlug}/${pestSlug}/`,
+            ],
+            wordCountTarget: cfg.minWordCountSubpage ?? 1200,
+          });
+          const subBrief = await generatePageBrief(
+            subPacket,
+            llm,
+            briefCache,
+            db,
+            cfg.runId ?? "no-run-id",
+            cfg.offerProfile?.offer_id ?? cfg.niche,
+            cfg.niche
+          );
+          const subBlocks = await generateContentBlocks(
+            subPacket,
+            subBrief,
+            llm,
+            blocksCache,
+            db,
+            cfg.runId ?? "no-run-id",
+            cfg.offerProfile?.offer_id ?? cfg.niche,
+            cfg.niche
+          );
+          const subHybridContext = buildHybridContext(subBrief, subBlocks);
+
+          const baseSubPrompt = strategy.getServiceSubpagePrompt(
             {
               city,
               state,
@@ -2689,6 +3373,7 @@ export async function runAgent3(
             },
             strategyContext
           );
+          const subPrompt = `${baseSubPrompt}\n\n${subHybridContext}`;
 
           const subReplacements = {
             city,
@@ -2702,21 +3387,8 @@ export async function runAgent3(
             title: `${city} ${pestType}`,
             name: `${city} ${pestType}`,
           };
-          const subLogLabel = `[Agent 3][Subpage][${city}/${pestType}]`;
-          const subLogger = createVerboseProviderLogger(subLogLabel);
-          let rawSubContent;
-          try {
-            rawSubContent = await llm.call({
-              prompt: subPrompt,
-              schema: ContentResponseSchema,
-              model: "sonnet",
-              timeoutMs: AGENT3_CONTENT_TIMEOUT_MS,
-              logLabel: subLogLabel,
-              onOutput: (chunk, stream) => subLogger.onOutput(chunk, stream),
-            });
-          } finally {
-            subLogger.flush();
-          }
+          console.log(`[Agent 3][Stage][Assemble] Assembling deterministic service content for ${citySlug}/${pestSlug}/`);
+          const rawSubContent = assemblePageFromHybrid(subPacket, subBrief, subBlocks);
           const subContent = applyOfferContentRules(
             resolveGeneratedContentPlaceholders(rawSubContent, subReplacements),
             cfg.offerProfile
@@ -2733,12 +3405,48 @@ export async function runAgent3(
           console.log(`[Agent 3] Subpage title for ${city}/${pestType}: ${subContent.title}`);
 
           let finalSubContent = subContent;
+          const subRouteKey = `${citySlug}/${pestSlug}/`;
+          const similarSubpage = findMostSimilarContent(
+            batchSimilarityHistory.service,
+            finalSubContent.content
+          );
+          if (similarSubpage && similarSubpage.similarity > AGENT3_BATCH_SIMILARITY_MAX) {
+            console.warn(
+              `[Agent 3][DIVERSITY_GUARD] service ${subRouteKey} is too similar to ${similarSubpage.routeKey} (score=${similarSubpage.similarity.toFixed(2)}). Attempting repair.`
+            );
+            const diversified = await repairContentForQa(llm, {
+              prompt: subPrompt,
+              content: finalSubContent,
+              city,
+              minWordCount: designSystem.designSpec.layout?.content_rules?.service_page_words?.min ?? cfg.minWordCountSubpage!,
+              supplementalTexts: [JSON.stringify(subSchemaTemplate)],
+              failures: ["low_uniqueness", "repeated_sentences"],
+              logLabel: `[Agent 3][Subpage diversity repair][${city}/${pestType}]`,
+              replacements: subReplacements,
+              phoneMinMentions: designSystem.designSpec.layout?.conversion_strategy?.phone_mentions_min ?? 3,
+              readingLevel: designSystem.readingLevel,
+              sectionRules: (designSystem.designSpec.layout?.section_rules ?? []) as SectionRule[],
+              metadata: {
+                title: finalSubContent.title,
+                description: finalSubContent.meta_description,
+                heroImageAlt: `${cluster.primary_keyword} pest control in ${city}`,
+                targetKeyword: cluster.primary_keyword,
+              },
+            });
+            finalSubContent = diversified.content;
+            const recheck = findMostSimilarContent(batchSimilarityHistory.service, finalSubContent.content);
+            if (recheck && recheck.similarity > AGENT3_BATCH_SIMILARITY_MAX) {
+              throw new Error(
+                `Diversity guard failed for ${subRouteKey}; still too similar to ${recheck.routeKey} (${recheck.similarity.toFixed(2)})`
+              );
+            }
+          }
           const minSubWords = designSystem.designSpec.layout?.content_rules?.service_page_words?.min ?? cfg.minWordCountSubpage!;
           console.log(`[Agent 3] Subpage word count minimum: ${minSubWords} (source: ${designSystem.designSpec.layout?.content_rules?.service_page_words?.min ? "agent-2 content_rules" : "config"})`);
           const subPhoneMin = designSystem.designSpec.layout?.conversion_strategy?.phone_mentions_min ?? 3;
           const subSectionRules = (designSystem.designSpec.layout?.section_rules ?? []) as SectionRule[];
           const subHeroImageAlt = `${cluster.primary_keyword} pest control in ${city}`;
-          let subQuality = runQualityGate(
+          let subQuality = runQualityGateCached(validationCache, [
             finalSubContent.content,
             city,
             minSubWords,
@@ -2756,7 +3464,7 @@ export async function runAgent3(
               heroImageAlt: subHeroImageAlt,
               targetKeyword: cluster.primary_keyword,
             }
-          );
+          ]);
           if (subQuality.warnings.length > 0) {
             console.warn(`[Agent 3] Subpage QA warnings for ${city}/${pestType}: ${subQuality.warnings.join("; ")}`);
           }
@@ -2793,8 +3501,37 @@ export async function runAgent3(
             subQuality = repaired.quality;
             if (!subQuality.passed) {
               console.warn(
-                `[Agent 3] Subpage QA still has failures after repair for ${city}/${pestType}: ${subQuality.failures.join(", ")} — publishing best-available content`
+                `[Agent 3] Subpage QA still has failures after 1st repair for ${city}/${pestType}: ${subQuality.failures.join(", ")}; attempting 2nd repair`
               );
+              const repaired2 = await repairContentForQa(llm, {
+                prompt: subPrompt,
+                content: finalSubContent,
+                city,
+                minWordCount: minSubWords,
+                supplementalTexts: [JSON.stringify(subSchemaTemplate)],
+                failures: subQuality.failures,
+                bannedPhrasesFound: subQuality.metrics.bannedPhrasesFound,
+                logLabel: `[Agent 3][Subpage repair 2][${city}/${pestType}]`,
+                replacements: subReplacements,
+                phoneMinMentions: subPhoneMin,
+                readingLevel: designSystem.readingLevel,
+                sectionRules: subSectionRules,
+                metadata: {
+                  title: finalSubContent.title,
+                  description: finalSubContent.meta_description,
+                  heroImageAlt: subHeroImageAlt,
+                  targetKeyword: cluster.primary_keyword,
+                },
+              });
+              finalSubContent = repaired2.content;
+              subQuality = repaired2.quality;
+              if (!subQuality.passed) {
+                console.warn(
+                  `[Agent 3] Subpage QA still has failures after 2nd repair for ${city}/${pestType}: ${subQuality.failures.join(", ")} — publishing best-available content`
+                );
+              } else {
+                console.log(`[Agent 3] Subpage 2nd repair passed QA for ${city}/${pestType}`);
+              }
             } else {
               console.log(`[Agent 3] Subpage repair passed QA for ${city}/${pestType}`);
             }
@@ -2939,7 +3676,25 @@ export async function runAgent3(
             city,
             pestType,
           });
+          batchSimilarityHistory.service.push({
+            routeKey: subRouteKey,
+            tokens: normalizeForSimilarity(finalSubContent.content),
+          });
           console.log(`[Agent 3] Saved page ${citySlug}/${pestSlug} (${subQuality.metrics.wordCount} words)`);
+          } catch (error) {
+            const pestType = String(cluster?.cluster_name ?? "unknown");
+            const pestSlug = resolveServiceSlug(cluster, routeAssignments);
+            const reason = error instanceof Error ? error.message : String(error);
+            console.error(
+              `[Agent 3][SUBPAGE_FAILED] ${citySlug}/${pestSlug} | runId=${cfg.runId} | offerId=${cfg.offerProfile?.offer_id ?? "unknown"} | reason=${reason} | continuing`
+            );
+            eventBus.emitEvent({
+              type: "agent_error",
+              agent: "agent-3",
+              error: `[SUBPAGE_FAILED] ${city}/${pestType}: ${reason}`,
+              timestamp: Date.now(),
+            });
+          }
           }
         );
 
@@ -2958,8 +3713,21 @@ export async function runAgent3(
         console.log(`[Agent 3] Registered page ${pageUrl}`);
       };
 
-      await scheduleWithVerboseLimiter(cfg.deployLimiter, `${cityRow.city}, ${cityRow.state}`, processCity);
-    }
+      try {
+        await scheduleWithVerboseLimiter(cfg.deployLimiter, `${cityRow.city}, ${cityRow.state}`, processCity);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        console.error(
+          `[Agent 3][CITY_FAILED] ${cityRow.city}, ${cityRow.state} | runId=${cfg.runId} | offerId=${cfg.offerProfile?.offer_id ?? "unknown"} | reason=${reason} | continuing`
+        );
+        eventBus.emitEvent({
+          type: "agent_error",
+          agent: "agent-3",
+          error: `[CITY_FAILED] ${cityRow.city}, ${cityRow.state}: ${reason}`,
+          timestamp: Date.now(),
+        });
+      }
+    });
 
     // Write site-level navigation data (footer links for services + cities)
     const allServiceSlugs = new Set<string>();
@@ -3250,6 +4018,12 @@ Every technician in our network uses EPA-registered products applied according t
     await updateSiteBuildRecord(db, buildRecord.id, "FAILED", {
       error: message,
       completed: true,
+    });
+    eventBus.emitEvent({
+      type: "agent_error",
+      agent: "agent-3",
+      error: message,
+      timestamp: Date.now(),
     });
     throw err;
   }

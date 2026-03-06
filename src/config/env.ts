@@ -28,6 +28,20 @@ const EnvSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+  AGENT1_RESEARCH_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  AGENT2_RESEARCH_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  AGENT3_CITY_CONCURRENCY: z.coerce.number().int().min(1).max(6).default(2),
+  AGENT3_ENFORCE_NEW_CITY_CAP: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  AGENT3_MAX_NEW_CITIES_PER_WEEK: z.coerce.number().int().min(1).default(3),
   INDEXATION_MIN_PAGE_AGE_DAYS: z.coerce.number().int().min(1).default(21),
   INDEXATION_LOOKBACK_DAYS: z.coerce.number().int().min(7).default(30),
   INDEXATION_RATIO_THRESHOLD: z.coerce.number().min(0).max(1).default(0.5),

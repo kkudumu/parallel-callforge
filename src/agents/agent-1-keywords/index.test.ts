@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "@jest/globals";
 import { runAgent1, type Agent1Config } from "./index.js";
 
 // Smoke test: verify Agent1Config accepts researchEnabled flag and runId

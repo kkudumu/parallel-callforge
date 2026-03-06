@@ -28,6 +28,9 @@ export interface AgentErrorEvent {
   type: "agent_error";
   agent: AgentName;
   taskId?: string;
+  runId?: string;
+  step?: string;
+  city?: string;
   error: string;
   timestamp: number;
 }

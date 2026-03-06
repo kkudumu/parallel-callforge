@@ -1,16 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, jest } from "@jest/globals";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
-  query: vi.fn(),
+jest.mock("@anthropic-ai/claude-agent-sdk", () => ({
+  query: jest.fn(),
 }));
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { runResearchPhase } from "./research-orchestrator.js";
 
-const mockedQuery = vi.mocked(query as any);
+const mockedQuery = query as jest.Mock;
 
 const VALID_RESEARCH_FILE = `# Keyword Pattern Research — pest control
 
@@ -43,7 +43,7 @@ describe("runResearchPhase", () => {
   beforeEach(() => {
     researchDir = join(tmpdir(), `agent1-research-orch-${Date.now()}-${Math.random()}`);
     mkdirSync(researchDir, { recursive: true });
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   afterEach(() => {

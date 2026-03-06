@@ -1,6 +1,8 @@
 import { z } from "zod/v4";
 import type { DbClient } from "./db/client.js";
 import type { LlmClient } from "./cli/llm-client.js";
+import { eventBus } from "./events/event-bus.js";
+import type { AgentName } from "./events/event-types.js";
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -91,6 +93,16 @@ export async function withSelfHealing<T>(opts: SelfHealingOptions<T>): Promise<T
       const durationMs = Date.now() - startedAt;
       const status: string = attempt === 0 ? "success" : "recovered";
 
+      if (attempt > 0) {
+        eventBus.emitEvent({
+          type: "agent_step",
+          agent: agentName as AgentName,
+          step: `Self-healing recovered`,
+          detail: `${step}: recovered after ${attempt} repair(s) in ${durationMs}ms`,
+          timestamp: Date.now(),
+        });
+      }
+
       try {
         await insertLog(db, {
           runId,
@@ -122,6 +134,14 @@ export async function withSelfHealing<T>(opts: SelfHealingOptions<T>): Promise<T
         const repair = await llm.call({ prompt, schema: RepairSchema });
         lastFixSummary = repair.summary;
 
+        eventBus.emitEvent({
+          type: "agent_step",
+          agent: agentName as AgentName,
+          step: `Self-healing repair (attempt ${attempt + 1})`,
+          detail: `${step}: ${repair.summary}`,
+          timestamp: Date.now(),
+        });
+
         await applyFix(repair.fixed_code, attempt);
         // Loop continues → next attempt uses the patched code.
       }
@@ -134,6 +154,13 @@ export async function withSelfHealing<T>(opts: SelfHealingOptions<T>): Promise<T
   }
 
   const durationMs = Date.now() - startedAt;
+
+  eventBus.emitEvent({
+    type: "agent_error",
+    agent: agentName as AgentName,
+    error: `[SELF_HEALING_DEAD] ${step}: ${lastError.message} (${maxRetries} attempts in ${durationMs}ms)`,
+    timestamp: Date.now(),
+  });
 
   try {
     await insertLog(db, {

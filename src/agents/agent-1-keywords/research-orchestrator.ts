@@ -1,4 +1,3 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -31,6 +30,11 @@ export interface ResearchPhaseConfig {
   minValidFiles?: number;
 }
 
+async function loadAgentSdkQuery() {
+  const sdk = await import("@anthropic-ai/claude-agent-sdk");
+  return sdk.query;
+}
+
 export async function runResearchPhase(
   cfg: ResearchPhaseConfig
 ): Promise<ResearchFindings> {
@@ -39,6 +43,7 @@ export async function runResearchPhase(
   console.log(`[Agent 1][Research] Research dir: ${cfg.researchDir}`);
 
   const orchestratorPrompt = buildOrchestratorPrompt(cfg);
+  const query = await loadAgentSdkQuery();
 
   for await (const message of query({
     prompt: orchestratorPrompt,

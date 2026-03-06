@@ -98,6 +98,8 @@ function buildAgent1Config(
   verticalProfile?: Awaited<ReturnType<typeof loadVerticalProfile>> | null
 ) {
   const niche = offerProfile?.niche ?? DEFAULT_NICHE;
+  const env = getEnv();
+  const researchEnabled = env.AGENT1_RESEARCH_ENABLED;
   if (citySource === "deployment_candidates" && offerId) {
     return {
       niche,
@@ -108,6 +110,7 @@ function buildAgent1Config(
       verticalProfile,
       payoutPerQualifiedCall,
       forceRefresh,
+      researchEnabled,
     };
   }
 
@@ -119,6 +122,7 @@ function buildAgent1Config(
     verticalProfile,
     payoutPerQualifiedCall,
     forceRefresh,
+    researchEnabled,
   };
 }
 
@@ -615,12 +619,20 @@ export function createDashboardServer(db?: DbClient) {
     try {
       await runMigrations(db);
 
+      const scanEnv = getEnv();
+      const scanLimiters = createRateLimiters();
+      const scanClaudeCli = createClaudeCli(scanEnv.CLAUDE_CLI_PATH);
+      const scanCodexCli = createCodexCli(scanEnv.CODEX_CLI_PATH);
+      const scanGeminiCli = createGeminiCli(scanEnv.GEMINI_CLI_PATH);
+      const scanLlm = createLlmClient(scanClaudeCli, scanCodexCli, scanLimiters, scanGeminiCli);
       const candidates = await runAgent05(
         {
           offerId,
           zipCodes: zipCodes.length > 0 ? zipCodes : undefined,
           source: zipCodes.length > 0 ? "api" : "stored-offer",
           topN,
+          llm: scanLlm,
+          runId: `geo-scan-${randomUUID()}`,
         },
         db
       );
@@ -641,6 +653,7 @@ export function createDashboardServer(db?: DbClient) {
           offerId,
           topCandidateLimit: topN,
           forceRefresh,
+          researchEnabled: true,
         }, llm, db);
       }
 
@@ -675,6 +688,10 @@ export function createDashboardServer(db?: DbClient) {
     const forceDesignRefresh = req.body?.forceDesignRefresh === true;
     const enableAgent7 = req.body?.enableAgent7 === true;
     const envDefaults = getEnv();
+    const cityConcurrency =
+      typeof req.body?.cityConcurrency === "number"
+        ? req.body.cityConcurrency
+        : envDefaults.AGENT3_CITY_CONCURRENCY;
     const citySource: CitySourceMode =
       req.body?.citySource === "deployment_candidates"
         ? "deployment_candidates"
@@ -693,6 +710,7 @@ export function createDashboardServer(db?: DbClient) {
     const offerZipCodes = typeof req.body?.offerZipCodes === "string"
       ? parseZipInput(req.body.offerZipCodes)
       : [];
+    const pipelineRunId = `dashboard-${randomUUID()}`;
     const ignoreIndexationKillSwitch = req.body?.ignoreIndexationKillSwitch === true;
     const payoutPerQualifiedCall = typeof req.body?.payoutPerQualifiedCall === "number"
       ? req.body.payoutPerQualifiedCall
@@ -769,6 +787,8 @@ export function createDashboardServer(db?: DbClient) {
             offerId: resolvedOfferId,
             zipCodes: offerZipCodes.length > 0 ? offerZipCodes : undefined,
             source: offerZipCodes.length > 0 ? "dashboard-pipeline" : "stored-offer",
+            llm,
+            runId: pipelineRunId,
           },
           db
         );
@@ -831,6 +851,8 @@ export function createDashboardServer(db?: DbClient) {
           offerProfile: offerContext.offerProfile,
           verticalProfile: offerContext.verticalProfile,
           forceRefresh: payload?.forceRefresh === true,
+          researchEnabled: env.AGENT2_RESEARCH_ENABLED,
+          runId: pipelineRunId,
         }, llm, db);
         return {};
       },
@@ -852,6 +874,10 @@ export function createDashboardServer(db?: DbClient) {
           phone: env.BUSINESS_PHONE,
           minWordCountHub: 800,
           minWordCountSubpage: 1200,
+          cityConcurrency:
+            typeof payload?.cityConcurrency === "number"
+              ? payload.cityConcurrency
+              : cityConcurrency,
           deployLimiter: limiters.contentDeploy,
           targetCities: typeof payload?.city === "string" ? [payload.city] : undefined,
           indexationKillSwitchEnabled:
@@ -862,6 +888,8 @@ export function createDashboardServer(db?: DbClient) {
           indexationMinPageAgeDays: env.INDEXATION_MIN_PAGE_AGE_DAYS,
           indexationLookbackDays: env.INDEXATION_LOOKBACK_DAYS,
           minIndexationRatio: env.INDEXATION_RATIO_THRESHOLD,
+          enforceNewCityCap: env.AGENT3_ENFORCE_NEW_CITY_CAP,
+          maxNewCitiesPerWeek: env.AGENT3_MAX_NEW_CITIES_PER_WEEK,
           ignoreIndexationKillSwitch:
             payload?.ignoreIndexationKillSwitch === true || ignoreIndexationKillSwitch,
         }, llm, db);
@@ -959,7 +987,12 @@ export function createDashboardServer(db?: DbClient) {
         const t3 = await orchestrator.scheduler.createTask(
           "site_build",
           "agent-3",
-          { niche: offerContext.niche, offerId, ignoreIndexationKillSwitch },
+          {
+            niche: offerContext.niche,
+            offerId,
+            ignoreIndexationKillSwitch,
+            cityConcurrency,
+          },
           previousTaskId ? [previousTaskId] : []
         );
         currentRunTaskIds.add(t3);

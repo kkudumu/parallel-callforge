@@ -152,6 +152,7 @@ function buildAgent1Config(
   const citySource = overrides.citySource ?? env.CITY_SOURCE_MODE;
   const offerId = overrides.offerId;
   const niche = overrides.offerProfile?.niche ?? overrides.niche ?? DEFAULT_NICHE;
+  const researchEnabled = overrides.researchEnabled ?? env.AGENT1_RESEARCH_ENABLED;
 
   if (citySource === "deployment_candidates") {
     if (!offerId) {
@@ -162,6 +163,7 @@ function buildAgent1Config(
       citySource,
       offerId,
       topCandidateLimit: 5,
+      researchEnabled,
       ...overrides,
     };
   }
@@ -170,6 +172,7 @@ function buildAgent1Config(
     niche,
     citySource: "hardcoded" as CitySourceMode,
     candidateCities: CANDIDATE_CITIES,
+    researchEnabled,
     ...overrides,
   };
 }
@@ -312,6 +315,7 @@ async function runSingleAgent(agentName: string) {
           niche: offerContext.niche,
           offerProfile: offerContext.offerProfile,
           verticalProfile: offerContext.verticalProfile,
+          researchEnabled: env.AGENT2_RESEARCH_ENABLED,
         }, llm, db);
         }
         break;
@@ -327,6 +331,7 @@ async function runSingleAgent(agentName: string) {
           phone: env.BUSINESS_PHONE,
           minWordCountHub: 800,
           minWordCountSubpage: 1200,
+          cityConcurrency: env.AGENT3_CITY_CONCURRENCY,
           indexationKillSwitchEnabled:
             env.INDEXATION_KILL_SWITCH_ENABLED && env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
           searchConsoleIntegrationEnabled: env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
@@ -421,6 +426,8 @@ async function runPipeline() {
       niche: offerContext.niche,
       offerProfile: offerContext.offerProfile,
       verticalProfile: offerContext.verticalProfile,
+      researchEnabled: env.AGENT2_RESEARCH_ENABLED,
+      runId,
     }, llm, db);
 
     console.log("Step 4/4: Site Build");
@@ -432,6 +439,9 @@ async function runPipeline() {
       phone: env.BUSINESS_PHONE,
       minWordCountHub: 800,
       minWordCountSubpage: 1200,
+      cityConcurrency: env.AGENT3_CITY_CONCURRENCY,
+      enforceNewCityCap: env.AGENT3_ENFORCE_NEW_CITY_CAP,
+      maxNewCitiesPerWeek: env.AGENT3_MAX_NEW_CITIES_PER_WEEK,
       indexationKillSwitchEnabled:
         env.INDEXATION_KILL_SWITCH_ENABLED && env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
       searchConsoleIntegrationEnabled: env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
@@ -472,12 +482,36 @@ async function runPipeline() {
 async function runOrchestrated() {
   const agentHandlers = new Map<string, AgentHandler>();
   const env = getEnv();
+  const runId = `orch-${randomUUID()}`;
   const db = createDbClient(env.DATABASE_URL);
   const limiters = createRateLimiters();
   const claudeCli = createClaudeCli(env.CLAUDE_CLI_PATH);
   const codexCli = createCodexCli(env.CODEX_CLI_PATH);
   const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
   const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
+
+  agentHandlers.set("agent-0.5", {
+    name: "agent-0.5",
+    async execute(payload) {
+      const effectiveOfferId =
+        typeof payload?.offerId === "string" ? normalizeOptionalArg(payload.offerId) : undefined;
+      if (!effectiveOfferId) {
+        throw new Error("Agent 0.5 requires an offerId in the task payload");
+      }
+      const zipCodes = Array.isArray(payload?.zipCodes) ? payload.zipCodes : undefined;
+      await runAgent05(
+        {
+          offerId: effectiveOfferId,
+          zipCodes,
+          source: zipCodes ? "orchestrator" : "stored-offer",
+          llm,
+          runId,
+        },
+        db
+      );
+      return {};
+    },
+  });
 
   agentHandlers.set("agent-1", {
     name: "agent-1",
@@ -530,6 +564,8 @@ async function runOrchestrated() {
         offerProfile: offerContext.offerProfile,
         verticalProfile: offerContext.verticalProfile,
         forceRefresh: payload?.forceRefresh === true,
+        researchEnabled: env.AGENT2_RESEARCH_ENABLED,
+        runId,
       }, llm, db);
       return {};
     },
@@ -549,6 +585,10 @@ async function runOrchestrated() {
         phone: env.BUSINESS_PHONE,
         minWordCountHub: 800,
         minWordCountSubpage: 1200,
+        cityConcurrency:
+          typeof payload?.cityConcurrency === "number"
+            ? payload.cityConcurrency
+            : env.AGENT3_CITY_CONCURRENCY,
         targetCities: typeof payload?.city === "string" ? [payload.city] : undefined,
         indexationKillSwitchEnabled:
           env.INDEXATION_KILL_SWITCH_ENABLED && env.SEARCH_CONSOLE_INTEGRATION_ENABLED,
@@ -556,6 +596,8 @@ async function runOrchestrated() {
         indexationMinPageAgeDays: env.INDEXATION_MIN_PAGE_AGE_DAYS,
         indexationLookbackDays: env.INDEXATION_LOOKBACK_DAYS,
         minIndexationRatio: env.INDEXATION_RATIO_THRESHOLD,
+        enforceNewCityCap: env.AGENT3_ENFORCE_NEW_CITY_CAP,
+        maxNewCitiesPerWeek: env.AGENT3_MAX_NEW_CITIES_PER_WEEK,
         ignoreIndexationKillSwitch: payload?.ignoreIndexationKillSwitch === true,
       }, llm, db);
       return {};

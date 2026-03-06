@@ -51,8 +51,9 @@ describe("Agent 1 - Keywords", () => {
       const db = {
         query: jest
           .fn()
-          .mockResolvedValueOnce({ rows: [] })
-          .mockResolvedValueOnce({ rows: [] }),
+          .mockResolvedValueOnce({ rows: [] })  // cache lookup
+          .mockResolvedValueOnce({ rows: [] })  // keyword_templates insert
+          .mockResolvedValueOnce({ rows: [] }), // pipeline_run_log (self-healing success log)
       };
       const llm = {
         call: jest.fn().mockResolvedValue({
@@ -64,10 +65,11 @@ describe("Agent 1 - Keywords", () => {
 
       expect(result).toHaveLength(10);
       expect(llm.call).toHaveBeenCalledTimes(1);
-      expect(db.query).toHaveBeenCalledTimes(2);
-      expect(db.query).toHaveBeenLastCalledWith(
+      expect(db.query).toHaveBeenCalledTimes(3);
+      expect(db.query).toHaveBeenNthCalledWith(
+        3,
         expect.stringContaining("INSERT INTO keyword_templates"),
-        ["pest-control", result]
+        ["pest-control", result, "generated", expect.any(Number)]
       );
     });
   });

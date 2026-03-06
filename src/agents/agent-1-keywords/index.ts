@@ -334,7 +334,7 @@ export interface Agent1Config {
   citySource?: CitySourceMode;
   payoutPerQualifiedCall?: number;
   forceRefresh?: boolean;
-  researchEnabled?: boolean;   // default: false (opt-in)
+  researchEnabled?: boolean;   // default: true (all entry points enable by default)
   researchDir?: string;        // default: tmp/agent1-research/{runId}
   minValidResearchFiles?: number; // default: 4
   cleanupResearchDir?: boolean; // default: true
@@ -455,7 +455,9 @@ export async function getKeywordTemplates(
   forceRefresh = false,
   offerProfile?: OfferProfile | null,
   verticalProfile?: VerticalProfile | null,
-  researchContext?: string | null
+  researchContext?: string | null,
+  runId?: string,
+  offerId?: string
 ): Promise<string[]> {
   const cacheKey = normalizeNiche(niche);
   console.log(`[Agent 1] Checking keyword template cache for ${cacheKey}...`);
@@ -486,11 +488,31 @@ export async function getKeywordTemplates(
     offerProfile,
     verticalProfile,
   });
-  const { templates } = await llm.call({
-    prompt: withResearchContext(templatePrompt, researchContext ?? null),
-    schema: KeywordTemplatesResponseSchema,
-    model: "haiku",
-    logLabel: "[Agent 1][Step 1][Keyword templates]",
+  let templateRepairHint = "";
+  const { templates } = await withSelfHealing({
+    runId: runId ?? "no-run-id",
+    offerId: offerId ?? "unknown",
+    agentName: "agent-1",
+    step: "keyword_templates",
+    fn: async () => {
+      const prompt = templateRepairHint
+        ? withResearchContext(templatePrompt, researchContext ?? null) +
+          `\n\n[Correction guidance: ${templateRepairHint}]`
+        : withResearchContext(templatePrompt, researchContext ?? null);
+      return llm.call({
+        prompt,
+        schema: KeywordTemplatesResponseSchema,
+        model: "haiku",
+        logLabel: "[Agent 1][Step 1][Keyword templates]",
+      });
+    },
+    getRepairContext: (err) =>
+      `Keyword template generation failed for niche "${niche}" with: ${err.message}\n\nReturn JSON with field: templates (string[]). Each template should be a keyword pattern like "[city] pest control".`,
+    applyFix: async (fixedCode) => {
+      templateRepairHint = fixedCode;
+    },
+    db,
+    llm,
   });
 
   console.log(`[Agent 1] Saving ${templates.length} keyword templates...`);
@@ -580,12 +602,32 @@ async function getScoredCities(
   }, 5000);
 
   let scored_cities: ScoredCity[] = [];
+  let scoringRepairHint = "";
   try {
-    ({ scored_cities } = await llm.call({
-      prompt: withResearchContext(scoringPrompt, researchContext ?? null),
-      schema: CityScoringResponseSchema,
-      model: "haiku",
-      onOutput: (chunk, stream) => scoringLogger.onOutput(chunk, stream),
+    ({ scored_cities } = await withSelfHealing({
+      runId: config.runId ?? "no-run-id",
+      offerId: config.offerId ?? "unknown",
+      agentName: "agent-1",
+      step: "city_scoring",
+      fn: async () => {
+        const prompt = scoringRepairHint
+          ? withResearchContext(scoringPrompt, researchContext ?? null) +
+            `\n\n[Correction guidance: ${scoringRepairHint}]`
+          : withResearchContext(scoringPrompt, researchContext ?? null);
+        return llm.call({
+          prompt,
+          schema: CityScoringResponseSchema,
+          model: "haiku",
+          onOutput: (chunk, stream) => scoringLogger.onOutput(chunk, stream),
+        });
+      },
+      getRepairContext: (err) =>
+        `City scoring failed for niche "${config.niche}" with: ${err.message}\n\nReturn JSON with field: scored_cities (array of {city, state, priority_score, reasoning}).`,
+      applyFix: async (fixedCode) => {
+        scoringRepairHint = fixedCode;
+      },
+      db,
+      llm,
     }));
   } finally {
     clearInterval(heartbeat);
@@ -785,12 +827,30 @@ export async function runAgent1(
         1,
         Math.min(6, config.minValidResearchFiles ?? DEFAULT_MIN_VALID_RESEARCH_FILES)
       );
-      researchFindings = await runResearchPhase({
-        niche: config.niche,
-        researchDir,
-        minValidFiles,
-      });
+      try {
+        researchFindings = await runResearchPhase({
+          niche: config.niche,
+          researchDir,
+          minValidFiles,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        console.error(
+          `[Agent 1][DEEP_RESEARCH_DEGRADED] ${config.niche} | runId=${runId} | researchDir=${researchDir} | reason=${reason} | proceeding_with=no_research_context`
+        );
+        eventBus.emitEvent({
+          type: "agent_step",
+          agent: "agent-1",
+          step: "Research degraded",
+          detail: `Falling back to non-research mode: ${reason}`,
+          timestamp: Date.now(),
+        });
+        researchFindings = null;
+      }
 
+      if (!researchFindings) {
+        console.log("[Agent 1] Phase 1: Research unavailable — continuing without research context");
+      } else {
       const validCount = Object.values(researchFindings).filter(Boolean).length;
       console.log(`[Agent 1] Phase 1: Research complete — ${validCount}/6 files valid`);
 
@@ -846,8 +906,8 @@ export async function runAgent1(
         playbookContent = playbookResult.markdown;
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        console.warn(
-          `[Agent 1] Playbook synthesis failed after retries: ${reason}. Proceeding with focused research contexts only.`
+        console.error(
+          `[Agent 1][PLAYBOOK_SYNTHESIS_DEGRADED] ${config.niche} | runId=${runId} | reason=${reason} | proceeding_with=focused_research_context_only`
         );
         playbookContent = null;
       }
@@ -891,6 +951,7 @@ export async function runAgent1(
       researchContextForClustering = playbookContent
         ? `PLAYBOOK:\n${playbookContent}\n\nFOCUSED RESEARCH:\n${clusteringResearch}`
         : clusteringResearch;
+      } // end researchFindings !== null
     }
 
   // Step 1: Load cached templates or generate them once per niche
@@ -903,7 +964,9 @@ export async function runAgent1(
     config.forceRefresh,
     config.offerProfile,
     config.verticalProfile,
-    researchContextForTemplates
+    researchContextForTemplates,
+    config.runId,
+    config.offerId
   );
   console.log(`[Agent 1] Using ${templates.length} keyword templates`);
   for (const [index, template] of templates.slice(0, 8).entries()) {
@@ -1233,6 +1296,15 @@ Return JSON with two fields:
       selectedCities: selectedCities.length,
     });
     console.log("[Agent 1] Keyword research complete");
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    eventBus.emitEvent({
+      type: "agent_error",
+      agent: "agent-1",
+      error: reason,
+      timestamp: Date.now(),
+    });
+    throw error;
   } finally {
     if (researchDirToCleanup && config.cleanupResearchDir !== false) {
       try {
