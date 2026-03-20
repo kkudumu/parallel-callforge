@@ -3,6 +3,7 @@ import type { LlmClient } from "../../shared/cli/llm-client.js";
 import type { DbClient } from "../../shared/db/client.js";
 import { withSelfHealing } from "../../shared/self-healing.js";
 import type { CitySourceMode } from "../../config/env.js";
+import type { ResearchMode } from "../../config/env.js";
 import { KeywordClusterSchema } from "../../shared/schemas/keyword-clusters.js";
 import { createGoogleKpClient } from "./google-kp.js";
 import { eventBus } from "../../shared/events/event-bus.js";
@@ -27,8 +28,16 @@ import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { runResearchPhase, type ResearchFindings } from "./research-orchestrator.js";
 import {
   buildResearchContext,
+  readResearchFile,
+  validateResearchFile,
+  RESEARCH_FILE_NAMES_A1,
   validatePlaybookFile,
 } from "./research-reader.js";
+import {
+  loadResearchSnapshot,
+  hydrateResearchSnapshot,
+  saveResearchSnapshot,
+} from "../../shared/research-snapshot-cache.js";
 import {
   buildPlaybookSynthesisPrompt,
   withResearchContext,
@@ -39,6 +48,45 @@ const PlaybookTextSchema = z.object({
 });
 const DEFAULT_MIN_VALID_RESEARCH_FILES = 4;
 const MAX_PLAYBOOK_RESEARCH_CONTEXT_CHARS = 120_000;
+const AGENT1_RESEARCH_CACHE_AGENT = "agent-1";
+
+interface Agent1ResearchPolicy {
+  minValidFiles: number;
+  ttlMs: number;
+  maxDurationMs: number;
+  stallTimeoutMs: number;
+  asyncRefreshOnMiss: boolean;
+}
+
+function getAgent1ResearchPolicy(mode: ResearchMode): Agent1ResearchPolicy {
+  switch (mode) {
+    case "fast":
+      return {
+        minValidFiles: 3,
+        ttlMs: 14 * 24 * 60 * 60 * 1000,
+        maxDurationMs: 12 * 60 * 1000,
+        stallTimeoutMs: 5 * 60 * 1000,
+        asyncRefreshOnMiss: true,
+      };
+    case "deep":
+      return {
+        minValidFiles: 6,
+        ttlMs: 3 * 24 * 60 * 60 * 1000,
+        maxDurationMs: 50 * 60 * 1000,
+        stallTimeoutMs: 15 * 60 * 1000,
+        asyncRefreshOnMiss: false,
+      };
+    case "standard":
+    default:
+      return {
+        minValidFiles: 4,
+        ttlMs: 7 * 24 * 60 * 60 * 1000,
+        maxDurationMs: 30 * 60 * 1000,
+        stallTimeoutMs: 10 * 60 * 1000,
+        asyncRefreshOnMiss: false,
+      };
+  }
+}
 
 // Schema for LLM keyword template generation
 const KeywordTemplatesResponseSchema = z.object({
@@ -335,6 +383,7 @@ export interface Agent1Config {
   payoutPerQualifiedCall?: number;
   forceRefresh?: boolean;
   researchEnabled?: boolean;   // default: true (all entry points enable by default)
+  researchMode?: ResearchMode; // default: "standard"
   researchDir?: string;        // default: tmp/agent1-research/{runId}
   minValidResearchFiles?: number; // default: 4
   cleanupResearchDir?: boolean; // default: true
@@ -351,6 +400,25 @@ function clampResearchContext(input: string): { value: string; truncated: boolea
     value: `${input.slice(0, budget)}${suffix}`,
     truncated: true,
   };
+}
+
+function loadAgent1ResearchFindings(researchDir: string): ResearchFindings | null {
+  const read = (filename: string): string | null => {
+    const filePath = join(researchDir, filename);
+    const content = readResearchFile(filePath);
+    if (!content) return null;
+    return validateResearchFile(content) ? content : null;
+  };
+
+  const findings: ResearchFindings = {
+    keywordPatterns: read("keyword-patterns.md"),
+    marketData: read("market-data.md"),
+    competitorKeywords: read("competitor-keywords.md"),
+    localSeo: read("local-seo.md"),
+    ppcEconomics: read("ppc-economics.md"),
+    gbpCompetition: read("gbp-competition.md"),
+  };
+  return Object.values(findings).some(Boolean) ? findings : null;
 }
 
 export async function loadCandidateCitiesFromDeploymentCandidates(
@@ -814,38 +882,116 @@ export async function runAgent1(
   let researchContextForScoring: string | null = null;
   let researchContextForClustering: string | null = null;
   let researchDirToCleanup: string | null = null;
+  const researchMode: ResearchMode = config.researchMode ?? "standard";
+  const researchPolicy = getAgent1ResearchPolicy(researchMode);
 
   try {
     if (config.researchEnabled) {
       const runId = config.runId ?? `agent1-${Date.now()}`;
       const researchDir = config.researchDir ?? join("tmp", "agent1-research", runId);
       researchDirToCleanup = researchDir;
-      console.log("[Agent 1] Phase 1: Starting deep research...");
+      const researchFingerprintInput = {
+        niche: normalizeNiche(config.niche),
+        offerId: config.offerId ?? null,
+        offerConstraints: config.offerProfile?.constraints ?? null,
+        verticalKey: config.verticalProfile?.vertical_key ?? null,
+      };
+      console.log(
+        `[Agent 1] Phase 1: Research mode=${researchMode} (minValid=${researchPolicy.minValidFiles}, ttl=${Math.round(researchPolicy.ttlMs / 86400000)}d)`
+      );
       eventBus.emitEvent({ type: "agent_step", agent: "agent-1", step: "Research phase", detail: "Starting", timestamp: Date.now() });
 
-      const minValidFiles = Math.max(
-        1,
-        Math.min(6, config.minValidResearchFiles ?? DEFAULT_MIN_VALID_RESEARCH_FILES)
-      );
-      try {
-        researchFindings = await runResearchPhase({
+      const minValidFiles = Math.max(1, Math.min(
+        6,
+        config.minValidResearchFiles ?? researchPolicy.minValidFiles ?? DEFAULT_MIN_VALID_RESEARCH_FILES
+      ));
+      const snapshot = !config.forceRefresh
+        ? loadResearchSnapshot({
+            agent: AGENT1_RESEARCH_CACHE_AGENT,
+            niche: config.niche,
+            fingerprintInput: researchFingerprintInput,
+            requiredFiles: [...RESEARCH_FILE_NAMES_A1],
+            ttlMs: researchPolicy.ttlMs,
+            validateFile: validateResearchFile,
+          })
+        : { hit: false, snapshotDir: null, validCount: 0 };
+
+      if (snapshot.hit && snapshot.snapshotDir) {
+        const hydrated = hydrateResearchSnapshot({
+          agent: AGENT1_RESEARCH_CACHE_AGENT,
+          niche: config.niche,
+          fingerprintInput: researchFingerprintInput,
+          destinationDir: researchDir,
+        });
+        console.log(
+          `[Agent 1] Reused research snapshot (${hydrated.fileCount} files, valid=${snapshot.validCount})`
+        );
+        researchFindings = loadAgent1ResearchFindings(researchDir);
+      }
+
+      const runDeepResearchNow = !snapshot.hit || snapshot.validCount < minValidFiles;
+      if (runDeepResearchNow && researchPolicy.asyncRefreshOnMiss && !config.forceRefresh) {
+        console.warn(
+          `[Agent 1] Fast mode cache miss/stale; starting async research refresh and continuing without waiting`
+        );
+        researchDirToCleanup = null;
+        void runResearchPhase({
           niche: config.niche,
           researchDir,
           minValidFiles,
-        });
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        console.error(
-          `[Agent 1][DEEP_RESEARCH_DEGRADED] ${config.niche} | runId=${runId} | researchDir=${researchDir} | reason=${reason} | proceeding_with=no_research_context`
-        );
-        eventBus.emitEvent({
-          type: "agent_step",
-          agent: "agent-1",
-          step: "Research degraded",
-          detail: `Falling back to non-research mode: ${reason}`,
-          timestamp: Date.now(),
-        });
-        researchFindings = null;
+          maxDurationMs: researchPolicy.maxDurationMs,
+          stallTimeoutMs: researchPolicy.stallTimeoutMs,
+        })
+          .then(() => {
+            saveResearchSnapshot({
+              agent: AGENT1_RESEARCH_CACHE_AGENT,
+              niche: config.niche,
+              fingerprintInput: researchFingerprintInput,
+              sourceDir: researchDir,
+              files: [...RESEARCH_FILE_NAMES_A1],
+            });
+            console.log("[Agent 1] Async research refresh completed and snapshot saved");
+          })
+          .catch((error) => {
+            console.error(
+              `[Agent 1][ASYNC_RESEARCH_REFRESH_FAILED] ${error instanceof Error ? error.message : String(error)}`
+            );
+          });
+      } else {
+        try {
+          if (runDeepResearchNow) {
+            console.log("[Agent 1] Phase 1: Starting deep research...");
+            researchFindings = await runResearchPhase({
+              niche: config.niche,
+              researchDir,
+              minValidFiles,
+              maxDurationMs: researchPolicy.maxDurationMs,
+              stallTimeoutMs: researchPolicy.stallTimeoutMs,
+            });
+            saveResearchSnapshot({
+              agent: AGENT1_RESEARCH_CACHE_AGENT,
+              niche: config.niche,
+              fingerprintInput: researchFingerprintInput,
+              sourceDir: researchDir,
+              files: [...RESEARCH_FILE_NAMES_A1],
+            });
+          } else {
+            console.log("[Agent 1] Phase 1: Snapshot satisfies minimum threshold; skipping live deep research");
+          }
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          console.error(
+            `[Agent 1][DEEP_RESEARCH_DEGRADED] ${config.niche} | runId=${runId} | researchDir=${researchDir} | reason=${reason} | proceeding_with=no_research_context`
+          );
+          eventBus.emitEvent({
+            type: "agent_step",
+            agent: "agent-1",
+            step: "Research degraded",
+            detail: `Falling back to non-research mode: ${reason}`,
+            timestamp: Date.now(),
+          });
+          researchFindings = null;
+        }
       }
 
       if (!researchFindings) {

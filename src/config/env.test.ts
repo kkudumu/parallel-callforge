@@ -17,6 +17,12 @@ describe("parseEnv", () => {
     expect(env.AGENT7_PROVIDER).toBe("database");
     expect(env.SEARCH_CONSOLE_INTEGRATION_ENABLED).toBe(false);
     expect(env.INDEXATION_KILL_SWITCH_ENABLED).toBe(false);
+    expect(env.AGENT1_RESEARCH_MODE).toBe("standard");
+    expect(env.AGENT2_RESEARCH_MODE).toBe("standard");
+    expect(env.RESEARCH_PROVIDER_MAX_CONCURRENCY).toBe(2);
+    expect(env.RESEARCH_EST_TOKENS_PER_PASS).toBe(75000);
+    expect(env.RESEARCH_MAX_EST_TOKENS_PER_JOB).toBe(300000);
+    expect(env.AGENT3_TEMPLATE_TIMEOUT_MS).toBe(900000);
     expect(env.NODE_ENV).toBe("development");
   });
 
@@ -30,6 +36,12 @@ describe("parseEnv", () => {
     expect(env.CITY_SOURCE_MODE).toBe("deployment_candidates");
     expect(env.AGENT7_PROVIDER).toBe("database");
     expect(env.SEARCH_CONSOLE_INTEGRATION_ENABLED).toBe(false);
+    expect(env.AGENT1_RESEARCH_MODE).toBe("standard");
+    expect(env.AGENT2_RESEARCH_MODE).toBe("standard");
+    expect(env.RESEARCH_PROVIDER_MAX_CONCURRENCY).toBe(2);
+    expect(env.RESEARCH_EST_TOKENS_PER_PASS).toBe(75000);
+    expect(env.RESEARCH_MAX_EST_TOKENS_PER_JOB).toBe(300000);
+    expect(env.AGENT3_TEMPLATE_TIMEOUT_MS).toBe(900000);
     expect(env.INDEXATION_RATIO_THRESHOLD).toBe(0.5);
     expect(env.NODE_ENV).toBe("development");
   });

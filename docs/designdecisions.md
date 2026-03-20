@@ -77,3 +77,73 @@ The function `withResearchContext` was added to `prompts.ts` but `index.ts` alre
 import { buildPlaybookSynthesisPrompt, withResearchContext } from "./prompts.js";
 ```
 No collision — the vertical strategy layer calls a different code path that does not import these new exports.
+
+---
+
+## Claude Session-Limit Fallback + Codex Deep Research (2026-03-06)
+
+### Decision 7: Keep Claude SDK as the main deep-research path
+
+**Context:** Agent 1 and Agent 2 deep research already use `@anthropic-ai/claude-agent-sdk` with parallel subagents. This is the established "main path" and already produces acceptable deep-research outputs.
+
+**Decision:** Do not replace the main path with Codex. Keep Claude SDK as primary orchestration and only activate Codex when Claude fails due to session/usage limits.
+
+**Reasoning:** This preserves known-good behavior and limits blast radius. The Codex work is additive resilience, not a full orchestration rewrite.
+
+---
+
+### Decision 8: Add explicit session-limit detection and fallback trigger
+
+**Problem:** Research orchestrators previously degraded when Claude research failed, but they did not distinguish session-limit failures and did not automatically reroute work to Codex.
+
+**Decision:** Added `detectSessionLimit(...)` in `src/shared/cli/types.ts` and wired Agent 1/2 research orchestrators to:
+1. Catch Claude SDK failures
+2. Detect session/usage/quota limit signatures
+3. Invoke Codex deep-research fallback
+
+**Files:**
+- `src/shared/cli/types.ts`
+- `src/agents/agent-1-keywords/research-orchestrator.ts`
+- `src/agents/agent-2-design/research-orchestrator.ts`
+
+---
+
+### Decision 9: Use a shared Codex deep-research runner with multi-agent-first strategy
+
+**Problem:** Initial Codex fallback implementation was a one-shot prompt asking for all files at once, which is more brittle and less aligned with Codex multi-agent guidance.
+
+**Decision:** Introduced `src/shared/cli/codex-deep-research.ts` as a shared fallback engine for Agent 1 and Agent 2:
+- First pass: ask Codex to run a multi-agent-style orchestration (one worker per file in parallel, if enabled).
+- Second pass safety net: validate generated files and run targeted retry generation only for missing/invalid files.
+
+**Reasoning:** This aligns with Codex multi-agent concepts while preserving deterministic recovery when multi-agent is unavailable or incomplete.
+
+---
+
+### Decision 10: Add one-time warning when Codex multi-agent feature flag appears disabled
+
+**Problem:** Multi-agent behavior depends on Codex configuration (`[features] multi_agent = true`). Without visibility, users may assume fan-out is active when it is not.
+
+**Decision:** The shared Codex deep-research runner checks:
+- `$CODEX_HOME/config.toml` or `~/.codex/config.toml`
+- `./.codex/config.toml`
+
+If `multi_agent = true` is not detected in `[features]`, it logs a one-time warning with remediation.
+
+**Reasoning:** Improves operability and makes fallback execution mode explicit in logs without blocking pipeline progress.
+
+---
+
+### Decision 11: Use lightweight quality gates for Codex fallback (not heavy hard constraints)
+
+**Problem:** Strong "deep memo" constraints (very high word/source thresholds and many required sections) improved depth but increased runtime/cost and risked brittle failures.
+
+**Decision:** Adopt lightweight guardrails in Codex fallback:
+- Minimum words: 900
+- Minimum source-index bullets: 8
+- Core structure validation still required (`validateResearchFile`)
+- Retry only up to 3 targeted repair rounds for invalid/missing files
+
+**Reasoning:** Matches user preference to keep Codex flexible like Claude main path while still preventing thin outputs.
+
+**Note:** Claude main path remains less constrained by explicit numeric depth gates; Codex fallback uses these light checks to normalize quality under failure conditions.

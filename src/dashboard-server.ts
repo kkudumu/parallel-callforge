@@ -12,7 +12,7 @@ import { createRateLimiters } from "./shared/cli/rate-limiter.js";
 import { createClaudeCli } from "./shared/cli/claude-cli.js";
 import { createCodexCli } from "./shared/cli/codex-cli.js";
 import { createGeminiCli } from "./shared/cli/gemini-cli.js";
-import { createLlmClient } from "./shared/cli/llm-client.js";
+import { createLlmClient, createRoundRobinLlmClient } from "./shared/cli/llm-client.js";
 import {
   loadCandidateCitiesFromDeploymentCandidates,
   runAgent1,
@@ -773,6 +773,9 @@ export function createDashboardServer(db?: DbClient) {
     const codexCli = createCodexCli(env.CODEX_CLI_PATH);
     const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
     const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
+    const agent3Llm = env.AGENT3_LLM_MODE === "round-robin"
+      ? createRoundRobinLlmClient({ claude: claudeCli, codex: codexCli, gemini: geminiCli }, limiters)
+      : llm;
 
     if (
       shouldRunAgent("agent-0.5") &&
@@ -892,7 +895,7 @@ export function createDashboardServer(db?: DbClient) {
           maxNewCitiesPerWeek: env.AGENT3_MAX_NEW_CITIES_PER_WEEK,
           ignoreIndexationKillSwitch:
             payload?.ignoreIndexationKillSwitch === true || ignoreIndexationKillSwitch,
-        }, llm, db);
+        }, agent3Llm, db);
         return {};
       },
     });

@@ -1,7 +1,10 @@
 import { spawn } from "node:child_process";
 
 interface RunCliCommandOptions {
+  // Maximum idle time without any stdout/stderr activity before killing the command.
   timeoutMs: number;
+  // Absolute upper bound regardless of output activity.
+  hardTimeoutMs?: number;
   maxBuffer: number;
   env?: Record<string, string | undefined>;
   onOutput?: (chunk: string, stream: "stdout" | "stderr") => void;
@@ -32,6 +35,10 @@ export function runCliCommand(
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now();
+    const idleTimeoutMs = options.timeoutMs;
+    const hardTimeoutMs =
+      options.hardTimeoutMs ??
+      Math.max(idleTimeoutMs * 10, 30 * 60 * 1000);
     const child = spawn(file, args, {
       env: options.env,
       stdio: ["pipe", "pipe", "pipe"],
@@ -47,13 +54,26 @@ export function runCliCommand(
       }
 
       settled = true;
-      clearTimeout(timeout);
+      clearTimeout(idleTimeout);
+      clearTimeout(hardTimeout);
       err.stdout = stdout;
       err.stderr = stderr;
       err.elapsedMs = Date.now() - startedAt;
       err.stdoutTail = tailText(stdout);
       err.stderrTail = tailText(stderr);
       reject(err);
+    };
+
+    const resetIdleTimeout = () => {
+      clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(() => {
+        child.kill("SIGTERM");
+        fail(
+          new Error(
+            `Command idle-timed out after ${idleTimeoutMs}ms without output (elapsed ${Date.now() - startedAt}ms)`
+          ) as CommandError
+        );
+      }, idleTimeoutMs);
     };
 
     const appendChunk = (stream: "stdout" | "stderr", chunk: string) => {
@@ -64,6 +84,7 @@ export function runCliCommand(
       }
 
       options.onOutput?.(chunk, stream);
+      resetIdleTimeout();
 
       if (stdout.length + stderr.length > options.maxBuffer) {
         child.kill("SIGTERM");
@@ -71,14 +92,23 @@ export function runCliCommand(
       }
     };
 
-    const timeout = setTimeout(() => {
+    let idleTimeout = setTimeout(() => {
       child.kill("SIGTERM");
       fail(
         new Error(
-          `Command timed out after ${options.timeoutMs}ms (elapsed ${Date.now() - startedAt}ms)`
+          `Command idle-timed out after ${idleTimeoutMs}ms without output (elapsed ${Date.now() - startedAt}ms)`
         ) as CommandError
       );
-    }, options.timeoutMs);
+    }, idleTimeoutMs);
+
+    const hardTimeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      fail(
+        new Error(
+          `Command hard-timed out after ${hardTimeoutMs}ms (elapsed ${Date.now() - startedAt}ms)`
+        ) as CommandError
+      );
+    }, hardTimeoutMs);
 
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");
@@ -96,7 +126,8 @@ export function runCliCommand(
       }
 
       settled = true;
-      clearTimeout(timeout);
+      clearTimeout(idleTimeout);
+      clearTimeout(hardTimeout);
 
       if (code === 0) {
         resolve({ stdout, stderr });

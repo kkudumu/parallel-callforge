@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 
 const CitySourceModeSchema = z.enum(["hardcoded", "deployment_candidates"]);
 const Agent7ProviderModeSchema = z.enum(["mock", "database"]);
+const ResearchModeSchema = z.enum(["fast", "standard", "deep"]);
 
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1).describe("PostgreSQL connection string"),
@@ -32,11 +33,14 @@ const EnvSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((value) => value === "true"),
+  AGENT1_RESEARCH_MODE: ResearchModeSchema.default("standard"),
   AGENT2_RESEARCH_ENABLED: z
     .enum(["true", "false"])
     .default("true")
     .transform((value) => value === "true"),
+  AGENT2_RESEARCH_MODE: ResearchModeSchema.default("standard"),
   AGENT3_CITY_CONCURRENCY: z.coerce.number().int().min(1).max(6).default(2),
+  AGENT3_TEMPLATE_TIMEOUT_MS: z.coerce.number().int().min(60_000).default(900_000),
   AGENT3_ENFORCE_NEW_CITY_CAP: z
     .enum(["true", "false"])
     .default("false")
@@ -45,6 +49,15 @@ const EnvSchema = z.object({
   INDEXATION_MIN_PAGE_AGE_DAYS: z.coerce.number().int().min(1).default(21),
   INDEXATION_LOOKBACK_DAYS: z.coerce.number().int().min(7).default(30),
   INDEXATION_RATIO_THRESHOLD: z.coerce.number().min(0).max(1).default(0.5),
+  RESEARCH_PROVIDER_SPLIT: z.string().default("claude,codex,gemini"),
+  RESEARCH_MIN_SOURCES: z.coerce.number().int().min(1).default(50),
+  RESEARCH_MIN_WORDS: z.coerce.number().int().min(100).default(2000),
+  RESEARCH_MIN_FINDINGS: z.coerce.number().int().min(1).default(15),
+  RESEARCH_MAX_DEEPENING_PASSES: z.coerce.number().int().min(0).max(5).default(3),
+  RESEARCH_PROVIDER_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(6).default(2),
+  RESEARCH_EST_TOKENS_PER_PASS: z.coerce.number().int().min(1000).default(75000),
+  RESEARCH_MAX_EST_TOKENS_PER_JOB: z.coerce.number().int().min(10_000).default(300000),
+  AGENT3_LLM_MODE: z.enum(["waterfall", "round-robin"]).default("round-robin"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   DISCORD_WEBHOOK_URL: z.string().optional().transform((v) => v || undefined).pipe(z.string().url().optional()),
 });
@@ -52,6 +65,7 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 export type CitySourceMode = z.infer<typeof CitySourceModeSchema>;
 export type Agent7ProviderMode = z.infer<typeof Agent7ProviderModeSchema>;
+export type ResearchMode = z.infer<typeof ResearchModeSchema>;
 
 export function parseEnv(raw: Record<string, string | undefined>): Env {
   return EnvSchema.parse(raw);

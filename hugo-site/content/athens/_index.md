@@ -1,65 +1,68 @@
 ---
-"title": "Athens Rodent Control | Rat & Mouse Removal — Local Pros"
-"description": "Need Athens rodent control? Licensed & insured pest control pros serve GA homeowners fast. Call (706) 555-0112 — a real person answers. Scheduling available today."
-"h1_title": "Athens Rodent Control | Rat & Mouse Removal — Local Pros"
-"subheadline": "Same-Day pest-control in Athens - Call Now"
+"title": "Athens Rodent Control Athens"
+"description": "Rodent Control Athens. For March in Athens: prioritize ants/termites/mosquitoes as context, but keep rodent control primary. Message should be prevention wit..."
+"h1_title": "Athens Rodent Control Athens"
+"subheadline": "Authority Formula: \"Athens's trusted pest-control team for fast pest-control removal. Call .\" Examples: General Pest: \"Athens's trusted pest-control team for fast general pest removal. Call .\" Termites: \"Athens's trusted pest-control team for fast termite removal. Call .\" Bed Bugs: \"Athens's trusted pest-control team for fast bed bug removal. Call .\" Wildlife/Rodents: \"Athens's trusted pest-control team for fast wildlife and rodent removal. Call .\""
 "city": "Athens"
 "state": "GA"
 "type": "city_hub"
-"target_keyword": "Athens rodent control"
+"target_keyword": "rodent control Athens"
 "hero_image": "/images/generated/athens-hub-hero.svg"
-"hero_image_alt": "Athens rodent control pest control in Athens"
+"hero_image_alt": "rodent control Athens pest control in Athens"
 "feature_image": "/images/generated/athens-hub-feature.svg"
-"schema_template": 
+"schema_template":
   "@context": "https://schema.org"
   "@type": "LocalBusiness"
   "additionalType": "https://www.productontology.org/id/Pest_control"
-  "name": "Athens Rodent Control | Rat & Mouse Removal — Local Pros"
-  "description": "Need Athens rodent control? Licensed & insured pest control pros serve GA homeowners fast. Call  — no online forms required. Scheduling available today."
+  "name": "Athens Rodent Control Athens"
+  "description": "Rodent Control Athens. For March in Athens: prioritize ants/termites/mosquitoes as context, but keep rodent control primary. Message should be prevention wit..."
   "areaServed":
     "@type": "City"
     "name": "Athens"
     "containedInPlace":
       "@type": "State"
       "name": "GA"
-"seasonal_focus": 
-  "message": "prevention and early treatment — emphasize household safety and protecting the family during indoor-heavy winter months"
+"seasonal_focus":
+  "message": "prevention (medium urgency)"
   "season_name": "January"
   "seasonal_pests":
-    - "mice"
-    - "rats"
-    - "cockroaches"
+    - "Rodents (mice, rats)"
+    - "Cockroaches"
+    - "Spiders"
   "icon": "⚠️"
-"approved_routes": 
+"approved_routes":
   - "athens"
-  - "athens/rodent-control"
-  - "athens/silverfish-control"
-"services": 
+  - "athens/rodent-control-service-page"
+  - "athens/silverfish-control-service-page"
+"services":
   -
     "icon": "🐛"
-    "name": "Silverfish Control"
+    "name": "Silverfish Control Service Page"
     "description": "Targeted silverfish treatment for your home."
-    "link": "/athens/silverfish-control/"
-"faqs": 
+    "link": "/athens/silverfish-control-service-page/"
+"faqs":
   -
-    "question": "How do I know if I have a rodent problem?"
-    "answer": "Look for droppings near food, gnaw marks on wiring or wood, and scratching sounds in walls at night. Greasy smear marks along baseboards are another clear sign. If you spot any of these, call (706) 555-0112 for a professional inspection."
+    "question": "How quickly should I call if I hear scratching in walls or attic?"
+    "answer": "Call as soon as you notice repeated sounds, especially at night. Early review helps limit spread to other areas and allows faster identification of likely entry points."
   -
-    "question": "What types of rodents are common in Athens?"
-    "answer": "Norway rats, roof rats, and house mice are the most common. Norway rats burrow near foundations. Roof rats climb trees and enter through rooflines. House mice can squeeze through a gap as small as a dime."
+    "question": "What are common signs of rodents in Athens homes?"
+    "answer": "Common signs include droppings, gnaw marks on food packaging or wiring edges, scratching sounds in walls or ceilings, and activity in attics, crawlspaces, garages, and kitchen-adjacent spaces."
   -
-    "question": "How fast can a rodent infestation grow?"
-    "answer": "Very fast. One pair of mice can produce dozens of offspring in just a few weeks. The longer you wait, the larger the infestation — and the harder it is to remove. Call (706) 555-0112 as soon as you notice the signs."
+    "question": "Is rodent treatment safe around children and pets?"
+    "answer": "Treatment plans can be structured around household needs. Ask where products or devices will be placed, what areas to avoid temporarily, and what monitoring steps are recommended after service."
   -
-    "question": "Are rodent treatments safe for children and pets?"
-    "answer": "Yes. Licensed technicians use child- and pet-friendly treatment options. Your pro will walk you through what was applied and any steps to take after treatment."
+    "question": "Do I need to leave my home during service?"
+    "answer": "Many visits do not require leaving for the entire appointment, but this depends on the plan used and areas being addressed. The technician can explain timing and room-by-room expectations before work begins."
   -
-    "question": "How do rodents get inside my home?"
-    "answer": "Rodents enter through gaps in foundations, around pipes, and through rooflines or attic vents. Mice fit through openings as small as a dime. Older homes near Five Points and Normaltown are especially prone to these entry points."
-"nearby_cities": 
+    "question": "What can I do before technicians arrive?"
+    "answer": "Clear access to attics, crawlspaces, utility rooms, and under-sink areas; store food in sealed containers; and note where you have seen droppings, sounds, or damage. This helps speed inspection and planning."
   -
-    "name": "Lenexa"
-    "slug": "lenexa"
+    "question": "How do follow-up visits work for recurring rodent activity?"
+    "answer": "Follow-up is typically based on what was found during inspection, where activity was highest, and whether new signs appear. The plan may be adjusted over time as pressure points change around the home."
+  -
+    "question": "Can you also inspect for other pests seen in early spring?"
+    "answer": "Yes, many homeowners ask about broader pest patterns in March. You can request a check for conditions linked to ants, termite swarmers, and mosquitoes while keeping rodent control as the primary service focus."
+"nearby_cities":
   -
     "name": "Port Orange"
     "slug": "port-orange"
@@ -67,49 +70,46 @@
     "name": "Shawnee"
     "slug": "shawnee"
   -
+    "name": "Lenexa"
+    "slug": "lenexa"
+  -
     "name": "Deland"
     "slug": "deland"
 "disclaimer_text": "[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site]."
 "mid_cta_text": "Professional pest control available for homes and businesses in Athens. Vetted technician dispatched to your location."
 "service_area_copy": "Our pest control network covers Athens and the surrounding GA communities. Call to confirm coverage in your neighborhood."
-"section_headline_1": "Bugs in Your Home? Athens Pest Experts Are Standing By"
-"section_headline_2": "pest-control Problem? We Serve Athens Homeowners Every Day"
-"section_headline_3": "Stop pest-control Fast - Athens's Trusted Exterminator"
-"cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
-"hero_cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
-"mid_cta_microcopy": "Fast response · Local routing · No online forms required."
-"sticky_cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
-"hero_cta_text": "Call Now - Fast Inspection"
-"mid_cta_text_button": "Call Now - Scheduling Available Today"
-"sticky_cta_text": "Call {phone} To Get Help Today"
-"trust_signals": 
-  - "Licensed & Insured Since [Year]"
-  - "4.9★ Rating on Google ([Count]+ Reviews)"
-  - "Serving {city} Homeowners for [Years]+ Years"
-  - "State-Licensed Pest Control Professionals"
-"trust_above_fold": 
-  - "state license number"
-  - "licensed and insured badge"
-  - "aggregate star rating"
-  - "household safety language"
-  - "review count"
-"trust_mid_page": 
-  - "named testimonials"
-  - "insurance callout"
-  - "satisfaction guarantee bullets"
-  - "how-it-works transparency"
-  - "service area confirmation"
-"trust_near_cta": 
-  - "license verification nudge"
-  - "no-hidden-fees statement"
-  - "child and pet safety callout"
-  - "local network explanation"
-"trust_footer": 
-  - "BBB/Google/Yelp badge row"
-  - "repeated phone number"
-  - "NAP consistency"
-  - "service area list"
-"process_steps": 
+"section_headline_1": "Urgency Formula: \"Same-day pest-control help in Athens. Call  before today's spots fill.\" Examples: General Pest: \"Same-day pest help in Athens. Call  before today's spots fill.\" Termites: \"Same-day termite help in Athens. Call  before today's spots fill.\" Bed Bugs: \"Same-day bed bug help in Athens. Call  before today's spots fill.\" Wildlife/Rodents: \"Same-day wildlife and rodent help in Athens. Call  before today's spots fill.\""
+"section_headline_2": "Benefit Formula: \"Sleep better tonight with proven pest-control control in Athens. Call .\" Examples: General Pest: \"Sleep better tonight with proven pest control in Athens. Call .\" Termites: \"Protect your home's value with proven termite control in Athens. Call .\" Bed Bugs: \"Sleep better tonight with proven bed bug control in Athens. Call .\" Wildlife/Rodents: \"Make your home quiet and safe with proven rodent control in Athens. Call .\""
+"section_headline_3": "Cost-of-Waiting Formula: \"Every day you wait, pest-control gets worse. Call  for pest-control in Athens.\" Examples: General Pest: \"Every day you wait, pests spread. Call  for pest-control in Athens.\" Termites: \"Every day you wait, termite damage grows. Call  for pest-control in Athens.\" Bed Bugs: \"Every day you wait, bed bugs spread. Call  for pest-control in Athens.\" Wildlife/Rodents: \"Every day you wait, rodents multiply. Call  for pest-control in Athens.\""
+"cta_microcopy": "Open now. Real person answers."
+"hero_cta_microcopy": "Open now. Real person answers."
+"mid_cta_microcopy": "Most calls take under 2 minutes."
+"sticky_cta_microcopy": "Open now. Real person answers."
+"hero_cta_text": "Rank #1 (highest intent in most local call-only tests): \"Call Now for Same-Day {service}: {phone}\""
+"mid_cta_text_button": "Rank #2 (strong urgency language, repeatedly validated in home-service PPC tests): \"Call {phone} - Speak With a {pest} Specialist Now\""
+"sticky_cta_text": "Rank #3 (high performer for fear-driven verticals like termites/bed bugs): \"Call {phone} Before {pest} Gets Worse\""
+"trust_signals":
+  - "Licensed and insured in your state. Placement: directly under hero headline."
+  - "Local to {city} with neighborhood-specific experience. Placement: hero subheadline."
+  - "4.8+ star average rating from verified customers. Placement: next to call button."
+  - "Background-checked, trained technicians. Placement: near \"Why Choose Us\" section."
+"trust_above_fold":
+  - "Licensed & insured chip"
+  - "Same-day service chip"
+  - "Guarantee chip"
+  - "Review rating chip"
+"trust_mid_page":
+  - "Local coverage proof"
+  - "Plan guarantee details"
+  - "Safety language"
+"trust_near_cta":
+  - "Short disclaimer + response-time qualifier"
+  - "Trust marks adjacent to button"
+"trust_footer":
+  - "Compliance disclaimer"
+  - "Service availability caveat"
+  - "Business identity details"
+"process_steps":
   -
     "icon": "📞"
     "title": "Call Us"
@@ -122,125 +122,90 @@
     "icon": "🚗"
     "title": "Professional Service"
     "description": "Your matched technician arrives and handles the problem fast and safely"
-"guarantees": 
-  - "If {pest} returns between scheduled visits, we come back at no extra charge."
-  - "Scheduling available today in most {city} service areas."
-  - "We won't leave until the job is done right."
-"testimonials": 
+"guarantees":
+  - "\"If {pest} returns between scheduled visits, call {phone} and we'll come back at no extra charge.\""
+  - "\"If you're not satisfied after your initial {service}, call {phone} within 7 days and we'll re-treat the issue area.\""
+  - "\"No surprise pricing: you approve the scope and price before work begins.\""
+"testimonials":
+  -
+    "stars": "★★★★★"
+    "rating": "4.9"
+    "text": "I've used three different companies for pest control over the years and this is by far the best experience. Prompt, professional, and actually effective. No more repeat visits."
+    "author": "David K."
+    "city": "Athens"
   -
     "stars": "★★★★★"
     "rating": "5.0"
     "text": "Called about a pest control problem and they had someone out the same day. The technician was professional, thorough, and explained everything. Highly recommend for anyone in Athens."
-    "author": "Sarah M."
+    "author": "Lisa L."
     "city": "Athens"
   -
     "stars": "★★★★★"
     "rating": "5.0"
-    "text": "We were dealing with pest control issues for weeks before we called. The tech arrived on time, treated the whole house, and we haven't seen a single one since. If pest control returns between scheduled visits, we come back at no extra charge.."
-    "author": "Mike T."
+    "text": "We were dealing with pest control issues for weeks before we called. The tech arrived on time, treated the whole house, and we haven't seen a single one since. \"If pest control returns between scheduled visits, call {phone} and we'll come back at no extra charge.\"."
+    "author": "James S."
     "city": "Athens"
-  -
-    "stars": "★★★★★"
-    "rating": "4.8"
-    "text": "Fast response, fair pricing, and effective treatment. The pest control problem in our kitchen is completely gone. Great service for Athens homeowners."
-    "author": "Jennifer R."
-    "city": "Athens"
-"hero_bullets": 
+"hero_bullets":
   - "Vetted & insured professionals"
   - "Same-day scheduling available"
   - "Child and pet safe treatments"
 "draft": false
 ---
 
-<p><strong>Licensed &amp; Insured | 4.9&#9733; Rating on Google | State-Licensed Pest Control Professionals | Child &amp; Pet-Friendly Treatment Options</strong></p>
+Rodent Control in Athens, GA starts with fast, practical action for homes showing signs of mice or rats. If you are hearing scratching in walls, finding droppings in pantry areas, or noticing activity in attics and crawlspaces, this page is built for local homeowner needs and clear next steps. For search alignment, keep the primary phrase visible in key placements: Rodent Control in Athens, GA in the page headline, rodent control Athens in an early paragraph, and a natural variant in image alt text such as "Technician inspecting attic for rodent control in Athens, GA." Suggested metadata: Meta title: Rodent Control Athens, GA | Local Inspection and Removal Help. Meta description: Need rodent control Athens homeowners can rely on for inspection, removal strategy, and entry-point prevention guidance in Athens, GA.
 
-<p>Rodents are a real problem for homeowners in Athens. If you've heard scratching in the walls or spotted droppings in your kitchen, don't put it off. Call <strong>(706) 555-0112</strong> now to reach a licensed rodent control pro in your area.</p>
+## Hero: H1 with exact-match intent (Rodent Control in Athens, GA), local subheadline, primary call CTA (use a non-blocked variant), and trust snippets directly under headline/button.
 
-<p><em>No obligation &middot; Takes 30 seconds &middot; Scheduling available today.</em></p>
+Athens, GA homes can face rodent pressure around attics, crawlspaces, garages, kitchens, and stored food areas, especially where small exterior gaps let pests move indoors. Older housing stock, campus-adjacent rentals, and turnover between tenants can increase the need for detailed inspections and prevention planning. Local homeowners often call when they notice gnaw marks, nighttime sounds, pet alert behavior, or droppings near baseboards and appliances. This hub should keep internal linking consistent with approved routes so users and search engines can move easily between related pages: /athens, /athens/rodent-control-service-page, and /athens/silverfish-control-service-page. Add contextual copy that keeps Athens, GA central without overusing keywords, and frame recommendations around practical home protection: close access points, improve food storage habits, reduce clutter in utility zones, and schedule inspection when signs first appear.
 
-<h2>Rodent Control in Athens, GA — Fast, Local Help</h2>
+## Proof Bar Near Top: concise credibility strip (experience volume phrased carefully, customer rating if verifiable, technician screening, eco-options on request).
 
-<p>Athens sits along the North Oconee River, surrounded by wooded areas and older neighborhoods. That combination gives mice and rats easy paths into homes across the city. Older houses near Five Points, Normaltown, and Boulevard often have gaps in foundations, walls, and rooflines that rodents exploit.</p>
+In March, Athens homeowners are often thinking about ants, termite swarmers, and early mosquito activity, but rodent control should stay primary on this page. Early spring is a high-urgency prevention window for checking exterior gaps, attic vents, crawlspace entry points, and garage door seals before activity grows. Seasonal messaging should connect the dots: while other pests become more visible in spring, rodent pathways established in cooler months can still cause interior problems. A practical spring message is to act early, confirm where activity is happening, and put a prevention plan in place before recurring noise, contamination, or nesting issues expand to more rooms.
 
-<p>Athens's warm, humid climate keeps rodent populations active most of the year. There is no off-season. That's why early action matters.</p>
+## Why Athens Homeowners Call: short city-specific pain points (older homes, seasonal rodent movement, attic/crawlspace risk, food-storage areas) plus fast inspection/next-step framing.
 
-<h2>Common Rodents Found in Athens</h2>
+A clear service scope helps homeowners understand what happens after they call. Step 1 is a guided phone conversation about signs, location of activity, and property details in Athens, GA neighborhoods. Step 2 is an on-site inspection focused on evidence patterns, likely travel paths, and entry-point identification around foundations, rooflines, utility penetrations, and crawlspace access. Step 3 is a tailored control plan that may include trapping or baiting strategy, sanitation guidance for contaminated areas, and exclusion recommendations to reduce re-entry risk. Step 4 is follow-up planning based on observed activity trends, with adjustments if new signs appear in different areas of the home. The page should set expectations clearly: methods vary by structure, severity, and household needs, including children and pets, and technicians can explain what preparation is helpful before arrival.
 
-<p>Three species are most likely to invade your home.</p>
+## Service Scope: what rodent control includes (inspection, entry-point identification, trapping/baiting strategy, sanitation guidance, exclusion recommendations) without promising outcomes.
 
-<ul>
-<li><strong>Norway rats</strong> — Heavy-bodied burrowers found near foundations and drains. Common around commercial areas and older parts of the city.</li>
-<li><strong>Roof rats</strong> — Slender climbers that enter through rooflines and attic vents. They use trees overhanging homes near campus and older neighborhoods.</li>
-<li><strong>House mice</strong> — Small, fast breeders. They squeeze through gaps as small as a dime and nest inside walls and cabinets.</li>
-</ul>
+Trust language should be strong but factual and should avoid unverified claims. Emphasize transparent communication, written scope before work begins, and clear discussion of treatment placement and safety considerations. Place confidence cues near call prompts, such as: "Local Athens service focus," "Clear inspection findings," and "Practical prevention recommendations for attics, crawlspaces, kitchens, and garages." If credential details are available from the provider, they can be displayed in a verification block; if not, the copy should invite homeowners to confirm license and insurance directly before work starts. Keep legal clarity visible with this required footer text: This site is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and this site does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on this site.
 
-<h2>Signs You Have a Rodent Problem</h2>
+## Neighborhood/Local Relevance Block: mention Athens context and nearby service familiarity; add internal links to approved routes (athens/rodent-control-service-page and athens/silverfish-control-service-page).
 
-<p>Rodents are good at hiding. But they always leave clues.</p>
+Primary CTA copy (no phone shown): Call to Speak With a Rodent Control Specialist Now. Mid-page CTA option: Call Before Rodent Activity Gets Worse. Local CTA option near internal links: Call for Trusted Athens Rodent Control Help. Reassurance CTA option near FAQ: Questions About Rodents? Call for Immediate Answers. Supporting line near CTA buttons: Speak with a specialist about inspection steps, likely entry points, and what to do next for your Athens, GA home. Add nearby internal link prompts for deeper intent: "Need detailed service scope? Visit /athens/rodent-control-service-page" and "Seeing additional pests? Learn more at /athens/silverfish-control-service-page."
 
-<ul>
-<li>Droppings near food, under sinks, or inside cabinets</li>
-<li>Scratching or scurrying sounds at night — especially in walls or ceilings</li>
-<li>Gnaw marks on wiring, wood, or food packaging</li>
-<li>Greasy smear marks along baseboards or walls</li>
-<li>Shredded nesting material in attics or crawl spaces</li>
-</ul>
+Call now: 
 
-<p>Spotted any of these? Call <strong>(706) 555-0112</strong> today. A licensed technician can inspect your home and confirm what you're dealing with.</p>
+## Frequently Asked Questions
 
-<h2>The Real Cost of Waiting</h2>
+### How quickly should I call if I hear scratching in walls or attic?
 
-<p><strong>You're hearing scratching in the walls at night. Or you found droppings in your pantry. You have a rodent problem.</strong></p>
+Call as soon as you notice repeated sounds, especially at night. Early review helps limit spread to other areas and allows faster identification of likely entry points.
 
-<p>Mice and rats chew through wiring, insulation, and wood. They contaminate food and carry disease. One pair of mice can produce dozens of offspring in just a few weeks. The longer they stay, the harder they are to remove — and the more damage they cause.</p>
+### What are common signs of rodents in Athens homes?
 
-<p>Chewed wiring is a fire hazard. Contaminated surfaces put your family at risk. Rodent activity in the crawl space can damage insulation and push up your energy bills.</p>
+Common signs include droppings, gnaw marks on food packaging or wiring edges, scratching sounds in walls or ceilings, and activity in attics, crawlspaces, garages, and kitchen-adjacent spaces.
 
-<p>The problem doesn't get better on its own. Call <strong>(706) 555-0112</strong> to connect with a licensed Athens rodent control professional today. Fast response. Local routing. Just call — a real person answers.</p>
+### Is rodent treatment safe around children and pets?
 
-<h2>How the Process Works</h2>
+Treatment plans can be structured around household needs. Ask where products or devices will be placed, what areas to avoid temporarily, and what monitoring steps are recommended after service.
 
-<h3>Step 1: Inspection</h3>
-<p>A licensed technician visits your home and checks entry points, nesting areas, and active runs. They identify the species and scope of the problem before recommending anything.</p>
+### Do I need to leave my home during service?
 
-<h3>Step 2: Treatment</h3>
-<p>Your pro sets up bait stations, traps, and exclusion barriers matched to your home's layout. Treatment is targeted — not generic.</p>
+Many visits do not require leaving for the entire appointment, but this depends on the plan used and areas being addressed. The technician can explain timing and room-by-room expectations before work begins.
 
-<h3>Step 3: Seal &amp; Prevent</h3>
-<p>Entry points are sealed to stop rodents from returning. Your technician explains what was done and what steps you can take to stay protected long-term.</p>
+### What can I do before technicians arrive?
 
-<p><strong>If rodents return between scheduled visits, we come back at no extra charge.</strong> That's our promise to every homeowner we serve.</p>
+Clear access to attics, crawlspaces, utility rooms, and under-sink areas; store food in sealed containers; and note where you have seen droppings, sounds, or damage. This helps speed inspection and planning.
 
-<h2>Seasonal Rodent Activity in the Area</h2>
+### How do follow-up visits work for recurring rodent activity?
 
-<h3>Fall and Winter</h3>
-<p>Cooler weather pushes mice and rats indoors. October through February is peak season. Homeowners near Sanford Stadium and throughout the Boulevard corridor often see increased activity as temperatures drop. Rodents seek warmth, water, and food inside your walls.</p>
+Follow-up is typically based on what was found during inspection, where activity was highest, and whether new signs appear. The plan may be adjusted over time as pressure points change around the home.
 
-<h3>Spring and Summer</h3>
-<p>Rodent populations grow fast in warm months. Roof rats become more active as trees fill in around older parts of town. Yard debris and dense vegetation near the North Oconee greenway give rodents shelter right next to homes.</p>
+### Can you also inspect for other pests seen in early spring?
 
-<h3>Year-Round Risk</h3>
-<p>Athens rarely gets cold enough to slow rodent activity for long. Mild winters mean populations stay strong. Don't wait for a bad season to act — there isn't one.</p>
+Yes, many homeowners ask about broader pest patterns in March. You can request a check for conditions linked to ants, termite swarmers, and mosquitoes while keeping rodent control as the primary service focus.
 
-<h2>Why Homeowners Trust Our Network</h2>
+---
 
-<ul>
-<li>&#10003; Licensed &amp; insured pest control professionals</li>
-<li>&#10003; Background-checked technicians</li>
-<li>&#10003; Child- and pet-friendly treatment options available</li>
-<li>&#10003; Local routing — connected to Athens-area pros only</li>
-<li>&#10003; 4.9&#9733; rating from local homeowners</li>
-<li>&#10003; Serving the Athens area for years</li>
-</ul>
-
-<p>Scheduling is available today in most service areas. Call <strong>(706) 555-0112</strong> to talk to a local expert now. Fast response. Real help.</p>
-
-<h2>Ready to Get Rid of Rodents?</h2>
-
-<p>Every day you wait, the problem grows. Don't share your home with mice or rats.</p>
-
-<p>Call <strong>(706) 555-0112</strong> now to connect with a licensed rodent control professional near you. Fast response. Local team. Results you can count on.</p>
-
-<p><em>No obligation &middot; Takes 30 seconds &middot; Scheduling available today.</em></p>
-
-<p><small>This site is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and this site does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on this site.</small></p>
+[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site].

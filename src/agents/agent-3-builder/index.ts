@@ -91,6 +91,7 @@ export interface Agent3Config {
   ignoreIndexationKillSwitch?: boolean;
   runId?: string;
   cityConcurrency?: number;
+  templateTimeoutMs?: number;
 }
 
 const DEFAULT_CONFIG: Partial<Agent3Config> = {
@@ -1723,7 +1724,8 @@ async function applyDesignSystem(
   hugo: ReturnType<typeof createHugoManager>,
   llm: LlmClient,
   runId: string,
-  offerId: string
+  offerId: string,
+  templateTimeoutMs: number
 ): Promise<DesignSystemContext> {
   const designResult = await db.query("SELECT * FROM design_specs WHERE niche = $1 LIMIT 1", [niche]);
   const copyResult = await db.query("SELECT * FROM copy_frameworks WHERE niche = $1 LIMIT 1", [niche]);
@@ -1813,7 +1815,7 @@ async function applyDesignSystem(
         prompt: hugoPrompt,
         schema: HugoTemplateResponseSchema,
         model: "sonnet",
-        timeoutMs: AGENT3_TEMPLATE_TIMEOUT_MS,
+        timeoutMs: templateTimeoutMs,
         logLabel: "[Agent 3][Design system][Hugo templates]",
         onOutput: (chunk, stream) => templateLogger.onOutput(chunk, stream),
       });
@@ -2588,6 +2590,10 @@ export async function runAgent3(
   db: DbClient
 ): Promise<void> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
+  const templateTimeoutMs = Math.max(
+    60_000,
+    cfg.templateTimeoutMs ?? AGENT3_TEMPLATE_TIMEOUT_MS
+  );
   const strategy = resolveVerticalStrategy(
     cfg.verticalProfile?.vertical_key ?? cfg.offerProfile?.vertical
   );
@@ -2657,7 +2663,15 @@ export async function runAgent3(
 
   try {
     hugo.ensureProject();
-    const designSystem = await applyDesignSystem(cfg.niche, db, hugo, llm, cfg.runId ?? "no-run-id", cfg.offerProfile?.offer_id ?? cfg.niche);
+    const designSystem = await applyDesignSystem(
+      cfg.niche,
+      db,
+      hugo,
+      llm,
+      cfg.runId ?? "no-run-id",
+      cfg.offerProfile?.offer_id ?? cfg.niche,
+      templateTimeoutMs
+    );
 
     console.log(`[Agent 3] Starting site build for ${cfg.niche}`);
     eventBus.emitEvent({ type: "agent_step", agent: "agent-3", step: "Starting", detail: cfg.niche, timestamp: Date.now() });

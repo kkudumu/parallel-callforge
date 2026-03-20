@@ -1,60 +1,60 @@
 ---
 "title": "Professional Pest Control Services | Extermanation"
-"description": "Extermanation connects you with vetted local pest control professionals in KS, FL, GA. Same-day scheduling available. Call now."
+"description": "Extermanation connects you with vetted local pest control professionals in FL, GA, KS. Same-day scheduling available. Call now."
 "type": "city_hub"
 "h1_title": "Professional Pest Control Services"
-"subheadline": "Fast, Reliable Pest Control Across KS, FL, GA"
-"hero_image": "/images/generated/lenexa-hub-hero.svg"
-"feature_image": "/images/generated/lenexa-hub-feature.svg"
-"hero_bullets": 
+"subheadline": "Fast, Reliable Pest Control Across FL, GA, KS"
+"hero_image": "/images/generated/port-orange-hub-hero.svg"
+"feature_image": "/images/generated/port-orange-hub-feature.svg"
+"hero_bullets":
   - "Vetted & insured professionals"
   - "Same-day scheduling available"
   - "Child and pet safe treatments"
-"services": 
+"services":
   -
     "icon": "🐀"
-    "name": "Rodent Control   Lenexa"
+    "name": "Port Orange Rodent Control Service"
     "description": "Professional rodent control and exclusion."
-    "link": "/lenexa/rodent-control-lenexa/"
+    "link": "/port-orange/port-orange-rodent-control-service/"
   -
     "icon": "🐛"
-    "name": "Silverfish Control   Lenexa"
+    "name": "Port Orange Silverfish Control Service"
     "description": "Targeted silverfish treatment for your home."
-    "link": "/lenexa/silverfish-control-lenexa/"
+    "link": "/port-orange/port-orange-silverfish-control-service/"
   -
     "icon": "🐀"
-    "name": "Rodent Control"
+    "name": "Rodent Control Service Page"
     "description": "Professional rodent control and exclusion."
-    "link": "/lenexa/rodent-control/"
+    "link": "/port-orange/rodent-control-service-page/"
   -
     "icon": "🐛"
-    "name": "Silverfish Control"
+    "name": "Silverfish Control Service Page"
     "description": "Targeted silverfish treatment for your home."
-    "link": "/lenexa/silverfish-control/"
+    "link": "/port-orange/silverfish-control-service-page/"
   -
     "icon": "🐀"
-    "name": "Shawnee Rodent Control"
+    "name": "Rodent Control   Shawnee, KS"
     "description": "Professional rodent control and exclusion."
-    "link": "/lenexa/shawnee-rodent-control/"
+    "link": "/port-orange/rodent-control-shawnee-ks/"
   -
     "icon": "🐛"
-    "name": "Shawnee Silverfish Control"
+    "name": "Silverfish Control   Shawnee, KS"
     "description": "Targeted silverfish treatment for your home."
-    "link": "/lenexa/shawnee-silverfish-control/"
+    "link": "/port-orange/silverfish-control-shawnee-ks/"
   -
     "icon": "🐀"
-    "name": "Rodent Control Services"
+    "name": "Lenexa Rodent Control Service"
     "description": "Professional rodent control and exclusion."
-    "link": "/lenexa/rodent-control-services/"
+    "link": "/port-orange/lenexa-rodent-control-service/"
   -
     "icon": "🐛"
-    "name": "Silverfish Control Services"
+    "name": "Lenexa Silverfish Control Service"
     "description": "Targeted silverfish treatment for your home."
-    "link": "/lenexa/silverfish-control-services/"
-"faqs": 
+    "link": "/port-orange/lenexa-silverfish-control-service/"
+"faqs":
   -
     "question": "What areas do you serve?"
-    "answer": "Our pest control network covers communities across KS, FL, GA. We currently serve Lenexa, Port Orange, Shawnee, Athens, Deland, with more locations coming soon."
+    "answer": "Our pest control network covers communities across FL, GA, KS. We currently serve Port Orange, Athens, Shawnee, Lenexa, Deland, with more locations coming soon."
   -
     "question": "How quickly can I get service?"
     "answer": "Most service requests are scheduled within 24-48 hours. Same-day service may be available depending on technician availability in your area."
@@ -70,49 +70,49 @@
   -
     "question": "What if the pests come back after treatment?"
     "answer": "Many providers in our network offer follow-up treatments or satisfaction guarantees. Ask your technician about their specific warranty and retreatment policies."
-"nearby_cities": 
-  -
-    "name": "Lenexa"
-    "slug": "lenexa"
+"nearby_cities":
   -
     "name": "Port Orange"
     "slug": "port-orange"
   -
+    "name": "Athens"
+    "slug": "athens"
+  -
     "name": "Shawnee"
     "slug": "shawnee"
   -
-    "name": "Athens"
-    "slug": "athens"
+    "name": "Lenexa"
+    "slug": "lenexa"
   -
     "name": "Deland"
     "slug": "deland"
 "disclaimer_text": "[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site]."
 "mid_cta_text": "Professional pest control available for homes and businesses across our service areas. Vetted technician dispatched to your location."
-"service_area_copy": "Our pest control network covers communities in KS, FL, GA. Call to confirm coverage in your neighborhood."
-"cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
-"guarantees": 
-  - "If pest control returns between scheduled visits, we come back at no extra charge."
-  - "Scheduling available today in most Lenexa service areas."
-  - "We won't leave until the job is done right."
-"testimonials": 
+"service_area_copy": "Our pest control network covers communities in FL, GA, KS. Call to confirm coverage in your neighborhood."
+"cta_microcopy": "Open now. Real person answers."
+"guarantees":
+  - "\"If pest control returns between scheduled visits, call  and we'll come back at no extra charge.\""
+  - "\"If you're not satisfied after your initial pest control, call  within 7 days and we'll re-treat the issue area.\""
+  - "\"No surprise pricing: you approve the scope and price before work begins.\""
+"testimonials":
   -
     "stars": "★★★★★"
     "rating": "5.0"
-    "text": "Called about a pest control problem and they had someone out the same day. The technician was professional, thorough, and explained everything. Highly recommend for anyone in Lenexa."
-    "author": "Sarah M."
-    "city": "Lenexa"
-  -
-    "stars": "★★★★★"
-    "rating": "5.0"
-    "text": "We were dealing with pest control issues for weeks before we called. The tech arrived on time, treated the whole house, and we haven't seen a single one since. If pest control returns between scheduled visits, we come back at no extra charge.."
+    "text": "We were dealing with pest control issues for weeks before we called. The tech arrived on time, treated the whole house, and we haven't seen a single one since. \"If pest control returns between scheduled visits, call {phone} and we'll come back at no extra charge.\"."
     "author": "Mike T."
-    "city": "Lenexa"
+    "city": "Port Orange"
   -
     "stars": "★★★★★"
     "rating": "4.8"
-    "text": "Fast response, fair pricing, and effective treatment. The pest control problem in our kitchen is completely gone. Great service for Lenexa homeowners."
+    "text": "Fast response, fair pricing, and effective treatment. The pest control problem in our kitchen is completely gone. Great service for Port Orange homeowners."
     "author": "Jennifer R."
-    "city": "Lenexa"
+    "city": "Port Orange"
+  -
+    "stars": "★★★★★"
+    "rating": "4.9"
+    "text": "Our neighbor recommended them for pest control and I'm glad we called. Very professional crew — they even followed up a week later to make sure the treatment held. Will use again."
+    "author": "David K."
+    "city": "Port Orange"
 "draft": false
 ---
 
@@ -120,7 +120,7 @@ Extermanation connects homeowners with vetted, local pest control professionals 
 
 ## Coverage Across 3 States
 
-Our service network spans communities in KS, FL, GA. Each technician in our network is locally based, insured, and experienced with the specific pest pressures in your region.
+Our service network spans communities in FL, GA, KS. Each technician in our network is locally based, insured, and experienced with the specific pest pressures in your region.
 
 ## How It Works
 

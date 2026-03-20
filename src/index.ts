@@ -9,7 +9,7 @@ import { createRateLimiters } from "./shared/cli/rate-limiter.js";
 import { createClaudeCli } from "./shared/cli/claude-cli.js";
 import { createCodexCli } from "./shared/cli/codex-cli.js";
 import { createGeminiCli } from "./shared/cli/gemini-cli.js";
-import { createLlmClient } from "./shared/cli/llm-client.js";
+import { createLlmClient, createRoundRobinLlmClient } from "./shared/cli/llm-client.js";
 import {
   parseZipInput,
   runAgent05,
@@ -24,6 +24,7 @@ import {
 } from "./agents/agent-7-monitor/index.js";
 import { SearchConsoleDataProvider } from "./agents/agent-7-monitor/search-console-provider.js";
 import { createOrchestrator } from "./orchestrator/index.js";
+import { runSupervisor } from "./supervisor.js";
 import type { AgentHandler } from "./orchestrator/types.js";
 import {
   loadOfferProfile,
@@ -153,6 +154,7 @@ function buildAgent1Config(
   const offerId = overrides.offerId;
   const niche = overrides.offerProfile?.niche ?? overrides.niche ?? DEFAULT_NICHE;
   const researchEnabled = overrides.researchEnabled ?? env.AGENT1_RESEARCH_ENABLED;
+  const researchMode = overrides.researchMode ?? env.AGENT1_RESEARCH_MODE;
 
   if (citySource === "deployment_candidates") {
     if (!offerId) {
@@ -164,6 +166,7 @@ function buildAgent1Config(
       offerId,
       topCandidateLimit: 5,
       researchEnabled,
+      researchMode,
       ...overrides,
     };
   }
@@ -173,6 +176,7 @@ function buildAgent1Config(
     citySource: "hardcoded" as CitySourceMode,
     candidateCities: CANDIDATE_CITIES,
     researchEnabled,
+    researchMode,
     ...overrides,
   };
 }
@@ -217,6 +221,9 @@ async function runSingleAgent(agentName: string) {
   const codexCli = createCodexCli(env.CODEX_CLI_PATH);
   const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
   const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
+  const agent3Llm = env.AGENT3_LLM_MODE === "round-robin"
+    ? createRoundRobinLlmClient({ claude: claudeCli, codex: codexCli, gemini: geminiCli }, limiters)
+    : llm;
 
   try {
     // Run migrations first
@@ -316,6 +323,7 @@ async function runSingleAgent(agentName: string) {
           offerProfile: offerContext.offerProfile,
           verticalProfile: offerContext.verticalProfile,
           researchEnabled: env.AGENT2_RESEARCH_ENABLED,
+          researchMode: env.AGENT2_RESEARCH_MODE,
         }, llm, db);
         }
         break;
@@ -338,7 +346,8 @@ async function runSingleAgent(agentName: string) {
           indexationMinPageAgeDays: env.INDEXATION_MIN_PAGE_AGE_DAYS,
           indexationLookbackDays: env.INDEXATION_LOOKBACK_DAYS,
           minIndexationRatio: env.INDEXATION_RATIO_THRESHOLD,
-        }, llm, db);
+          templateTimeoutMs: env.AGENT3_TEMPLATE_TIMEOUT_MS,
+        }, agent3Llm, db);
         }
         break;
       case "agent-7":
@@ -365,6 +374,9 @@ async function runPipeline() {
   const codexCli = createCodexCli(env.CODEX_CLI_PATH);
   const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
   const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
+  const agent3Llm = env.AGENT3_LLM_MODE === "round-robin"
+    ? createRoundRobinLlmClient({ claude: claudeCli, codex: codexCli, gemini: geminiCli }, limiters)
+    : llm;
 
   await runMigrations(env.DATABASE_URL, path.resolve("src/shared/db/migrations"));
 
@@ -427,6 +439,7 @@ async function runPipeline() {
       offerProfile: offerContext.offerProfile,
       verticalProfile: offerContext.verticalProfile,
       researchEnabled: env.AGENT2_RESEARCH_ENABLED,
+      researchMode: env.AGENT2_RESEARCH_MODE,
       runId,
     }, llm, db);
 
@@ -449,7 +462,8 @@ async function runPipeline() {
       indexationLookbackDays: env.INDEXATION_LOOKBACK_DAYS,
       minIndexationRatio: env.INDEXATION_RATIO_THRESHOLD,
       runId,
-    }, llm, db);
+      templateTimeoutMs: env.AGENT3_TEMPLATE_TIMEOUT_MS,
+    }, agent3Llm, db);
 
     console.log("=== Pipeline Complete ===");
     if (env.DISCORD_WEBHOOK_URL) {
@@ -489,6 +503,9 @@ async function runOrchestrated() {
   const codexCli = createCodexCli(env.CODEX_CLI_PATH);
   const geminiCli = createGeminiCli(env.GEMINI_CLI_PATH);
   const llm = createLlmClient(claudeCli, codexCli, limiters, geminiCli);
+  const agent3Llm = env.AGENT3_LLM_MODE === "round-robin"
+    ? createRoundRobinLlmClient({ claude: claudeCli, codex: codexCli, gemini: geminiCli }, limiters)
+    : llm;
 
   agentHandlers.set("agent-0.5", {
     name: "agent-0.5",
@@ -565,6 +582,7 @@ async function runOrchestrated() {
         verticalProfile: offerContext.verticalProfile,
         forceRefresh: payload?.forceRefresh === true,
         researchEnabled: env.AGENT2_RESEARCH_ENABLED,
+        researchMode: env.AGENT2_RESEARCH_MODE,
         runId,
       }, llm, db);
       return {};
@@ -599,7 +617,8 @@ async function runOrchestrated() {
         enforceNewCityCap: env.AGENT3_ENFORCE_NEW_CITY_CAP,
         maxNewCitiesPerWeek: env.AGENT3_MAX_NEW_CITIES_PER_WEEK,
         ignoreIndexationKillSwitch: payload?.ignoreIndexationKillSwitch === true,
-      }, llm, db);
+        templateTimeoutMs: env.AGENT3_TEMPLATE_TIMEOUT_MS,
+      }, agent3Llm, db);
       return {};
     },
   });
@@ -635,12 +654,54 @@ async function runOrchestrated() {
 
 // CLI argument parsing
 const command = process.argv[2];
+const offerIdArg = process.argv[3];
+
+function runSupervised(offerId: string) {
+  runSupervisor(offerId).then((result) => {
+    if (result.success) {
+      console.log(`Supervised pipeline completed after ${result.totalAttempts} attempt(s)`);
+      process.exit(0);
+    } else {
+      console.error(`Supervised pipeline failed after ${result.totalAttempts} attempt(s)`);
+      process.exit(1);
+    }
+  }).catch((err) => {
+    console.error("Supervisor failed:", err);
+    process.exit(1);
+  });
+}
 
 if (command === "pipeline") {
+  if (offerIdArg === "--help" || offerIdArg === "-h") {
+    console.log("Usage: npx tsx src/index.ts pipeline <offerId>");
+    process.exit(0);
+  }
+  if (!offerIdArg) {
+    console.error("Usage: npx tsx src/index.ts pipeline <offerId>");
+    process.exit(1);
+  }
+  console.log(`[CLI] pipeline now runs in supervised mode. Starting supervisor for ${offerIdArg}...`);
+  runSupervised(offerIdArg);
+} else if (command === "pipeline-once") {
+  if (offerIdArg === "--help" || offerIdArg === "-h") {
+    console.log("Usage: npx tsx src/index.ts pipeline-once <offerId>");
+    process.exit(0);
+  }
   runPipeline().catch((err) => {
     console.error("Pipeline failed:", err);
     process.exit(1);
   });
+} else if (command === "supervise") {
+  const offerId = offerIdArg;
+  if (offerId === "--help" || offerId === "-h") {
+    console.log("Usage: npx tsx src/index.ts supervise <offerId>");
+    process.exit(0);
+  }
+  if (!offerId) {
+    console.error("Usage: npx tsx src/index.ts supervise <offerId>");
+    process.exit(1);
+  }
+  runSupervised(offerId);
 } else if (command === "orchestrate") {
   runOrchestrated().catch((err) => {
     console.error("Orchestrator failed:", err);
@@ -659,7 +720,9 @@ if (command === "pipeline") {
   console.log("CallForge - Parallel Content Pipeline");
   console.log("");
   console.log("Usage:");
-  console.log("  npx tsx src/index.ts pipeline <offerId>  Run full pipeline sequentially");
+  console.log("  npx tsx src/index.ts pipeline <offerId>  Run full pipeline (always supervised with auto-restart)");
+  console.log("  npx tsx src/index.ts pipeline-once <offerId>  Run single pipeline attempt (no supervisor)");
+  console.log("  npx tsx src/index.ts supervise <offerId>   Run supervisor explicitly");
   console.log("  npx tsx src/index.ts orchestrate   Run via task queue orchestrator");
   console.log("  npx tsx src/index.ts vertical-profile <verticalKey> <json-or-file>  Save a vertical definition");
   console.log("  npx tsx src/index.ts offer-profile <offerId> <raw-text-or-file>  Save parsed offer profile");

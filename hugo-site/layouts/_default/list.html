@@ -1,200 +1,105 @@
 {{ define "main" }}
-<section class="hero">
-    <div class="container">
-        <h1>{{ .Params.city }} Pest Control</h1>
-        <p class="hero-subhead">Professional residential pest control services for {{ .Params.city }} homeowners. Licensed, insured, trusted locally.</p>
-        <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn btn-full hero-cta">
-            📞 Call Now for Local Pest Help
-        </a>
-        <div class="hero-bullets">
-            <span class="hero-bullet">Licensed & insured</span>
-            <span class="hero-bullet">Same-day service</span>
-            <span class="hero-bullet">No hidden fees</span>
-            <span class="hero-bullet">Residential only</span>
-            <span class="hero-bullet">Pets & kids safe</span>
-        </div>
-    </div>
+{{- $phoneDisplay := .Site.Params.phone_display | default "(555) 123-4567" -}}
+{{- $phoneTel := .Site.Params.phone_tel | default (replaceRE "[^0-9+]" "" $phoneDisplay) -}}
+<section class="container" style="margin-bottom:18px">
+  <p style="margin:0;font-weight:700;color:var(--color-urgency)">Emergency pest issue in {{ .Params.city | default .Site.Params.city | default "your city" }}? Fast dispatch starts with one call: <a href="tel:{{ $phoneTel }}">{{ $phoneDisplay }}</a></p>
 </section>
 
-<section class="trust-bar">
-    <div class="trust-grid">
-        <div class="trust-item">
-            <div class="trust-icon">🏛️</div>
-            <div class="trust-label">State Licensed</div>
-            <div class="trust-value">Verified pros</div>
-        </div>
-        <div class="trust-item">
-            <div class="trust-icon">🛡️</div>
-            <div class="trust-label">Fully Insured</div>
-            <div class="trust-value">Coverage verified</div>
-        </div>
-        <div class="trust-item">
-            <div class="trust-icon">⭐</div>
-            <div class="trust-label">Rated</div>
-            <div class="trust-value">{{ .Params.averageRating | default "4.8" }}/5 stars</div>
-        </div>
-        <div class="trust-item">
-            <div class="trust-icon">✓</div>
-            <div class="trust-label">Local Network</div>
-            <div class="trust-value">{{ .Params.city }} based</div>
-        </div>
-    </div>
+<section class="container" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:16px;padding:24px;margin-bottom:18px">
+  <h1>{{ .Params.hero_title | default (printf "Pest Control in %s That Shows Up Fast" (.Params.city | default .Site.Params.city | default "Your Area")) }}</h1>
+  <p style="font-size:1.125rem">Speak to a local dispatcher now. Same-day scheduling available in most neighborhoods when technicians are open.</p>
+  <a class="cta-call" style="width:100%;max-width:420px" href="tel:{{ $phoneTel }}">Call Now (24/7)</a>
+  <p><strong>{{ $phoneDisplay }}</strong> | Licensed, insured, and treatment-ready today when available.</p>
 </section>
 
-<section id="services">
-    <div class="container">
-        <h2>Residential Pest Services in {{ .Params.city }}</h2>
-        <p>We handle common household pests through our matched-technician network. All services are residential-only and 100% transparent.</p>
-        
-        {{ if .Params.pestServices }}
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin-top: 2rem;">
-            {{ range first 6 (default slice .Params.pestServices) }}
-            <div style="background: white; padding: 1.5rem; border-radius: 6px; border: 1px solid #E0DDD5;">
-                <h3 style="color: var(--trust); margin-top: 0;">{{ .name }}</h3>
-                <p>{{ .description }}</p>
-                <span style="display: inline-block; font-size: 0.8rem; background: var(--trust); color: white; padding: 0.3rem 0.6rem; border-radius: 3px; margin-bottom: 1rem;">Residential</span>
-                <br>
-                <a href="tel:+1{{ $.Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn" style="margin-top: 1rem;">
-                    Call for {{ .name }}
-                </a>
-            </div>
-            {{ end }}
-        </div>
-        {{ end }}
-    </div>
+<section class="container" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+  <div style="background:var(--color-bg-alt);border:1px solid var(--color-border);padding:12px;border-radius:12px">Licensed &amp; Insured</div>
+  <div style="background:var(--color-bg-alt);border:1px solid var(--color-border);padding:12px;border-radius:12px">Same-Day Service in Select Areas</div>
+  <div style="background:var(--color-bg-alt);border:1px solid var(--color-border);padding:12px;border-radius:12px">Retreatment Guarantee Options</div>
+  <div style="background:var(--color-bg-alt);border:1px solid var(--color-border);padding:12px;border-radius:12px">Top-Rated Local Reviews</div>
 </section>
 
-<section id="how-it-works">
-    <div class="container">
-        <h2 class="text-center">How It Works</h2>
-        <p class="text-center">Simple, transparent 3-step process.</p>
-        
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin-top: 3rem;">
-            <div style="text-align: center;">
-                <div style="font-size: 3rem; font-weight: 700; color: var(--primary); margin-bottom: 1rem;">1</div>
-                <h3>Call Now</h3>
-                <p>Describe your pest problem. Get instant confirmation of coverage and service availability in {{ .Params.city }}.</p>
-            </div>
-            <div style="text-align: center;">
-                <div style="font-size: 3rem; font-weight: 700; color: var(--primary); margin-bottom: 1rem;">2</div>
-                <h3>Get Matched</h3>
-                <p>We match you with a licensed, insured local technician ready to visit your home.</p>
-            </div>
-            <div style="text-align: center;">
-                <div style="font-size: 3rem; font-weight: 700; color: var(--primary); margin-bottom: 1rem;">3</div>
-                <h3>Service Delivered</h3>
-                <p>Technician arrives, completes work, and you pay only for services received—no surprises.</p>
-            </div>
-        </div>
-    </div>
+<section class="container" style="margin-bottom:24px">
+  <h2>Pests We Handle Every Day</h2>
+  <p>Ants, roaches, spiders, rats, mice, termites, bed bugs, fleas, wasps, hornets, silverfish, and mosquitoes. We choose treatments with family and pet safety in mind and explain all products before service.</p>
+  <p>Not sure what pest you have? Call now for quick guidance: <a href="tel:{{ $phoneTel }}">{{ $phoneDisplay }}</a></p>
+  <a class="cta-call" style="width:100%;max-width:420px" href="tel:{{ $phoneTel }}">Call Now (24/7)</a>
 </section>
 
-<section class="mid-cta">
-    <div class="mid-cta-content">
-        <h2>Ready to get pest help in {{ .Params.city }}?</h2>
-        <p style="font-size: 1.1rem; margin-bottom: 1rem;">Our network is available 24/7. Call now for immediate service confirmation.</p>
-        <div class="mid-cta-phone">{{ .Params.phoneNumber }}</div>
-        <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn" style="background: var(--cta-primary); font-size: 20px;">
-            📞 Call Now for Local Pest Help
-        </a>
-    </div>
+<section class="container" style="margin-bottom:24px">
+  <h2>How It Works in 3 Simple Steps</h2>
+  <div style="display:grid;gap:12px">
+    <article style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:16px"><h3>1) Call</h3><p>Tell us what you are seeing, where it started, and how urgent it feels. We confirm the fastest available visit window.</p></article>
+    <article style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:16px"><h3>2) Inspect</h3><p>A local tech checks activity zones, entry points, and risk areas to build a focused treatment plan and clear quote.</p></article>
+    <article style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:16px"><h3>3) Treat</h3><p>We treat active areas, explain next steps, and schedule follow-up if needed. Same-day treatment may be available.</p></article>
+  </div>
+  <p style="margin-top:10px">Ready to start? <a href="tel:{{ $phoneTel }}">{{ $phoneDisplay }}</a></p>
+  <a class="cta-call" style="width:100%;max-width:420px" href="tel:{{ $phoneTel }}">Call Now (24/7)</a>
 </section>
 
-<section id="testimonials">
-    <div class="container">
-        <h2 class="text-center">Local Reviews from {{ .Params.city }} Residents</h2>
-        
-        {{ if .Params.testimonials }}
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-top: 2rem;">
-            {{ range first 5 (default slice .Params.testimonials) }}
-            <div style="background: white; padding: 1.5rem; border-radius: 6px; border: 1px solid #E0DDD5;">
-                <div style="color: var(--primary); margin-bottom: 0.5rem;">{{ .rating | default "⭐⭐⭐⭐⭐" }}</div>
-                <p style="font-style: italic; margin-bottom: 1rem;">"{{ .quote }}"</p>
-                <strong>{{ .author }}</strong><br>
-                <span style="font-size: 0.9rem; color: var(--text-muted);">{{ .location }}, {{ $.Params.city }}</span>
-            </div>
-            {{ end }}
-        </div>
-        {{ end }}
-    </div>
+<section class="container" style="margin-bottom:24px">
+  <h2>Local Coverage Across {{ .Params.city | default .Site.Params.city | default "the Metro Area" }}</h2>
+  <p>Our local team serves homes and businesses across nearby neighborhoods. Dispatch times depend on traffic, weather, and active call volume.</p>
+  {{ if .Params.neighborhoods }}
+  <ul>
+    {{ range .Params.neighborhoods }}
+    <li>{{ . }}</li>
+    {{ end }}
+  </ul>
+  {{ else }}
+  <ul>
+    <li>Downtown</li><li>Northside</li><li>West End</li><li>Riverside</li><li>Oak Park</li><li>Eastgate</li>
+  </ul>
+  {{ end }}
+  <p>Check your address now: <a href="tel:{{ $phoneTel }}">{{ $phoneDisplay }}</a></p>
+  <a class="cta-call" style="width:100%;max-width:420px" href="tel:{{ $phoneTel }}">Call Now (24/7)</a>
 </section>
 
-<section id="trust-authority">
-    <div class="container">
-        <h2>Why Choose Local Pest Control in {{ .Params.city }}?</h2>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
-            <div>
-                <h3 style="color: var(--trust);">Licensed & Insured</h3>
-                <p>State-licensed professionals verified before dispatch. Full liability coverage protects your home.</p>
-                
-                <h3 style="color: var(--trust); margin-top: 2rem;">Satisfaction Guaranteed</h3>
-                <ul style="list-style: none; padding-left: 0;">
-                    <li>✓ Work until pest problem solved</li>
-                    <li>✓ Transparent pricing—no hidden fees</li>
-                    <li>✓ 100% family & pet safe methods</li>
-                </ul>
-            </div>
-            <div>
-                <h3 style="color: var(--trust);">Residential-Only Service</h3>
-                <p>We focus exclusively on homeowner pest problems. No commercial kitchens or industrial facilities.</p>
-                
-                <h3 style="color: var(--trust); margin-top: 2rem;">Local Network Transparency</h3>
-                <p>Every technician is licensed and insured independently. You pay only for direct service—no middleman markups.</p>
-            </div>
-        </div>
-    </div>
+<section class="container" style="margin-bottom:24px">
+  <h2>Plans, Options, and Guarantees</h2>
+  <div style="display:grid;gap:12px">
+    <article style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:16px"><h3>One-Time Relief</h3><p>Targeted treatment for active issues. Best for sudden infestations or move-in pest activity.</p></article>
+    <article style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:16px"><h3>Quarterly Protection</h3><p>Year-round coverage designed to reduce recurring pest pressure with seasonal service.</p></article>
+    <article style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:16px"><h3>Specialty Treatments</h3><p>Advanced protocols for termites, bed bugs, and rodents with follow-up recommendations.</p></article>
+  </div>
+  <p>Pricing is based on inspection findings, structure size, and pest severity. Ask about retreatment or money-back terms where applicable.</p>
+  <a class="cta-call" style="width:100%;max-width:420px" href="tel:{{ $phoneTel }}">Call Now (24/7)</a>
 </section>
 
-<section id="service-areas">
-    <div class="container">
-        <h2>Service Areas in {{ .Params.city }}</h2>
-        <p>We serve all residential neighborhoods in {{ .Params.city }} and nearby areas.</p>
-        
-        {{ if .Params.serviceAreas }}
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem;">
-            {{ range .Params.serviceAreas }}
-            <div style="padding: 1rem; background: white; border-radius: 4px; border-left: 4px solid var(--trust);">
-                {{ . }}
-            </div>
-            {{ end }}
-        </div>
-        {{ end }}
-    </div>
+<section class="container" style="margin-bottom:24px">
+  <h2>What Local Customers Say</h2>
+  {{ if .Params.reviews }}
+    {{ range .Params.reviews }}
+    <blockquote style="background:var(--color-surface);border-left:4px solid var(--color-trust);padding:12px 14px;margin:0 0 12px">
+      <p style="margin-bottom:6px">&#9733;&#9733;&#9733;&#9733;&#9733; {{ .quote }}</p>
+      <cite>{{ .name }}, {{ .city }}</cite>
+    </blockquote>
+    {{ end }}
+  {{ else }}
+    <blockquote style="background:var(--color-surface);border-left:4px solid var(--color-trust);padding:12px 14px;margin:0 0 12px"><p style="margin-bottom:6px">&#9733;&#9733;&#9733;&#9733;&#9733; "They answered right away and had a tech out the same afternoon."</p><cite>Maria L., Downtown</cite></blockquote>
+    <blockquote style="background:var(--color-surface);border-left:4px solid var(--color-trust);padding:12px 14px;margin:0 0 12px"><p style="margin-bottom:6px">&#9733;&#9733;&#9733;&#9733;&#9733; "Clear pricing, respectful tech, and no more roaches after treatment."</p><cite>Jordan K., Riverside</cite></blockquote>
+    <blockquote style="background:var(--color-surface);border-left:4px solid var(--color-trust);padding:12px 14px;margin:0 0 12px"><p style="margin-bottom:6px">&#9733;&#9733;&#9733;&#9733;&#9733; "Fast call-back and very thorough inspection."</p><cite>Ava T., Northside</cite></blockquote>
+  {{ end }}
+  <p>Need help now? <a href="tel:{{ $phoneTel }}">{{ $phoneDisplay }}</a></p>
+  <a class="cta-call" style="width:100%;max-width:420px" href="tel:{{ $phoneTel }}">Call Now (24/7)</a>
 </section>
 
-<section id="faq">
-    <div class="container">
-        <h2>Frequently Asked Questions</h2>
-        
-        {{ if .Params.faqs }}
-        <div style="margin-top: 2rem;">
-            {{ range first 8 (default slice .Params.faqs) }}
-            <details style="margin-bottom: 1rem; padding: 1.5rem; background: white; border-radius: 4px; border-left: 4px solid var(--primary); cursor: pointer;">
-                <summary style="font-weight: 700; color: var(--primary); outline: none;">
-                    {{ .question }}
-                </summary>
-                <p style="margin-top: 1rem; color: var(--text); padding-top: 1rem; border-top: 1px solid #E0DDD5;">
-                    {{ .answer }}
-                </p>
-                <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted);">
-                    <em>Still have questions? <a href="tel:+1{{ $.Params.phoneNumber | replaceRE "[^0-9]" "" }}" style="color: var(--primary); font-weight: 600;">Call us now</a> for personalized guidance.</em>
-                </p>
-            </details>
-            {{ end }}
-        </div>
-        {{ end }}
-    </div>
+<section class="container" style="margin-bottom:24px">
+  <h2>Frequently Asked Questions</h2>
+  <details><summary>How fast can you arrive?</summary><p>Same-day service is available in many neighborhoods when schedules allow. Call for the current ETA.</p></details>
+  <details><summary>How much does service cost?</summary><p>Cost depends on pest type, infestation size, and property layout. We provide pricing after inspection.</p></details>
+  <details><summary>Are treatments safe for kids and pets?</summary><p>We use targeted products and explain precautions clearly. Always follow technician guidance after treatment.</p></details>
+  <details><summary>Do you serve my neighborhood?</summary><p>We cover most nearby zones and suburbs. Availability varies by route load and technician coverage.</p></details>
+  <details><summary>Do you offer guarantees?</summary><p>Many plans include retreatment options. Guarantee terms vary by service type and agreement details.</p></details>
+  <details><summary>Can I call at night or on weekends?</summary><p>Yes. Calls are answered 24/7 and appointments are scheduled based on local dispatch availability.</p></details>
+  <p>Still deciding? Speak with a local team member now: <a href="tel:{{ $phoneTel }}">{{ $phoneDisplay }}</a></p>
+  <a class="cta-call" style="width:100%;max-width:420px" href="tel:{{ $phoneTel }}">Call Now (24/7)</a>
 </section>
 
-<section id="disclaimer">
-    <div class="container">
-        <div style="background: #FEF9F3; padding: 2rem; border-radius: 6px; border-left: 4px solid var(--secondary);">
-            <h3 style="color: var(--primary); margin-top: 0;">💡 Transparency Commitment</h3>
-            <p style="font-size: 0.95rem; color: var(--text);">
-                We connect homeowners with licensed, independent pest control technicians in {{ .Params.city }}. Each technician operates as an independent contractor and maintains their own licensing, insurance, and customer service standards. You pay directly for services rendered—no hidden fees or surprise charges. All residential pest control services are performed in full compliance with Florida Department of Agriculture regulations.
-            </p>
-        </div>
-    </div>
+<section class="container" style="background:var(--color-primary);color:#fff;border-radius:16px;padding:24px;margin-bottom:24px">
+  <h2 style="color:#fff">Stop the Pest Problem Before It Spreads</h2>
+  <p>Call now for urgent help. Fast response depends on your exact location and live technician capacity.</p>
+  <a class="cta-call" style="width:100%;max-width:420px" href="tel:{{ $phoneTel }}">Call Now (24/7)</a>
+  <p style="margin:.75rem 0 0"><strong>{{ $phoneDisplay }}</strong></p>
 </section>
 {{ end }}

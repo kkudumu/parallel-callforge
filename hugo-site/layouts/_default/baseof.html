@@ -1,555 +1,103 @@
-<!DOCTYPE html>
+{{- $phoneDisplay := .Site.Params.phone_display | default "(555) 123-4567" -}}
+{{- $phoneTel := .Site.Params.phone_tel | default (replaceRE "[^0-9+]" "" $phoneDisplay) -}}
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ .Title }} | Pest Control Services</title>
-    <meta name="description" content="{{ .Description }}">
-    <link rel="stylesheet" href="/css/generated-theme.css">
-
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Public Sans', 'Helvetica Neue', sans-serif;
-            color: var(--color-text);
-            background: var(--color-background);
-            line-height: 1.6;
-            font-size: 16px;
-        }
-        
-        @media (min-width: 768px) {
-            body { font-size: 18px; }
-        }
-        
-        h1, h2, h3, h4, h5, h6 {
-            font-family: 'Archivo Narrow', 'Arial Narrow', sans-serif;
-            line-height: 1.2;
-            margin: 1em 0 0.5em 0;
-        }
-        
-        h1 { font-size: 2.5rem; color: var(--color-primary); }
-        h2 { font-size: 2rem; color: var(--color-primary); }
-        h3 { font-size: 1.5rem; color: var(--color-primary); }
-        
-        @media (min-width: 768px) {
-            h1 { font-size: 3.5rem; }
-            h2 { font-size: 2.5rem; }
-        }
-        
-        p { margin-bottom: 1em; }
-        a { color: var(--color-primary); text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        
-        .container {
-            max-width: 1280px;
-            margin: 0 auto;
-            padding: 0 1rem;
-        }
-        
-        @media (min-width: 768px) {
-            .container { padding: 0 2rem; }
-        }
-        
-        /* Button Styles */
-        .btn {
-            display: inline-block;
-            padding: 0.75rem 1.5rem;
-            background: var(--color-cta-primary);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 18px;
-            font-weight: 600;
-            text-decoration: none;
-            cursor: pointer;
-            min-height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.2s;
-        }
-        
-        .btn:hover {
-            background: var(--color-cta-primary-hover);
-            text-decoration: none;
-        }
-        
-        .btn-full {
-            width: 100%;
-        }
-        
-        .btn-phone {
-            background: var(--color-urgency);
-        }
-        
-        .btn-phone:hover {
-            background: #A01810;
-        }
-        
-        /* Header */
-        header {
-            background: white;
-            border-bottom: 1px solid #E0DDD5;
-            padding: 1rem 1rem;
-            position: relative;
-            z-index: 99;
-        }
-        
-        @media (min-width: 768px) {
-            header { padding: 1.5rem 2rem; }
-        }
-        
-        .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            max-width: 1280px;
-            margin: 0 auto;
-        }
-        
-        .logo {
-            font-family: 'Archivo Narrow', 'Arial Narrow', sans-serif;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--color-primary);
-        }
-        
-        .header-phone {
-            display: none;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 0.25rem;
-        }
-        
-        @media (min-width: 768px) {
-            .header-phone {
-                display: flex;
-            }
-        }
-        
-        .header-phone-label {
-            font-size: 0.85rem;
-            color: var(--color-text-muted);
-        }
-        
-        .header-phone-number {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: var(--color-primary);
-        }
-        
-        /* Sticky Call Bar - Mobile Only */
-        .sticky-call-bar {
-            display: flex;
-            gap: 0.5rem;
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--color-urgency);
-            padding: 0.5rem;
-            z-index: 100;
-            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
-        }
-        
-        @media (min-width: 768px) {
-            .sticky-call-bar {
-                display: none;
-            }
-        }
-        
-        .sticky-call-bar .btn {
-            flex: 1;
-            font-size: 16px;
-            min-height: 56px;
-            background: var(--color-urgency);
-            color: white;
-        }
-        
-        .sticky-call-bar .btn:hover {
-            background: #A01810;
-        }
-        
-        /* Content padding for sticky bar */
-        @media (max-width: 767px) {
-            body {
-                padding-bottom: 70px;
-            }
-        }
-        
-        /* Hero Section */
-        .hero {
-            background: linear-gradient(135deg, var(--color-primary) 0%, #1a4a2f 100%);
-            color: white;
-            padding: 3rem 1rem;
-            text-align: center;
-        }
-        
-        @media (min-width: 768px) {
-            .hero {
-                padding: 5rem 2rem;
-            }
-        }
-        
-        .hero h1 {
-            color: white;
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        @media (min-width: 768px) {
-            .hero h1 { font-size: 3.5rem; }
-        }
-        
-        .hero-subhead {
-            font-size: 1.2rem;
-            margin-bottom: 2rem;
-            line-height: 1.4;
-        }
-        
-        @media (min-width: 768px) {
-            .hero-subhead { font-size: 1.5rem; }
-        }
-        
-        .hero-cta {
-            background: var(--color-cta-primary);
-            margin-bottom: 2rem;
-            font-size: 20px;
-        }
-        
-        .hero-cta:hover {
-            background: var(--color-cta-primary-hover);
-        }
-        
-        .hero-bullets {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            margin-top: 2rem;
-            align-items: center;
-        }
-        
-        @media (min-width: 768px) {
-            .hero-bullets {
-                flex-direction: row;
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-        }
-        
-        .hero-bullet {
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .hero-bullet::before {
-            content: "✓";
-            font-weight: bold;
-            color: var(--color-secondary);
-        }
-        
-        /* Trust Bar */
-        .trust-bar {
-            background: white;
-            padding: 2rem 1rem;
-            border-top: 3px solid var(--color-trust);
-        }
-        
-        @media (min-width: 768px) {
-            .trust-bar {
-                padding: 2rem;
-            }
-        }
-        
-        .trust-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            max-width: 1280px;
-            margin: 0 auto;
-        }
-        
-        @media (min-width: 768px) {
-            .trust-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-        
-        .trust-item {
-            text-align: center;
-        }
-        
-        .trust-icon {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .trust-label {
-            font-size: 0.9rem;
-            color: var(--color-text-muted);
-            font-weight: 600;
-        }
-        
-        .trust-value {
-            font-size: 1.1rem;
-            color: var(--color-primary);
-            font-weight: 700;
-        }
-        
-        /* Main Content */
-        main {
-            background: var(--color-surface);
-        }
-        
-        section {
-            padding: 3rem 1rem;
-        }
-        
-        @media (min-width: 768px) {
-            section {
-                padding: 4rem 2rem;
-            }
-        }
-        
-        /* Mid-Page CTA Block */
-        .mid-cta {
-            background: var(--color-primary);
-            color: white;
-            text-align: center;
-            margin: 3rem 1rem;
-        }
-        
-        @media (min-width: 768px) {
-            .mid-cta {
-                margin: 4rem 2rem;
-            }
-        }
-        
-        .mid-cta-content {
-            max-width: 1280px;
-            margin: 0 auto;
-            padding: 3rem 1rem;
-        }
-        
-        .mid-cta h2 {
-            color: white;
-            margin-bottom: 1rem;
-        }
-        
-        .mid-cta-phone {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin: 1rem 0;
-            color: var(--color-secondary);
-        }
-        
-        @media (min-width: 768px) {
-            .mid-cta-phone {
-                font-size: 3rem;
-            }
-        }
-        
-        .mid-cta .btn {
-            background: var(--color-cta-primary);
-            margin-top: 1.5rem;
-            font-size: 20px;
-        }
-        
-        .mid-cta .btn:hover {
-            background: var(--color-cta-primary-hover);
-        }
-        
-        /* Footer */
-        footer {
-            background: var(--color-primary);
-            color: white;
-            padding: 2rem 1rem;
-        }
-        
-        @media (min-width: 768px) {
-            footer {
-                padding: 3rem 2rem;
-            }
-        }
-        
-        .footer-content {
-            max-width: 1280px;
-            margin: 0 auto;
-        }
-        
-        .footer-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-        
-        @media (min-width: 768px) {
-            .footer-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-        }
-        
-        .footer-section h3 {
-            color: white;
-            font-size: 1.2rem;
-            margin-bottom: 1rem;
-        }
-        
-        .footer-section ul {
-            list-style: none;
-        }
-        
-        .footer-section li {
-            margin-bottom: 0.5rem;
-        }
-        
-        .footer-section a {
-            color: var(--color-secondary);
-        }
-        
-        .footer-section a:hover {
-            color: white;
-        }
-        
-        .footer-nap {
-            font-size: 0.9rem;
-            line-height: 1.8;
-            margin-bottom: 1.5rem;
-        }
-        
-        .footer-phone {
-            font-size: 1.3rem;
-            font-weight: 700;
-            color: var(--color-secondary);
-            margin: 1rem 0;
-        }
-        
-        .footer-divider {
-            border-top: 1px solid rgba(255,255,255,0.2);
-            padding-top: 1.5rem;
-            margin-top: 1.5rem;
-            font-size: 0.85rem;
-            color: rgba(255,255,255,0.8);
-        }
-        
-        .footer-badges {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
-        }
-        
-        .footer-badge {
-            width: 50px;
-            height: 50px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-        }
-        
-        /* Utility Classes */
-        .text-center { text-align: center; }
-        .mt-2 { margin-top: 2rem; }
-        .mb-2 { margin-bottom: 2rem; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ if .Title }}{{ .Title }} | {{ end }}{{ .Site.Title }}</title>
+  <meta name="description" content="{{ .Params.meta_description | default .Site.Params.default_meta_description | default "Fast local pest control with same-day and emergency dispatch in select areas. Call now for immediate help." }}">
+  <link rel="canonical" href="{{ .Permalink }}">
+  <link rel="stylesheet" href="/css/generated-theme.css">
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;padding:0}
+    body{font-family:var(--font-body);color:var(--color-text);background:var(--color-background);line-height:1.5}
+    h1,h2,h3,h4{font-family:var(--font-heading);color:var(--color-primary);line-height:1.2;margin:0 0 .6rem}
+    p{margin:.25rem 0 1rem}a{color:var(--color-primary-dark)}
+    .container{width:min(1200px,100% - 32px);margin-inline:auto}
+    .utility-strip{background:var(--color-primary);color:#fff;padding:.65rem 0;position:sticky;top:0;z-index:60}
+    .utility-inner{display:flex;gap:.75rem;justify-content:space-between;align-items:center;flex-wrap:wrap}
+    .utility-copy{font-weight:700;font-size:.95rem}
+    .chipline{font-size:.85rem;opacity:.95}
+    .cta-call{display:inline-flex;align-items:center;justify-content:center;min-height:60px;padding:0 24px;border-radius:12px;background:var(--color-cta-primary);color:#fff;font-weight:700;font-size:var(--font-size-cta);line-height:1;border:2px solid var(--color-cta-primary-hover);box-shadow:0 8px 20px rgba(0,0,0,.15);text-decoration:none}
+    .cta-call:hover{background:var(--color-cta-primary-hover)}
+    .cta-call:focus{outline:3px solid var(--color-secondary);outline-offset:2px}
+    .cta-call:active{transform:translateY(1px)}
+    .site-header{background:var(--color-surface);border-bottom:1px solid var(--color-border)}
+    .site-header .container{display:flex;justify-content:space-between;align-items:center;padding:14px 0;gap:10px;flex-wrap:wrap}
+    .brand{font-family:var(--font-heading);font-size:1.15rem;font-weight:700;color:var(--color-primary);text-decoration:none}
+    .header-phone{font-weight:700;color:var(--color-text);text-decoration:none}
+    main{padding:18px 0 110px}
+    .footer{background:var(--color-surface);border-top:1px solid var(--color-border);padding:28px 0 110px;font-size:.95rem}
+    .footer-grid{display:grid;gap:16px}
+    .muted{color:var(--color-text-muted)}
+    .sticky-mobile-call{position:fixed;left:0;right:0;bottom:0;background:var(--color-surface);border-top:1px solid var(--color-border);padding:10px 12px calc(10px + env(safe-area-inset-bottom));z-index:80}
+    .sticky-mobile-call .cta-call{width:100%;font-size:18px}
+    .desktop-float{display:none}
+    @media (min-width:480px){.container{width:min(1200px,100% - 36px)}}
+    @media (min-width:768px){h1{font-size:clamp(2.125rem,4vw,3.25rem)}h2{font-size:clamp(1.75rem,3vw,2.5rem)}.footer-grid{grid-template-columns:1.2fr 1fr 1fr}}
+    @media (min-width:1024px){main{padding-bottom:48px}.sticky-mobile-call{display:none}.desktop-float{display:block;position:fixed;right:18px;bottom:20px;z-index:70}.desktop-float .cta-call{min-height:56px;font-size:18px;padding:0 18px}}
+    @media (min-width:1280px){.container{width:min(1200px,100% - 48px)}}
+  </style>
 </head>
 <body>
-    {{ block "sticky-call" . }}
-    <div class="sticky-call-bar">
-        <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn btn-full">
-            📞 Call Now
-        </a>
+  <div class="utility-strip">
+    <div class="container utility-inner">
+      <div>
+        <div class="utility-copy">Need urgent pest help? Call <a href="tel:{{ $phoneTel }}" style="color:#fff">{{ $phoneDisplay }}</a></div>
+        <div class="chipline">24/7 phone support. Same-day appointments in eligible service areas.</div>
+      </div>
+      <a class="cta-call" href="tel:{{ $phoneTel }}">Call Now (24/7)</a>
     </div>
-    {{ end }}
-    
-    {{ block "header" . }}
-    <header>
-        <div class="header-content">
-            <div class="logo">PestControl.Local</div>
-            <div class="header-phone">
-                <span class="header-phone-label">24/7 Local Service</span>
-                <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="header-phone-number">
-                    {{ .Params.phoneNumber }}
-                </a>
-            </div>
-        </div>
-    </header>
-    {{ end }}
-    
-    {{ block "main" . }}
-    <main>
-        {{ .Content }}
-    </main>
-    {{ end }}
-    
-    {{ block "footer" . }}
-    <footer>
-        <div class="footer-content">
-            <div class="footer-grid">
-                <div class="footer-section">
-                    <h3>Contact</h3>
-                    <div class="footer-nap">
-                        <strong>{{ .Params.businessName | default "Local Pest Control" }}</strong><br>
-                        {{ .Params.address }}<br>
-                        <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="footer-phone">
-                            {{ .Params.phoneNumber }}
-                        </a>
-                    </div>
-                    <a href="tel:+1{{ .Params.phoneNumber | replaceRE "[^0-9]" "" }}" class="btn btn-full">
-                        Call Now
-                    </a>
-                </div>
-                
-                <div class="footer-section">
-                    <h3>Service Areas</h3>
-                    <ul>
-                        {{ with .Params.serviceAreas }}
-                            {{ range first 8 . }}
-                                <li><a href="#{{ . | lower | replaceRE " " "-" }}">{{ . }}</a></li>
-                            {{ end }}
-                        {{ end }}
-                    </ul>
-                </div>
-                
-                <div class="footer-section">
-                    <h3>Resources</h3>
-                    <ul>
-                        <li><a href="/">Home</a></li>
-                        <li><a href="/about">About</a></li>
-                        <li><a href="/privacy">Privacy Policy</a></li>
-                        <li><a href="/terms">Terms of Service</a></li>
-                    </ul>
-                </div>
-            </div>
-            
-            <div class="footer-badges">
-                <div class="footer-badge">🏆</div>
-                <div class="footer-badge">⭐</div>
-                <div class="footer-badge">✓</div>
-                <div class="footer-badge">🛡️</div>
-            </div>
-            
-            <div class="footer-divider">
-                &copy; {{ now.Year }} {{ .Params.businessName | default "Local Pest Control" }}. Licensed & Insured. All rights reserved.
-            </div>
-        </div>
-    </footer>
-    {{ end }}
-    
-    {{ block "structured-data" . }}
-    {{ if .Params.structuredData }}
-    <script type="application/ld+json">
-    {{ .Params.structuredData | jsonify | safeJS }}
-    </script>
-    {{ end }}
-    {{ end }}
+  </div>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="{{ "/" | relURL }}">{{ .Site.Params.business_name | default .Site.Title }}</a>
+      <a class="header-phone" href="tel:{{ $phoneTel }}">{{ $phoneDisplay }}</a>
+    </div>
+  </header>
+
+  <main>
+    {{ block "main" . }}{{ end }}
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>{{ .Site.Params.business_name | default .Site.Title }}</strong><br>
+        <span class="muted">{{ .Site.Params.address | default "Service Area Business" }}</span><br>
+        <a href="tel:{{ $phoneTel }}">{{ $phoneDisplay }}</a>
+      </div>
+      <div>
+        <strong>Service Notice</strong>
+        <p class="muted">Service availability, response time, and pricing vary by location, inspection findings, and technician availability.</p>
+      </div>
+      <div>
+        <strong>Compliance</strong>
+        <p class="muted">This website is a local marketing publisher and may route calls to a licensed partner where needed. By calling, you agree to be contacted about requested service.</p>
+      </div>
+    </div>
+  </footer>
+
+  <div class="sticky-mobile-call" aria-label="Sticky mobile call action">
+    <a class="cta-call" href="tel:{{ $phoneTel }}">Call Now (24/7) - {{ $phoneDisplay }}</a>
+  </div>
+
+  <div class="desktop-float" aria-label="Desktop floating call action">
+    <a class="cta-call" href="tel:{{ $phoneTel }}">Call {{ $phoneDisplay }}</a>
+  </div>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": {{ ( .Site.Params.business_name | default .Site.Title ) | jsonify }},
+    "url": {{ .Site.BaseURL | jsonify }},
+    "telephone": {{ $phoneDisplay | jsonify }},
+    "areaServed": {{ ( .Site.Params.area_served | default "Local service area" ) | jsonify }},
+    "description": "Emergency-focused local pest control with call-first dispatch"
+  }
+  </script>
 </body>
 </html>

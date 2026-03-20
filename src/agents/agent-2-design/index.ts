@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { rmSync } from "node:fs";
 import type { LlmClient } from "../../shared/cli/llm-client.js";
 import type { DbClient } from "../../shared/db/client.js";
+import type { ResearchMode } from "../../config/env.js";
 import { DesignSpecSchema } from "../../shared/schemas/design-specs.js";
 import { CopyFrameworkSchema } from "../../shared/schemas/copy-frameworks.js";
 import { eventBus } from "../../shared/events/event-bus.js";
@@ -29,12 +30,64 @@ import {
 } from "./prompts.js";
 import { readResearchFile, validateResearchFile } from "./research-reader.js";
 import { withSelfHealing } from "../../shared/self-healing.js";
+import {
+  loadResearchSnapshot,
+  hydrateResearchSnapshot,
+  saveResearchSnapshot,
+} from "../../shared/research-snapshot-cache.js";
 
 const AGENT2_COMPETITOR_ANALYSIS_TIMEOUT_MS = 420_000;
 const AGENT2_DESIGN_SPEC_TIMEOUT_MS = 180_000;
 const AGENT2_COPY_FRAMEWORK_TIMEOUT_MS = 180_000;
 const AGENT2_SCHEMA_TEMPLATES_TIMEOUT_MS = 120_000;
 const AGENT2_SEASONAL_CALENDAR_TIMEOUT_MS = 180_000;
+const AGENT2_RESEARCH_CACHE_AGENT = "agent-2";
+const AGENT2_RESEARCH_FILES = [
+  "competitors.md",
+  "cro-data.md",
+  "design.md",
+  "copy.md",
+  "schema.md",
+  "seasonal.md",
+] as const;
+
+interface Agent2ResearchPolicy {
+  minValidFiles: number;
+  ttlMs: number;
+  maxDurationMs: number;
+  stallTimeoutMs: number;
+  asyncRefreshOnMiss: boolean;
+}
+
+function getAgent2ResearchPolicy(mode: ResearchMode): Agent2ResearchPolicy {
+  switch (mode) {
+    case "fast":
+      return {
+        minValidFiles: 3,
+        ttlMs: 14 * 24 * 60 * 60 * 1000,
+        maxDurationMs: 12 * 60 * 1000,
+        stallTimeoutMs: 5 * 60 * 1000,
+        asyncRefreshOnMiss: true,
+      };
+    case "deep":
+      return {
+        minValidFiles: 6,
+        ttlMs: 3 * 24 * 60 * 60 * 1000,
+        maxDurationMs: 50 * 60 * 1000,
+        stallTimeoutMs: 15 * 60 * 1000,
+        asyncRefreshOnMiss: false,
+      };
+    case "standard":
+    default:
+      return {
+        minValidFiles: 4,
+        ttlMs: 7 * 24 * 60 * 60 * 1000,
+        maxDurationMs: 30 * 60 * 1000,
+        stallTimeoutMs: 10 * 60 * 1000,
+        asyncRefreshOnMiss: false,
+      };
+  }
+}
 // Internal schema for competitor analysis (not persisted to DB as its own table)
 const CompetitorAnalysisSchema = z.object({
   patterns: z.array(z.object({
@@ -74,6 +127,7 @@ export interface Agent2Config {
   verticalProfile?: VerticalProfile | null;
   forceRefresh?: boolean;
   researchEnabled?: boolean;
+  researchMode?: ResearchMode;
   runId?: string;
 }
 
@@ -296,6 +350,8 @@ export async function runAgent2(
     offerProfile: config.offerProfile,
     verticalProfile: config.verticalProfile,
   };
+  const researchMode: ResearchMode = config.researchMode ?? "standard";
+  const researchPolicy = getAgent2ResearchPolicy(researchMode);
   console.log(`[Agent 2] Design research missing or stale for ${config.niche}, refreshing`);
 
   // Phase 1: Deep research via Agent SDK subagents
@@ -318,7 +374,12 @@ export async function runAgent2(
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Deep research", detail: "Spawning subagents", timestamp: Date.now() });
 
     try {
-      const findings = await runResearchPhase({ niche: config.niche, researchDir });
+      const findings = await runResearchPhase({
+        niche: config.niche,
+        researchDir,
+        maxDurationMs: researchPolicy.maxDurationMs,
+        stallTimeoutMs: researchPolicy.stallTimeoutMs,
+      });
       researchCtx = {
         competitorResearch: findings.competitors,
         croResearch: findings.croData,
@@ -329,8 +390,10 @@ export async function runAgent2(
       };
 
       const validCount = countResearchDocuments(researchCtx);
-      if (validCount === 0) {
-        logDeepResearchDegraded("No valid findings were produced by deep research");
+      if (validCount < researchPolicy.minValidFiles) {
+        logDeepResearchDegraded(
+          `Only ${validCount}/6 valid findings produced (minimum required: ${researchPolicy.minValidFiles})`
+        );
         researchCtx = {};
         return;
       }
@@ -338,6 +401,18 @@ export async function runAgent2(
       await checkpoints.mark("research_complete", {
         competitorsWords: findings.competitors?.split(/\s+/).length ?? 0,
         croWords: findings.croData?.split(/\s+/).length ?? 0,
+      });
+      saveResearchSnapshot({
+        agent: AGENT2_RESEARCH_CACHE_AGENT,
+        niche: config.niche,
+        fingerprintInput: {
+          niche: normalizeNiche(config.niche),
+          offerId: config.offerProfile?.offer_id ?? null,
+          offerConstraints: config.offerProfile?.constraints ?? null,
+          verticalKey: config.verticalProfile?.vertical_key ?? null,
+        },
+        sourceDir: researchDir,
+        files: [...AGENT2_RESEARCH_FILES],
       });
       console.log("[Agent 2] Phase 1 complete");
       eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research complete", detail: "Phase 2: synthesis", timestamp: Date.now() });
@@ -348,9 +423,51 @@ export async function runAgent2(
     }
   };
 
+  const researchFingerprintInput = {
+    niche: normalizeNiche(config.niche),
+    offerId: config.offerProfile?.offer_id ?? null,
+    offerConstraints: config.offerProfile?.constraints ?? null,
+    verticalKey: config.verticalProfile?.vertical_key ?? null,
+  };
+  const snapshot = !config.forceRefresh
+    ? loadResearchSnapshot({
+        agent: AGENT2_RESEARCH_CACHE_AGENT,
+        niche: config.niche,
+        fingerprintInput: researchFingerprintInput,
+        requiredFiles: [...AGENT2_RESEARCH_FILES],
+        ttlMs: researchPolicy.ttlMs,
+        validateFile: validateResearchFile,
+      })
+    : { hit: false, snapshotDir: null, validCount: 0 };
+
+  if (snapshot.hit) {
+    const hydrated = hydrateResearchSnapshot({
+      agent: AGENT2_RESEARCH_CACHE_AGENT,
+      niche: config.niche,
+      fingerprintInput: researchFingerprintInput,
+      destinationDir: researchDir,
+    });
+    const reloaded = loadValidatedResearchContext(researchDir);
+    if (reloaded.validCount > 0) {
+      researchCtx = reloaded.context;
+    }
+    console.log(
+      `[Agent 2] Reused research snapshot (${hydrated.fileCount} files, valid=${snapshot.validCount})`
+    );
+  }
+
   if (config.researchEnabled === false) {
     console.log("[Agent 2] Deep research disabled via config, skipping");
     eventBus.emitEvent({ type: "agent_step", agent: "agent-2", step: "Research skipped", detail: "Disabled via AGENT2_RESEARCH_ENABLED=false", timestamp: Date.now() });
+  } else if (
+    researchPolicy.asyncRefreshOnMiss &&
+    !config.forceRefresh &&
+    (!snapshot.hit || snapshot.validCount < researchPolicy.minValidFiles)
+  ) {
+    console.warn(
+      `[Agent 2] Fast mode cache miss/stale; starting async research refresh and continuing`
+    );
+    void runDeepResearch();
   } else if (!config.forceRefresh && checkpoints.has("research_complete")) {
     console.log("[Agent 2] Reusing checkpointed research findings");
     const reloaded = loadValidatedResearchContext(researchDir);

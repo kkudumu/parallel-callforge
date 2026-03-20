@@ -1,24 +1,24 @@
 :root {
-  --color-primary: #123524;
-  --color-primary-dark: #123524;
-  --color-secondary: #E7D8B1;
-  --color-bg-alt: #FFFDF8;
-  --color-success: #1F2933;
-  --color-cta-primary: #D95F0E;
-  --color-cta-primary-hover: #B94F0A;
-  --color-urgency: #B42318;
-  --color-text: #1F2933;
-  --color-text-muted: #5B6870;
-  --color-trust: #2F7A3E;
-  --color-background: #F7F4EC;
-  --color-surface: #FFFDF8;
+  --color-primary: #0B3C5D;
+  --color-primary-dark: #0B3C5D;
+  --color-secondary: #0E7C86;
+  --color-bg-alt: #FFFFFF;
+  --color-success: #1E293B;
+  --color-cta-primary: #E85D04;
+  --color-cta-primary-hover: #C64A00;
+  --color-urgency: #D7263D;
+  --color-text: #1E293B;
+  --color-text-muted: #475569;
+  --color-trust: #2A9D8F;
+  --color-background: #F7F4EF;
+  --color-surface: #FFFFFF;
   --color-border: #E8E8E8;
-  --font-heading: 'Archivo Narrow', 'Arial Narrow', sans-serif;
-  --font-body: 'Public Sans', 'Helvetica Neue', sans-serif;
+  --font-heading: Sora, 'Barlow Condensed', 'Oswald', sans-serif;
+  --font-body: Source Sans 3, 'Nunito Sans', sans-serif;
   --font-size-body-desktop: 18px;
   --font-size-body-mobile: 16px;
   --font-size-cta: 20px;
-  --bp-mobile: 390px;
+  --bp-mobile: 0px;
   --bp-phablet: 480px;
   --bp-tablet: 768px;
   --bp-laptop: 1024px;
@@ -180,7 +180,7 @@
 .faq-highlight {
   padding: 28px;
   border-radius: 24px;
-  background: linear-gradient(135deg, #E7D8B1 0%, #123524 100%);
+  background: linear-gradient(135deg, #0E7C86 0%, #0B3C5D 100%);
   color: #fff;
 }
 
@@ -195,7 +195,7 @@
 }
 
 .cta-section-premium {
-  background: linear-gradient(135deg, #E7D8B1 0%, #123524 100%);
+  background: linear-gradient(135deg, #0E7C86 0%, #0B3C5D 100%);
 }
 
 .mini-list {

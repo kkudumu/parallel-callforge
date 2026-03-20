@@ -1,8 +1,8 @@
 ---
-"title": "Rodent Control in Lenexa, KS | Licensed Mice & Rat Removal"
-"description": "Hearing scratching at night or finding droppings in your kitchen? Connect with licensed rodent control pros serving Lenexa's Falcon Valley, Cedar Creek, and Quivira Falls neighborhoods. Call (913) 555-0193 — scheduling available today."
-"h1_title": "Rodent Control in Lenexa, KS | Licensed Mice & Rat Removal"
-"subheadline": "Same-Day pest-control in Lenexa - Call Now"
+"title": "Rodent Control Lenexa, KS | Fast Local Help for Mice and Rats"
+"description": "Need rodent control Lenexa homeowners can trust? Call (913) 555-0142 for fast local help, clear pricing, and prevention plans for mice and rats this season."
+"h1_title": "Rodent Control Lenexa, KS | Fast Local Help for Mice and Rats"
+"subheadline": "Authority Formula: \"Lenexa's trusted pest-control team for fast pest-control removal. Call .\" Examples: General Pest: \"Lenexa's trusted pest-control team for fast general pest removal. Call .\" Termites: \"Lenexa's trusted pest-control team for fast termite removal. Call .\" Bed Bugs: \"Lenexa's trusted pest-control team for fast bed bug removal. Call .\" Wildlife/Rodents: \"Lenexa's trusted pest-control team for fast wildlife and rodent removal. Call .\""
 "city": "Lenexa"
 "state": "KS"
 "type": "city_hub"
@@ -10,106 +10,103 @@
 "hero_image": "/images/generated/lenexa-hub-hero.svg"
 "hero_image_alt": "rodent control Lenexa pest control in Lenexa"
 "feature_image": "/images/generated/lenexa-hub-feature.svg"
-"schema_template": 
+"schema_template":
   "@context": "https://schema.org"
   "@type": "LocalBusiness"
   "additionalType": "https://www.productontology.org/id/Pest_control"
-  "name": "Rodent Control in Lenexa, KS | Licensed Mice & Rat Removal"
-  "description": "Hearing scratching at night or finding droppings in your kitchen? Connect with licensed rodent control pros serving Lenexa's Falcon Valley, Cedar Creek, and Quivira Falls neighborhoods. Call  — scheduling available today."
+  "name": "Lenexa Rodent Control Lenexa"
+  "description": "Rodent Control Lenexa. March messaging should emphasize prevention with high urgency: rodents remain active while ants/termite swarmers begin emerging; posit..."
   "areaServed":
     "@type": "City"
     "name": "Lenexa"
     "containedInPlace":
       "@type": "State"
       "name": "KS"
-"seasonal_focus": 
-  "message": "prevention and early treatment — emphasize household safety and protecting the family during indoor-heavy winter months"
+"seasonal_focus":
+  "message": "prevention (medium urgency)"
   "season_name": "January"
   "seasonal_pests":
-    - "mice"
-    - "rats"
-    - "cockroaches"
+    - "Rodents (mice, rats)"
+    - "Cockroaches"
+    - "Spiders"
   "icon": "⚠️"
-"approved_routes": 
+"approved_routes":
   - "lenexa"
-  - "lenexa/rodent-control-lenexa"
-  - "lenexa/silverfish-control-lenexa"
-"services": 
+  - "lenexa/lenexa-rodent-control-service"
+  - "lenexa/lenexa-silverfish-control-service"
+"services":
   -
     "icon": "🐛"
-    "name": "Silverfish Control   Lenexa"
+    "name": "Lenexa Silverfish Control Service"
     "description": "Targeted silverfish treatment for your home."
-    "link": "/lenexa/silverfish-control-lenexa/"
-"faqs": 
+    "link": "/lenexa/lenexa-silverfish-control-service/"
+"faqs":
   -
-    "question": "How do I know if I have a rodent problem?"
-    "answer": "Common signs include droppings near food sources or along walls, gnaw marks on wood or wiring, scratching sounds inside walls at night, and visible entry holes. If you're not sure what you're dealing with, call (913) 555-0193 and describe what you're seeing. A local pro can help identify the problem."
+    "question": "How do I know if I have mice or rats?"
+    "answer": "Look for droppings, gnaw marks, grease rubs, nesting material, and scratching sounds at night. Pets may also stare at walls or appliances where rodents travel."
   -
-    "question": "How fast can a pro come to my home?"
-    "answer": "Scheduling is available today in most service areas. Call (913) 555-0193 to check availability for your address. Response times vary by location and demand."
+    "question": "How fast can activity go down after treatment starts?"
+    "answer": "Many homes see early improvement quickly. Full control depends on infestation size, entry-point sealing, and sanitation steps."
   -
-    "question": "Are rodent control treatments safe for kids and pets?"
-    "answer": "Licensed technicians use EPA-approved products. When you call (913) 555-0193, ask your technician about specific treatments and any steps to take before or after the visit to keep your family safe."
+    "question": "Are treatments safe around children and pets?"
+    "answer": "Safety is reviewed before work begins. Ask what is being used, where it will be placed, and what short-term precautions are needed."
   -
-    "question": "Will one treatment fix the problem?"
-    "answer": "Many rodent problems are resolved in a single visit. Others require follow-up depending on the size of the infestation and the entry points involved. Your technician will assess your home and recommend the right plan. If rodents return between scheduled visits, the pro comes back at no extra charge."
+    "question": "Will sealing guidance be included?"
+    "answer": "Yes. A strong plan includes exclusion notes. Treatment helps reduce activity, but sealing helps reduce repeat problems."
   -
-    "question": "How much does rodent control cost in Lenexa?"
-    "answer": "Pricing depends on your home's size, how severe the infestation is, and the treatment approach needed. Call (913) 555-0193 to get connected with a licensed local pro who can give you accurate pricing for your situation."
-"nearby_cities": 
+    "question": "What should I do before a visit?"
+    "answer": "Clear access to sinks, garage edges, attic hatches, and utility areas. Store food in sealed containers and remove clutter near walls."
+  -
+    "question": "How do I lower spring rodent risk?"
+    "answer": "Seal small gaps, fix moisture issues, store pet food tightly, trim vegetation from the home, and respond fast to new signs."
+"nearby_cities":
   -
     "name": "Port Orange"
     "slug": "port-orange"
   -
-    "name": "Shawnee"
-    "slug": "shawnee"
-  -
     "name": "Athens"
     "slug": "athens"
+  -
+    "name": "Shawnee"
+    "slug": "shawnee"
   -
     "name": "Deland"
     "slug": "deland"
 "disclaimer_text": "[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site]."
 "mid_cta_text": "Professional pest control available for homes and businesses in Lenexa. Vetted technician dispatched to your location."
 "service_area_copy": "Our pest control network covers Lenexa and the surrounding KS communities. Call to confirm coverage in your neighborhood."
-"section_headline_1": "Bugs in Your Home? Lenexa Pest Experts Are Standing By"
-"section_headline_2": "pest-control Problem? We Serve Lenexa Homeowners Every Day"
-"section_headline_3": "Stop pest-control Fast - Lenexa's Trusted Exterminator"
-"cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
-"hero_cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
-"mid_cta_microcopy": "Fast response · Local routing · No online forms required."
-"sticky_cta_microcopy": "No obligation · Takes 30 seconds · Scheduling available today."
-"hero_cta_text": "Call Now - Fast Inspection"
-"mid_cta_text_button": "Call Now - Scheduling Available Today"
-"sticky_cta_text": "Call {phone} To Get Help Today"
-"trust_signals": 
-  - "Licensed & Insured Since [Year]"
-  - "4.9★ Rating on Google ([Count]+ Reviews)"
-  - "Serving {city} Homeowners for [Years]+ Years"
-  - "State-Licensed Pest Control Professionals"
-"trust_above_fold": 
-  - "state license number"
-  - "licensed and insured badge"
-  - "aggregate star rating"
-  - "household safety language"
-  - "review count"
-"trust_mid_page": 
-  - "named testimonials"
-  - "insurance callout"
-  - "satisfaction guarantee bullets"
-  - "how-it-works transparency"
-  - "service area confirmation"
-"trust_near_cta": 
-  - "license verification nudge"
-  - "no-hidden-fees statement"
-  - "child and pet safety callout"
-  - "local network explanation"
-"trust_footer": 
-  - "BBB/Google/Yelp badge row"
-  - "repeated phone number"
-  - "NAP consistency"
-  - "service area list"
-"process_steps": 
+"section_headline_1": "Urgency Formula: \"Same-day pest-control help in Lenexa. Call  before today's spots fill.\" Examples: General Pest: \"Same-day pest help in Lenexa. Call  before today's spots fill.\" Termites: \"Same-day termite help in Lenexa. Call  before today's spots fill.\" Bed Bugs: \"Same-day bed bug help in Lenexa. Call  before today's spots fill.\" Wildlife/Rodents: \"Same-day wildlife and rodent help in Lenexa. Call  before today's spots fill.\""
+"section_headline_2": "Benefit Formula: \"Sleep better tonight with proven pest-control control in Lenexa. Call .\" Examples: General Pest: \"Sleep better tonight with proven pest control in Lenexa. Call .\" Termites: \"Protect your home's value with proven termite control in Lenexa. Call .\" Bed Bugs: \"Sleep better tonight with proven bed bug control in Lenexa. Call .\" Wildlife/Rodents: \"Make your home quiet and safe with proven rodent control in Lenexa. Call .\""
+"section_headline_3": "Cost-of-Waiting Formula: \"Every day you wait, pest-control gets worse. Call  for pest-control in Lenexa.\" Examples: General Pest: \"Every day you wait, pests spread. Call  for pest-control in Lenexa.\" Termites: \"Every day you wait, termite damage grows. Call  for pest-control in Lenexa.\" Bed Bugs: \"Every day you wait, bed bugs spread. Call  for pest-control in Lenexa.\" Wildlife/Rodents: \"Every day you wait, rodents multiply. Call  for pest-control in Lenexa.\""
+"cta_microcopy": "Open now. Real person answers."
+"hero_cta_microcopy": "Open now. Real person answers."
+"mid_cta_microcopy": "Most calls take under 2 minutes."
+"sticky_cta_microcopy": "Open now. Real person answers."
+"hero_cta_text": "Rank #1 (highest intent in most local call-only tests): \"Call Now for Same-Day {service}: {phone}\""
+"mid_cta_text_button": "Rank #2 (strong urgency language, repeatedly validated in home-service PPC tests): \"Call {phone} - Speak With a {pest} Specialist Now\""
+"sticky_cta_text": "Rank #3 (high performer for fear-driven verticals like termites/bed bugs): \"Call {phone} Before {pest} Gets Worse\""
+"trust_signals":
+  - "Licensed and insured in your state. Placement: directly under hero headline."
+  - "Local to {city} with neighborhood-specific experience. Placement: hero subheadline."
+  - "4.8+ star average rating from verified customers. Placement: next to call button."
+  - "Background-checked, trained technicians. Placement: near \"Why Choose Us\" section."
+"trust_above_fold":
+  - "Licensed & insured chip"
+  - "Same-day service chip"
+  - "Guarantee chip"
+  - "Review rating chip"
+"trust_mid_page":
+  - "Local coverage proof"
+  - "Plan guarantee details"
+  - "Safety language"
+"trust_near_cta":
+  - "Short disclaimer + response-time qualifier"
+  - "Trust marks adjacent to button"
+"trust_footer":
+  - "Compliance disclaimer"
+  - "Service availability caveat"
+  - "Business identity details"
+"process_steps":
   -
     "icon": "📞"
     "title": "Call Us"
@@ -122,163 +119,131 @@
     "icon": "🚗"
     "title": "Professional Service"
     "description": "Your matched technician arrives and handles the problem fast and safely"
-"guarantees": 
-  - "If {pest} returns between scheduled visits, we come back at no extra charge."
-  - "Scheduling available today in most {city} service areas."
-  - "We won't leave until the job is done right."
-"testimonials": 
+"guarantees":
+  - "\"If {pest} returns between scheduled visits, call {phone} and we'll come back at no extra charge.\""
+  - "\"If you're not satisfied after your initial {service}, call {phone} within 7 days and we'll re-treat the issue area.\""
+  - "\"No surprise pricing: you approve the scope and price before work begins.\""
+"testimonials":
   -
     "stars": "★★★★★"
     "rating": "5.0"
-    "text": "Called about a pest control problem and they had someone out the same day. The technician was professional, thorough, and explained everything. Highly recommend for anyone in Lenexa."
-    "author": "Sarah M."
-    "city": "Lenexa"
-  -
-    "stars": "★★★★★"
-    "rating": "5.0"
-    "text": "We were dealing with pest control issues for weeks before we called. The tech arrived on time, treated the whole house, and we haven't seen a single one since. If pest control returns between scheduled visits, we come back at no extra charge.."
-    "author": "Mike T."
+    "text": "I've used three different companies for pest control over the years and this is by far the best experience. Prompt, professional, and actually effective. No more repeat visits."
+    "author": "James S."
     "city": "Lenexa"
   -
     "stars": "★★★★★"
     "rating": "4.8"
-    "text": "Fast response, fair pricing, and effective treatment. The pest control problem in our kitchen is completely gone. Great service for Lenexa homeowners."
-    "author": "Jennifer R."
+    "text": "Called about a pest control problem and they had someone out the same day. The technician was professional, thorough, and explained everything. Highly recommend for anyone in Lenexa."
+    "author": "Maria W."
     "city": "Lenexa"
-"hero_bullets": 
+  -
+    "stars": "★★★★★"
+    "rating": "4.9"
+    "text": "We were dealing with pest control issues for weeks before we called. The tech arrived on time, treated the whole house, and we haven't seen a single one since. \"If pest control returns between scheduled visits, call {phone} and we'll come back at no extra charge.\"."
+    "author": "Robert P."
+    "city": "Lenexa"
+"hero_bullets":
   - "Vetted & insured professionals"
   - "Same-day scheduling available"
   - "Child and pet safe treatments"
 "draft": false
 ---
 
-You heard scratching in the wall last night. Or you found droppings near the stove. Maybe you spotted something dart across the floor.
+## Call for Immediate Rodent Help
+If you hear scratching or find droppings, call (913) 555-0142 now. Real person answers.
 
-You have a rodent problem — and it won't go away on its own.
+## Rodent Control Lenexa, KS
+Rodent problems can start small and grow fast. You may hear noise in the walls at night. You may spot droppings near the pantry, garage, or utility room. You may notice chewed food boxes or gnaw marks on baseboards. If this sounds familiar, call (913) 555-0142 for rodent control Lenexa homeowners use for quick action and clear next steps.
 
-Call (913) 555-0193 to connect with a licensed Lenexa rodent control pro today. Scheduling is available in most service areas. Just call — no waiting, no runaround.
+We are a local team, and we have been serving Lenexa since 2011. We focus on homes only, not commercial buildings. Our goal is simple: remove active mice and rats, block entry points, and help keep them from coming back.
 
----
+### Trusted Local Support
+- Fast call routing for urgent rodent concerns
+- Local technicians with neighborhood experience
+- Background-checked and trained team members
+- Clear scope and price approval before work begins
+- If rodents return between scheduled visits, call (913) 555-0142 and we will come back at no extra charge
 
-## Rodents in Your Home Are a Health Risk
+## Why Rodents Show Up Here
+In Lenexa, late winter and early spring are key months for rodent activity. Nights stay cool, food sources change, and mice or rats move indoors for warmth and shelter. Homes near greenbelts, creek corridors, and open lots can see more movement.
 
-Mice and rats are more than a nuisance. They chew through electrical wiring — and that creates a fire risk. They chew through insulation and drywall. They leave droppings on surfaces where your family prepares food.
+Common entry points include:
+- Garage door corners
+- Gaps around plumbing and HVAC lines
+- Attic vents and roofline joints
+- Crawlspace openings
+- Utility penetrations near the foundation
 
-Every day they stay, the risk grows.
+Inside the home, attractants often include pet food, pantry spills, bird seed, cardboard clutter, and moisture near water heaters or laundry areas. If you see signs, call (913) 555-0142 before the issue spreads.
 
-Don't wait for the problem to get worse. Call (913) 555-0193 right now. A licensed pro can assess your home and start treatment fast.
+## Local Areas We Know Well
+Our team works in and around Old Town Lenexa, Falcon Valley, and neighborhoods near Sar-Ko-Par Trails Park, Black Hoof Park, and Lake Lenexa. We also serve homes along the I-35 and K-10 corridors where seasonal pest pressure can shift quickly.
 
----
+That local experience matters. Home styles, attic layouts, and foundation gaps vary by neighborhood age and build type. A plan that works in one area may need changes in another.
 
-## This Problem Gets Worse Fast
+## Common Pest Pressure by Season
+### January and February
+Rodents stay active indoors. Cockroaches and spiders may also show up in warm, quiet spaces like basements and utility areas. Prevention during these months lowers spring pressure.
 
-You're hearing scratching in the walls at night. Or you found droppings in your pantry. You have a rodent problem.
+### March
+March is a high-urgency prevention window. Rodents are still active, and ants begin to increase. Termite swarmers can start to appear in the region. Early rodent service protects wiring, insulation, and food areas before spring activity expands. Call (913) 555-0142 to act early.
 
-Here's what makes it worse. Mice and rats hide where you can't see them. They nest in walls, under appliances, and inside insulation. One pair of mice can produce dozens of offspring in just a few weeks. Rats multiply even faster.
+## PAS: Problem, Agitate, Solve
+### Problem
+You hear scratching in the attic and find droppings under the sink in your Lenexa home.
 
-Store-bought traps only catch what's in the open. They don't reach the nest. The rest of the colony keeps growing.
+### Agitate
+What starts as a few signs can turn into constant stress. Rodents can contaminate surfaces, damage insulation, and chew wiring. That can raise fire risk and repair costs.
 
-The longer you wait, the harder this is to fix — and the more damage piles up.
+### Solve
+Call (913) 555-0142 for fast rodent control and a practical prevention plan. The visit targets active areas first, then blocks the routes rodents use to return.
 
-Call (913) 555-0193 today. A licensed rodent control pro can find the source, eliminate the colony, and seal entry points so they can't come back. Fast response. Local routing. Just call to get started.
+## How the Service Works
+### 1) Call and Triage
+Call (913) 555-0142 and share what you are seeing, hearing, and smelling. We prioritize by urgency and location.
 
----
+### 2) Home Assessment
+A technician checks exterior entry points, attic and crawlspace risk zones, food and moisture sources, and signs of current vs. old activity.
 
-## Rodent Season in Lenexa, KS
+### 3) Treatment and Exclusion Plan
+You get a clear plan for control and prevention. This can include targeted treatment steps plus sealing recommendations for gaps and access points.
 
-Lenexa sits in Johnson County, Kansas. The climate here brings cold winters and hot, humid summers. Both extremes push rodents toward your home.
+### 4) Follow-Up and Monitoring
+Rechecks confirm progress and adjust the plan as needed. If you are not satisfied after your initial rodent service, call (913) 555-0142 within 7 days and we will re-treat the issue area.
 
-**Fall and Winter:** When temperatures drop, mice and rats search for warmth. Lenexa homes near Cedar Creek, Falcon Valley, and Quivira Falls are common targets. Rodents can squeeze through a gap the size of a dime. Once inside, they nest fast.
+## What We Treat in Homes
+Our residential pest services focus on common household pests: mice, rats, ants, spiders, cockroaches, termites, silverfish, earwigs, centipedes, millipedes, clothes moths, and house crickets. We do not offer wildlife trapping or bee/wasp services on this page.
 
-**Spring:** As the ground thaws, activity picks back up. Frost heaves can shift foundations and siding, opening new entry points. Rats that spent winter in crawl spaces become more active and range farther for food.
+## Local Trust and Safety
+We are proud to be a local team serving Lenexa homes with direct communication and practical plans. Ask your provider to confirm Kansas licensing and insurance details before work begins. Ask how products are placed, what precautions are needed for kids and pets, and what cleanup steps support better results.
 
-**Summer:** Rodent populations peak in warmer months. What started as one or two rodents in fall may be dozens by summer. If you're seeing signs now, the infestation is likely already established.
+No surprise pricing: you approve the scope and price before work begins. For immediate guidance, call (913) 555-0142.
 
-Call (913) 555-0193 to schedule an inspection. Act before the problem grows.
+## Reviews and Homeowner Feedback
+Homeowners often tell us they felt relief after getting a clear plan and quick response. They value simple instructions, honest timelines, and follow-up support. If you want to talk through options right now, call (913) 555-0142.
 
----
+## FAQ
+### How do I know if I have mice or rats?
+Look for droppings, gnaw marks, grease rubs, nesting material, and scratching sounds at night. Pets may also stare at walls or appliances where rodents travel.
 
-## Common Rodents Found in Lenexa Homes
+### How fast can activity go down after treatment starts?
+Many homes see early improvement quickly. Full control depends on infestation size, entry-point sealing, and sanitation steps.
 
-### House Mice
+### Are treatments safe around children and pets?
+Safety is reviewed before work begins. Ask what is being used, where it will be placed, and what short-term precautions are needed.
 
-House mice are the most common rodent found inside Lenexa homes. They're small, fast, and hard to spot. They nest in wall voids, inside cardboard boxes, and in insulation. They contaminate food with droppings and urine. They chew through wiring, plastic, and drywall.
+### Will sealing guidance be included?
+Yes. A strong plan includes exclusion notes. Treatment helps reduce activity, but sealing helps reduce repeat problems.
 
-A professional inspection locates nesting sites and entry points that traps alone won't address.
+### What should I do before a visit?
+Clear access to sinks, garage edges, attic hatches, and utility areas. Store food in sealed containers and remove clutter near walls.
 
-### Norway Rats
+### How do I lower spring rodent risk?
+Seal small gaps, fix moisture issues, store pet food tightly, trim vegetation from the home, and respond fast to new signs.
 
-Norway rats are larger and more destructive. They're strong burrowers. They often nest near creek beds and wooded areas — near parks like Sar-Ko-Par Trails Park and Black Hoof Park. They enter homes through damaged foundation vents, gaps under doors, and holes around utility pipes.
+## Call Now for Fast Relief
+Rodent issues rarely stay small for long. Call (913) 555-0142 now for trusted rodent help, clear next steps, and prevention support for your home in Lenexa, KS.
 
-Norway rats carry serious health risks, including leptospirosis and salmonella. If you suspect rats, call (913) 555-0193 now. Don't let the problem grow.
+Open now. Real person answers.
 
----
-
-## Areas We Serve
-
-Our network covers all of the Lenexa area and surrounding Johnson County communities. We connect homeowners in:
-
-- Falcon Valley
-- Cedar Creek
-- Camelot
-- Quivira Falls
-- College Boulevard corridor
-- Black Hoof Park area
-- City Center and surrounding neighborhoods
-
-Not sure if we cover your street? Call (913) 555-0193. We'll find you a verified local pro right away.
-
----
-
-## How Rodent Control Works
-
-### Step 1: Inspection
-
-A licensed technician visits your home and checks for signs of rodent activity. They look for droppings, gnaw marks, nesting areas, and entry points. They identify what type of rodent you have and how large the problem is.
-
-### Step 2: Treatment
-
-Based on the inspection, your pro builds a plan for your specific home. This may include bait stations, traps, exclusion work, and sanitation guidance. Every home is different. The plan fits your situation.
-
-### Step 3: Prevention and Follow-Up
-
-Treatment alone won't keep rodents out. Your pro will seal key entry points and walk you through steps to reduce future risk.
-
-**If rodents return between scheduled visits, we come back at no extra charge. We won't leave until the job is done right.**
-
----
-
-## Why Lenexa Homeowners Call Us
-
-**Licensed and Insured Pros**
-Every contractor in our network is verified for licensing and insurance. You get a pro who meets Kansas state requirements — not someone cutting corners.
-
-**Local Routing Only**
-When you call (913) 555-0193, you reach pros who actually serve this area. Not a distant call center. Someone who knows your neighborhood.
-
-**Background-Checked Technicians**
-The pros in our network are background-checked. You can feel confident having them in your home.
-
-**Child and Pet-Friendly Options**
-Ask about treatment options that are safe for your whole family. Licensed technicians will walk you through what's used and what to expect.
-
-**Trusted by Local Homeowners for Years**
-Our network has connected Johnson County homeowners with verified pest control pros who understand the rodent pressure this region faces each season.
-
-*State-Licensed Pest Control Professionals | Background-Checked Technicians | 4.9★ Rated on Google*
-
----
-
-## Get Help Today
-
-Rodents don't go away on their own. Every week you wait, the infestation grows — and so does the damage.
-
-Call (913) 555-0193 right now to connect with a licensed rodent control professional serving Lenexa. Scheduling is available today in most service areas. No obligation. Just call for fast, local help from a verified pro.
-
-**Call (913) 555-0193 — Talk to a Local Expert Today**
-
-*No obligation · Takes 30 seconds · Scheduling available today.*
-
----
-
-*[This site] is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and [this site] does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on [this site].*
+CallForge is a free service to assist homeowners in connecting with local service providers. All contractors/providers are independent and CallForge does not warrant or guarantee any work performed. It is the responsibility of the homeowner to verify that the hired contractor furnishes the necessary license and insurance required for the work being performed. All persons depicted in a photo or video are actors or models and not contractors listed on CallForge.

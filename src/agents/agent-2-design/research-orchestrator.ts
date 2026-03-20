@@ -1,5 +1,11 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { getEnv } from "../../config/env.js";
+import { runDistributedResearch } from "../../shared/cli/research-distributor.js";
+import type {
+  ResearchProvider,
+  ResearchQualityThresholds,
+} from "../../shared/cli/deep-research-runner.js";
 import {
   buildCompetitorAnalystPrompt,
   buildCroResearcherPrompt,
@@ -31,11 +37,18 @@ export interface ResearchFindings {
 export interface ResearchPhaseConfig {
   niche: string;
   researchDir: string;
+  stallTimeoutMs?: number;
+  maxDurationMs?: number;
+  heartbeatMs?: number;
 }
 
-async function loadAgentSdkQuery() {
-  const sdk = await import("@anthropic-ai/claude-agent-sdk");
-  return sdk.query;
+function parseProviderSplit(split: string): ResearchProvider[] {
+  return split
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is ResearchProvider =>
+      s === "claude" || s === "codex" || s === "gemini"
+    );
 }
 
 export async function runResearchPhase(
@@ -45,71 +58,98 @@ export async function runResearchPhase(
   console.log(`[Agent 2][Research] Starting research phase for "${cfg.niche}"`);
   console.log(`[Agent 2][Research] Research dir: ${cfg.researchDir}`);
 
-  const orchestratorPrompt = buildOrchestratorPrompt(cfg);
-  const query = await loadAgentSdkQuery();
-
-  for await (const message of query({
-    prompt: orchestratorPrompt,
-    options: {
-      allowedTools: ["Task", "Write", "Read", "WebSearch", "WebFetch"],
-      agents: {
-        "competitor-analyzer": {
-          description: "Visits real pest control websites across US markets and extracts CTA patterns, layout order, trust signals, and mobile behavior. Use for competitor research.",
-          prompt: buildCompetitorAnalystPrompt(cfg),
-          tools: ["WebSearch", "WebFetch", "Write"],
-          model: "sonnet",
-        },
-        "cro-researcher": {
-          description: "Finds CRO case studies, A/B test results, and conversion benchmarks for local service landing pages. Use for conversion rate data.",
-          prompt: buildCroResearcherPrompt(cfg),
-          tools: ["WebSearch", "WebFetch", "Write"],
-          model: "sonnet",
-        },
-        "design-researcher": {
-          description: "Researches visual design data — colors, typography, layout, mobile UX, page speed impact on conversions. Use for design specifications.",
-          prompt: buildDesignResearcherPrompt(cfg),
-          tools: ["WebSearch", "WebFetch", "Write"],
-          model: "sonnet",
-        },
-        "copy-researcher": {
-          description: "Finds copywriting performance data — headline formulas, CTA text tests, reading level research, PAS scripts. Use for copy framework.",
-          prompt: buildCopyResearcherPrompt(cfg),
-          tools: ["WebSearch", "WebFetch", "Write"],
-          model: "sonnet",
-        },
-        "schema-researcher": {
-          description: "Researches JSON-LD schema markup for local service businesses without a Google Business Profile. Use for schema templates.",
-          prompt: buildSchemaResearcherPrompt(cfg),
-          tools: ["WebSearch", "WebFetch", "Write"],
-          model: "sonnet",
-        },
-        "seasonal-researcher": {
-          description: "Finds real pest activity data by month and region, and marketing spend benchmarks. Use for seasonal calendar.",
-          prompt: buildSeasonalResearcherPrompt(cfg),
-          tools: ["WebSearch", "WebFetch", "Write"],
-          model: "sonnet",
-        },
-      },
-    },
-  })) {
-    const msg = message as any;
-
-    // Log subagent invocations
-    for (const block of msg.message?.content ?? []) {
-      if (block.type === "tool_use" && block.name === "Task") {
-        console.log(`[Agent 2][Research] Spawning subagent: ${block.input?.subagent_type ?? "unknown"}`);
-      }
-    }
-
-    // Check for error
-    if ("is_error" in msg && msg.is_error) {
-      throw new Error(`Research phase failed: ${msg.result}`);
-    }
-
-    if ("result" in msg) {
-      console.log(`[Agent 2][Research] Orchestrator complete`);
-    }
+  const env = getEnv();
+  const providers = parseProviderSplit(env.RESEARCH_PROVIDER_SPLIT);
+  if (providers.length === 0) {
+    throw new Error(
+      "[Agent 2][Research] No valid providers in RESEARCH_PROVIDER_SPLIT"
+    );
   }
+
+  const thresholds: ResearchQualityThresholds = {
+    minSources: env.RESEARCH_MIN_SOURCES,
+    minWords: env.RESEARCH_MIN_WORDS,
+    minFindings: env.RESEARCH_MIN_FINDINGS,
+  };
+
+  const promptCfg = { niche: cfg.niche, researchDir: cfg.researchDir };
+
+  const jobs = [
+    {
+      filename: "competitors.md",
+      topic: "Competitor",
+      prompt: buildCompetitorAnalystPrompt(promptCfg),
+      focus: "CTA patterns, layout order, trust signals, mobile behavior",
+      researchDir: cfg.researchDir,
+      niche: cfg.niche,
+    },
+    {
+      filename: "cro-data.md",
+      topic: "CRO Data",
+      prompt: buildCroResearcherPrompt(promptCfg),
+      focus: "A/B test results, conversion lift patterns, call CTA performance",
+      researchDir: cfg.researchDir,
+      niche: cfg.niche,
+    },
+    {
+      filename: "design.md",
+      topic: "Design",
+      prompt: buildDesignResearcherPrompt(promptCfg),
+      focus: "color/typography/layout decisions tied to conversion impact",
+      researchDir: cfg.researchDir,
+      niche: cfg.niche,
+    },
+    {
+      filename: "copy.md",
+      topic: "Copy",
+      prompt: buildCopyResearcherPrompt(promptCfg),
+      focus: "headline formulas, CTA wording tests, reading-level effects",
+      researchDir: cfg.researchDir,
+      niche: cfg.niche,
+    },
+    {
+      filename: "schema.md",
+      topic: "Schema",
+      prompt: buildSchemaResearcherPrompt(promptCfg),
+      focus: "JSON-LD for local service sites, valid schema combinations",
+      researchDir: cfg.researchDir,
+      niche: cfg.niche,
+    },
+    {
+      filename: "seasonal.md",
+      topic: "Seasonal",
+      prompt: buildSeasonalResearcherPrompt(promptCfg),
+      focus: "monthly/regional demand patterns, budget timing, seasonality",
+      researchDir: cfg.researchDir,
+      niche: cfg.niche,
+    },
+  ];
+
+  console.log(
+    `[Agent 2][Research] Distributing ${jobs.length} jobs across [${providers.join(", ")}]`
+  );
+
+  const results = await runDistributedResearch({
+    jobs,
+    providers,
+    validateContent: validateResearchFile,
+    thresholds,
+    logPrefix: "[Agent 2][Research]",
+    maxDeepeningPasses: env.RESEARCH_MAX_DEEPENING_PASSES,
+    maxConcurrentPerProvider: env.RESEARCH_PROVIDER_MAX_CONCURRENCY,
+    estimatedTokensPerPass: env.RESEARCH_EST_TOKENS_PER_PASS,
+    maxEstimatedTokensPerJob: env.RESEARCH_MAX_EST_TOKENS_PER_JOB,
+    cliPaths: {
+      claude: env.CLAUDE_CLI_PATH,
+      codex: env.CODEX_CLI_PATH,
+      gemini: env.GEMINI_CLI_PATH,
+    },
+  });
+
+  const successCount = results.filter((r) => r.success).length;
+  console.log(
+    `[Agent 2][Research] Distribution complete: ${successCount}/${results.length} jobs met thresholds`
+  );
 
   return readResearchFindings(cfg.researchDir);
 }
@@ -119,14 +159,20 @@ function readResearchFindings(researchDir: string): ResearchFindings {
     const path = join(researchDir, filename);
     const content = readResearchFile(path);
     if (!content) {
-      console.warn(`[Agent 2][Research] Warning: ${filename} not found after research`);
+      console.warn(
+        `[Agent 2][Research] Warning: ${filename} not found after research`
+      );
       return null;
     }
     if (!validateResearchFile(content)) {
-      console.warn(`[Agent 2][Research] Warning: ${filename} failed validation (too short or missing Source Index)`);
+      console.warn(
+        `[Agent 2][Research] Warning: ${filename} failed validation (too short or missing Source Index)`
+      );
       return null;
     }
-    console.log(`[Agent 2][Research] Loaded ${filename} (${content.split(/\s+/).length} words)`);
+    console.log(
+      `[Agent 2][Research] Loaded ${filename} (${content.split(/\s+/).length} words)`
+    );
     return content;
   };
 
@@ -138,26 +184,4 @@ function readResearchFindings(researchDir: string): ResearchFindings {
     schema: read("schema.md"),
     seasonal: read("seasonal.md"),
   };
-}
-
-function buildOrchestratorPrompt(cfg: ResearchPhaseConfig): string {
-  return `You are the lead research orchestrator for a ${cfg.niche} landing page design system.
-
-Your job: spawn all 6 research subagents IN PARALLEL using the Task tool simultaneously. Do not run them sequentially — call all 6 Task tools in the same response.
-
-Research directory: ${cfg.researchDir}
-
-The 6 subagents and what they do:
-- competitor-analyzer: visits real ${cfg.niche} websites, extracts CTA and layout patterns
-- cro-researcher: finds A/B test data and conversion benchmarks for local services
-- design-researcher: researches color, typography, mobile UX conversion data
-- copy-researcher: finds headline formula and CTA copy performance data
-- schema-researcher: researches JSON-LD schema for local service businesses
-- seasonal-researcher: finds pest activity data and marketing calendar benchmarks
-
-CRITICAL: Invoke all 6 simultaneously. Each will write its findings to a .md file in ${cfg.researchDir}.
-
-Once all 6 complete, use the Read tool to verify each file exists and has content. If any file is missing or appears thin (under 500 words), note it in your response but do not re-spawn — the calling code will handle it.
-
-Start wide: instruct each subagent to begin with broad search terms before drilling into specifics. Quality over speed — we want real data, not the first results found.`;
 }

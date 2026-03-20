@@ -12,6 +12,7 @@ export interface LlmCallOptions<T extends z.ZodType> {
   model?: ModelTier;
   logLabel?: string;
   onOutput?: (chunk: string, stream: "stdout" | "stderr") => void;
+  provider?: "claude" | "codex" | "gemini";
 }
 
 export interface LlmClient {
@@ -369,6 +370,109 @@ export function createLlmClient(
 
       progressLogger.finish("failed");
       throw new Error(`All providers failed. ${failures.join(". ")}`);
+    },
+  };
+}
+
+export function createRoundRobinLlmClient(
+  providers: { claude: CliProvider; codex: CliProvider; gemini: CliProvider },
+  limiters: RateLimiters
+): LlmClient {
+  const providerOrder: Array<{
+    name: "claude" | "codex" | "gemini";
+    provider: CliProvider;
+    limiter: RateLimiters[keyof RateLimiters];
+  }> = [
+    { name: "claude", provider: providers.claude, limiter: limiters.claude },
+    { name: "codex", provider: providers.codex, limiter: limiters.codex },
+    { name: "gemini", provider: providers.gemini, limiter: limiters.gemini },
+  ];
+
+  let callCounter = 0;
+
+  return {
+    async call<T extends z.ZodType>(options: LlmCallOptions<T>): Promise<z.infer<T>> {
+      const {
+        prompt,
+        schema,
+        maxRetries = 3,
+        maxTurns,
+        timeoutMs,
+        model,
+        logLabel,
+        onOutput,
+        provider: forcedProvider,
+      } = options;
+
+      const progressLogger = createProgressLogger(logLabel, model, onOutput);
+
+      // Determine starting provider: forced or round-robin
+      let startIdx: number;
+      if (forcedProvider) {
+        startIdx = providerOrder.findIndex((p) => p.name === forcedProvider);
+        if (startIdx === -1) startIdx = 0;
+      } else {
+        startIdx = callCounter % providerOrder.length;
+        callCounter++;
+      }
+
+      const selected = providerOrder[startIdx];
+      const callNum = callCounter;
+      console.log(
+        `[RoundRobin] call #${callNum} → ${selected.name}${forcedProvider ? " (forced)" : ""}`
+      );
+
+      // Build waterfall starting from selected provider
+      const orderedProviders: typeof providerOrder = [];
+      for (let i = 0; i < providerOrder.length; i++) {
+        orderedProviders.push(
+          providerOrder[(startIdx + i) % providerOrder.length]
+        );
+      }
+
+      const failures: string[] = [];
+
+      for (let i = 0; i < orderedProviders.length; i++) {
+        const current = orderedProviders[i];
+
+        try {
+          const result = await current.limiter.schedule(() =>
+            invokeWithValidation(
+              current.provider,
+              prompt,
+              schema,
+              maxRetries,
+              maxTurns,
+              timeoutMs,
+              model,
+              progressLogger
+            )
+          );
+          progressLogger.finish("completed");
+          return result;
+        } catch (err: any) {
+          const errorSummary = summarizeError(err);
+          const errorDetails = formatErrorDetails(err);
+          failures.push(`${current.name}: ${errorSummary}`);
+          const next = orderedProviders[i + 1];
+          if (next) {
+            console.warn(
+              `[RoundRobin][${current.name}] Failed, falling back to ${next.name}: ${errorSummary}`
+            );
+            if (errorDetails !== errorSummary) {
+              console.warn(
+                `[RoundRobin][${current.name}] Failure details:\n${errorDetails}`
+              );
+            }
+            continue;
+          }
+        }
+      }
+
+      progressLogger.finish("failed");
+      throw new Error(
+        `[RoundRobin] All providers failed. ${failures.join(". ")}`
+      );
     },
   };
 }

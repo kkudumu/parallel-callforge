@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@jest/globals";
-import { detectRateLimit, parseRetryAfter, extractJson } from "./types.js";
+import { detectRateLimit, detectSessionLimit, parseRetryAfter, extractJson } from "./types.js";
 import { isCodexSchemaCompatible } from "./codex-cli.js";
 import { isClaudeSchemaCompatible } from "./claude-cli.js";
 
@@ -14,6 +14,19 @@ describe("CLI utilities", () => {
     it("returns false for non-rate-limit errors", () => {
       expect(detectRateLimit(1, "TypeError: undefined")).toBe(false);
       expect(detectRateLimit(0, "rate limit")).toBe(false);
+    });
+  });
+
+  describe("detectSessionLimit", () => {
+    it("detects usage/session limit messages", () => {
+      expect(detectSessionLimit("Claude session limit reached")).toBe(true);
+      expect(detectSessionLimit("You have reached your usage limit")).toBe(true);
+      expect(detectSessionLimit("quota has been reached")).toBe(true);
+    });
+
+    it("returns false for unrelated errors", () => {
+      expect(detectSessionLimit("TypeError: cannot read property")).toBe(false);
+      expect(detectSessionLimit("network timeout")).toBe(false);
     });
   });
 

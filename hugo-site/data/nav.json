@@ -1,54 +1,62 @@
 {
   "pest_services": [
     {
-      "slug": "rodent-control-lenexa",
-      "name": "Rodent Control   Lenexa"
+      "slug": "port-orange-rodent-control-service",
+      "name": "Port Orange Rodent Control Service"
     },
     {
-      "slug": "silverfish-control-lenexa",
-      "name": "Silverfish Control   Lenexa"
+      "slug": "port-orange-silverfish-control-service",
+      "name": "Port Orange Silverfish Control Service"
     },
     {
-      "slug": "rodent-control",
-      "name": "Rodent Control"
+      "slug": "rodent-control-service-page",
+      "name": "Rodent Control Service Page"
     },
     {
-      "slug": "silverfish-control",
-      "name": "Silverfish Control"
+      "slug": "silverfish-control-service-page",
+      "name": "Silverfish Control Service Page"
     },
     {
-      "slug": "shawnee-rodent-control",
-      "name": "Shawnee Rodent Control"
+      "slug": "rodent-control-shawnee-ks",
+      "name": "Rodent Control   Shawnee, KS"
     },
     {
-      "slug": "shawnee-silverfish-control",
-      "name": "Shawnee Silverfish Control"
+      "slug": "silverfish-control-shawnee-ks",
+      "name": "Silverfish Control   Shawnee, KS"
     },
     {
-      "slug": "rodent-control-services",
-      "name": "Rodent Control Services"
+      "slug": "lenexa-rodent-control-service",
+      "name": "Lenexa Rodent Control Service"
     },
     {
-      "slug": "silverfish-control-services",
-      "name": "Silverfish Control Services"
+      "slug": "lenexa-silverfish-control-service",
+      "name": "Lenexa Silverfish Control Service"
+    },
+    {
+      "slug": "deland-rodent-control-service-page",
+      "name": "Deland Rodent Control Service Page"
+    },
+    {
+      "slug": "deland-silverfish-control-service-page",
+      "name": "Deland Silverfish Control Service Page"
     }
   ],
   "service_cities": [
     {
-      "name": "Lenexa",
-      "slug": "lenexa"
-    },
-    {
       "name": "Port Orange",
       "slug": "port-orange"
+    },
+    {
+      "name": "Athens",
+      "slug": "athens"
     },
     {
       "name": "Shawnee",
       "slug": "shawnee"
     },
     {
-      "name": "Athens",
-      "slug": "athens"
+      "name": "Lenexa",
+      "slug": "lenexa"
     },
     {
       "name": "Deland",

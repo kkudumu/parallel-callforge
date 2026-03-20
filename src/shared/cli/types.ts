@@ -1,5 +1,3 @@
-import type { z } from "zod/v4";
-
 export type ModelTier = "haiku" | "sonnet" | "opus";
 
 export interface CliInvokeOptions {
@@ -32,6 +30,17 @@ export function detectRateLimit(exitCode: number | null, stderr: string): boolea
     /Please try again in/i,
   ];
   return exitCode !== 0 && patterns.some((p) => p.test(stderr));
+}
+
+export function detectSessionLimit(output: string): boolean {
+  const patterns = [
+    /session.?limit/i,
+    /usage.?limit/i,
+    /quota(?:\s+has)?\s+been\s+reached/i,
+    /reached your .*limit/i,
+    /limit (?:resets|will reset)/i,
+  ];
+  return patterns.some((p) => p.test(output));
 }
 
 export function parseRetryAfter(stderr: string): number {
