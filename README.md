@@ -94,7 +94,7 @@ flowchart TB
     end
 
     %% ===== Orchestrator =====
-    subgraph ORCH[Orchestrator & Reliability]
+    subgraph ORCH["Orchestrator and Reliability"]
         SCHED["task-scheduler.ts<br/>DAG of agent_tasks"]
         DLQ["DLQ manager<br/>(transient / permanent)"]
         CHK["Checkpoints<br/>agent_checkpoints table<br/>resumable sub-steps"]
@@ -178,7 +178,7 @@ This is what PRD v9, the gap plans, the Agent 1 playbook, the two-pipeline marke
 
 ```mermaid
 flowchart TB
-    subgraph NEW_MARKET[NEW: Market Intelligence Layer]
+    subgraph NEW_MARKET["NEW — Market Intelligence Layer"]
         A0["Agent 0 — Market Scanner (NEW)<br/>Census ACS/CBSA, NOAA climate,<br/>HUD TIP zones, Frostline<br/>→ standalone cities + suburb candidates"]
         FRANCHISE["Franchise & Competition Scan (NEW)<br/>Orkin / Terminix / Aptive coverage,<br/>Places API, Moz DA, PageSpeed"]
         PAYOUT["Payout Intelligence (NEW)<br/>offer network feeds,<br/>call network data"]
@@ -196,7 +196,7 @@ flowchart TB
         A7_V2["Agent 7 — Monitor (EXPANDED)<br/>+ real GSC / GA4 / MarketCall<br/>+ indexation kill switch<br/>+ vertical-aware remediation<br/>+ portfolio health + rebalancing"]
     end
 
-    subgraph NEW_OPS[NEW: Portfolio Operations]
+    subgraph NEW_OPS["NEW — Portfolio Operations"]
         QUEUE["Opportunity Queue (NEW)<br/>DB-backed, replaces<br/>hardcoded city arrays<br/>interleaves 2 suburbs : 1 city"]
         RELEASE["Release Control (NEW)<br/>separates build vs publish<br/>scheduled release windows<br/>creation is uncapped,<br/>publication is gated"]
         VUI["Vertical / Offer Dashboard UI (NEW)<br/>author + edit vertical definitions<br/>without CLI"]
@@ -209,7 +209,7 @@ flowchart TB
         DECIDE["Decision tree:<br/>indexing → ranking → CTR →<br/>conversion → revenue"]
     end
 
-    subgraph SHARED[Platform (unchanged surfaces)]
+    subgraph SHARED["Platform — unchanged surfaces"]
         ORCH2["Orchestrator + DLQ + Scheduler"]
         SH2["Self-Healing + Watchdog + Checkpoints"]
         LLM2["Multi-LLM router<br/>(Claude / Codex / Gemini)"]
