@@ -9,6 +9,26 @@ CallForge spins up local-service websites (starting with pest control) at the ci
 - **Mode:** organic-first, phone-only conversion, no forms, TCPA-compliant templates
 - **Status:** MVP producing live cities (Shawnee, Deland, Lenexa, Athens, Port Orange) with research, hybrid content generation, self-healing, and a watchdog loop all wired up
 
+### The full agent roster
+
+PRD v7 designed **10 numbered agents (0 through 9)**. V9 added a deterministic pre-filter, Agent 0.5, for a total of **11 numbered agents** plus the Watchdog and Supervisor infrastructure processes.
+
+| # | Agent | Role | Status |
+|---|---|---|---|
+| 0 | Network Intelligence | Monitors pay-per-call networks (MarketCall, Ringba) for offers, payouts, ZIP-level bid maps | Designed (PRD v7 §3), **not implemented** |
+| 0.5 | Geo Opportunity Scanner | Deterministic ZIP → city shortlist before expensive keyword research | ✅ **Implemented** |
+| 1 | Keyword Research + City Strategy | Keyword templates, city scoring, clustering, deep research subagents | ✅ **Implemented** |
+| 2 | Niche & Design Research | Competitor, design spec, copy framework, schema, seasonal calendar | ✅ **Implemented** |
+| 3 | Site Builder | Hugo templates + hybrid content generation + QA + deploy | ✅ **Implemented** |
+| 4 | Social Media Content Engine | COPE (Create Once, Publish Everywhere) across 6 platforms | Designed (PRD v7 §7), **not implemented** |
+| 5 | Blog Content Engine | SEO-optimized blog posts with persona rotation, AI-detector defenses | Designed (PRD v7 §8), **not implemented** |
+| 6 | Social Media Engagement Responder | Tiered response to comments / mentions / DMs | Designed (PRD v7 §9), **not implemented** |
+| 7 | Performance Monitor + Rebalancer | GSC / GA4 / MarketCall ingest, thresholds, health score, closed-loop remediation | ✅ **Implemented** (mock/DB providers; GSC behind a flag) |
+| 8 | Backlink & Citation Builder | NAP consistency, free aggregators, industry directories, white-hat link building | Designed (PRD v7 §11), **not implemented** |
+| 9 | Google Ads Manager | Call-Only Ads, bid management from MarketCall payouts, geo-targeting | Designed (PRD v7 §12, Phase 2), **not implemented** |
+| — | Watchdog | Child process; clusters failures, writes `learned_repair_patterns` | ✅ **Implemented** |
+| — | Supervisor | Outer process; respawns pipeline, LLM-diagnoses crashes | ✅ **Implemented** |
+
 ---
 
 ## Table of Contents
@@ -43,7 +63,7 @@ Everything is codified as a multi-agent pipeline so the portfolio can scale with
 
 ## Current architecture
 
-This is what is actually implemented and wired up on `master` today.
+This is what is actually implemented and wired up on `master` today: **5 of the 11 designed agents** (0.5, 1, 2, 3, 7) plus the Watchdog + Supervisor. Agents 0, 4, 5, 6, 8, and 9 are designed in PRD v7 but not yet built — they show up in the future-state diagram below.
 
 ```mermaid
 flowchart TB
@@ -178,97 +198,128 @@ This is what PRD v9, the gap plans, the Agent 1 playbook, the two-pipeline marke
 
 ```mermaid
 flowchart TB
-    subgraph NEW_MARKET["NEW — Market Intelligence Layer"]
-        A0["Agent 0 — Market Scanner (NEW)<br/>Census ACS/CBSA, NOAA climate,<br/>HUD TIP zones, Frostline<br/>→ standalone cities + suburb candidates"]
-        FRANCHISE["Franchise & Competition Scan (NEW)<br/>Orkin / Terminix / Aptive coverage,<br/>Places API, Moz DA, PageSpeed"]
-        PAYOUT["Payout Intelligence (NEW)<br/>offer network feeds,<br/>call network data"]
+    subgraph INTEL["NEW — Network & Market Intelligence"]
+        A0["Agent 0 — Network Intelligence<br/>(NEW, PRD v7 §3)<br/>MarketCall + Ringba scrapers,<br/>Keitaro reporting, postbacks,<br/>ZIP-level bid maps,<br/>payout + offer catalog"]
+        MKT["Market Scanner<br/>Census ACS/CBSA, NOAA,<br/>HUD TIP, Frostline,<br/>Moz DA, Places API"]
+        FRANCHISE["Franchise Detection<br/>Orkin / Terminix / Aptive"]
     end
 
-    subgraph UPGRADED[Upgraded Agents]
-        A05_V2["Agent 0.5 — Geo Scanner (EXPANDED)<br/>+ two-pipeline model:<br/>standalone_city vs suburb<br/>+ metro_parent & cluster metadata<br/>+ search identity confidence<br/>+ pest pressure score<br/>+ monetization score"]
-
-        A1_V2["Agent 1 — Keywords (EXPANDED)<br/>+ cache versioning<br/>(estimated vs Google Ads API)<br/>+ niche expansion per market<br/>(wildlife, bed bugs, commercial)<br/>+ composite city & suburb scoring"]
-
-        A2_V2["Agent 2 — Design (EXPANDED)<br/>+ per-vertical prompt stacks<br/>(pest / HVAC / roofing)<br/>+ full playbook enforcement<br/>(5 archetypes, trust placement,<br/>CTA repetition, reading level)"]
-
-        A3_V2["Agent 3 — Builder (EXPANDED)<br/>+ all 40 gap-plan fixes<br/>(dynamic CTAs, trust signals,<br/>schema, breakpoints, section rules,<br/>process steps, seasonal banner)<br/>+ stronger uniqueness gate<br/>+ hard-fail compliance QA"]
-
-        A7_V2["Agent 7 — Monitor (EXPANDED)<br/>+ real GSC / GA4 / MarketCall<br/>+ indexation kill switch<br/>+ vertical-aware remediation<br/>+ portfolio health + rebalancing"]
+    subgraph DISCOVERY["Discovery and Planning"]
+        A05_V2["Agent 0.5 — Geo Scanner (EXPANDED)<br/>two-pipeline model<br/>(standalone_city vs suburb),<br/>metro parent, cluster metadata,<br/>search identity, pest pressure,<br/>monetization score"]
+        QUEUE["Opportunity Queue (NEW)<br/>DB-backed, interleaves<br/>2 suburbs : 1 city"]
+        A1_V2["Agent 1 — Keywords (EXPANDED)<br/>cache source versioning,<br/>per-market niche expansion<br/>(wildlife, bed bugs, commercial),<br/>composite city + suburb scoring"]
+        A2_V2["Agent 2 — Design (EXPANDED)<br/>per-vertical prompt stacks<br/>(pest / HVAC / roofing),<br/>full playbook: 5 archetypes,<br/>trust placement, CTA repetition,<br/>reading level"]
     end
 
-    subgraph NEW_OPS["NEW — Portfolio Operations"]
-        QUEUE["Opportunity Queue (NEW)<br/>DB-backed, replaces<br/>hardcoded city arrays<br/>interleaves 2 suburbs : 1 city"]
-        RELEASE["Release Control (NEW)<br/>separates build vs publish<br/>scheduled release windows<br/>creation is uncapped,<br/>publication is gated"]
-        VUI["Vertical / Offer Dashboard UI (NEW)<br/>author + edit vertical definitions<br/>without CLI"]
-        AGENT8["Agent 8 — Link / Authority (NEW)<br/>backlink acquisition,<br/>citation consistency"]
-        REPORT["Revenue & Portfolio Reporting (NEW)<br/>monthly ROI per site,<br/>sunset / maintain / optimize"]
+    subgraph BUILD["Build and Publish"]
+        A3_V2["Agent 3 — Site Builder (EXPANDED)<br/>all 40 gap-plan fixes,<br/>stronger uniqueness gate,<br/>hard-fail compliance QA"]
+        A5["Agent 5 — Blog Content (NEW, PRD v7 §8)<br/>section-by-section generation,<br/>persona rotation, AI-detector defenses,<br/>local data injection, Git → Netlify"]
+        RELEASE["Release Control (NEW)<br/>build vs publish split,<br/>scheduled release windows"]
+        HUGO2["Hugo + Netlify"]
     end
 
-    subgraph LOOP[Closed-Loop Optimization]
-        OPT["optimization_actions<br/>+ deduped follow-up<br/>agent_tasks"]
+    subgraph DISTRIBUTE["Distribution and Authority"]
+        A4["Agent 4 — Social Media Content (NEW, PRD v7 §7)<br/>COPE engine, 6 platforms<br/>(Facebook, Instagram, X, TikTok,<br/>YouTube, LinkedIn), FFmpeg + Puppeteer"]
+        A6["Agent 6 — Social Engagement (NEW, PRD v7 §9)<br/>tiered responder<br/>(auto / template / escalate / ignore)"]
+        A8["Agent 8 — Backlink + Citation (NEW, PRD v7 §11)<br/>NAP consistency, Express Update,<br/>Foursquare, GBP, Yelp, industry directories,<br/>HARO, guest posts"]
+        A9["Agent 9 — Google Ads Manager (NEW, PRD v7 §12)<br/>Call-Only Ads, ZIP geo-targeting,<br/>bids from MarketCall payouts,<br/>dayparting 7am–7pm"]
+    end
+
+    subgraph FEEDBACK["Feedback and Optimization"]
+        A7_V2["Agent 7 — Monitor (EXPANDED)<br/>real GSC / GA4 / MarketCall,<br/>indexation kill switch,<br/>vertical-aware remediation"]
         DECIDE["Decision tree:<br/>indexing → ranking → CTR →<br/>conversion → revenue"]
+        OPT["optimization_actions<br/>+ deduped follow-up<br/>agent_tasks"]
+        REPORT["Revenue & Portfolio Reporting (NEW)<br/>maintain / optimize / sunset"]
     end
 
     subgraph SHARED["Platform — unchanged surfaces"]
         ORCH2["Orchestrator + DLQ + Scheduler"]
         SH2["Self-Healing + Watchdog + Checkpoints"]
         LLM2["Multi-LLM router<br/>(Claude / Codex / Gemini)"]
-        HUGO2["Hugo + Netlify"]
-        DB2[("PostgreSQL<br/>+ opportunity_queue<br/>+ release_schedule<br/>+ link_targets<br/>+ revenue_rollups")]
+        VUI["Vertical / Offer Dashboard UI (NEW)"]
+        DB2[("PostgreSQL<br/>+ opportunity_queue<br/>+ release_schedule<br/>+ offer_catalog<br/>+ bid_maps<br/>+ link_targets<br/>+ social_posts<br/>+ revenue_rollups")]
     end
 
-    A0 --> A05_V2
-    FRANCHISE --> A0
-    PAYOUT --> A0
+    %% Intelligence → discovery
+    A0 --> A1_V2
+    A0 --> A9
+    MKT --> A05_V2
+    FRANCHISE --> A05_V2
     A05_V2 --> QUEUE
     QUEUE --> A1_V2
     A1_V2 --> A2_V2
     A2_V2 --> A3_V2
+    A2_V2 --> A5
+
+    %% Build → publish
     A3_V2 --> RELEASE
+    A5 --> RELEASE
     RELEASE --> HUGO2
+
+    %% Distribution
+    A5 --> A4
+    A4 --> A6
+    HUGO2 --> A8
+    A0 --> A9
+
+    %% Feedback
     HUGO2 --> A7_V2
+    A4 --> A7_V2
+    A9 --> A7_V2
     A7_V2 --> DECIDE
     DECIDE --> OPT
     OPT --> A1_V2
     OPT --> A3_V2
-    OPT --> AGENT8
-    AGENT8 --> A3_V2
+    OPT --> A5
+    OPT --> A8
+    OPT --> A9
     A7_V2 --> REPORT
 
+    %% Platform
     VUI --> A2_V2
     VUI --> QUEUE
-
     A05_V2 --> SH2
     A1_V2 --> SH2
     A2_V2 --> SH2
     A3_V2 --> SH2
+    A5 --> SH2
     A7_V2 --> SH2
+    A8 --> SH2
+    A9 --> SH2
     SH2 --> ORCH2
     ORCH2 --> DB2
     LLM2 --> A1_V2
     LLM2 --> A2_V2
     LLM2 --> A3_V2
+    LLM2 --> A5
+    LLM2 --> A6
 
     classDef new fill:#ffe4a8,stroke:#c47a00,stroke-width:2px,color:#222
     classDef expanded fill:#c6e2ff,stroke:#2b6cb0,stroke-width:2px,color:#222
     classDef shared fill:#eeeeee,stroke:#555,color:#222
-    class A0,FRANCHISE,PAYOUT,QUEUE,RELEASE,VUI,AGENT8,REPORT new
+    class A0,MKT,FRANCHISE,QUEUE,RELEASE,VUI,A4,A5,A6,A8,A9,REPORT new
     class A05_V2,A1_V2,A2_V2,A3_V2,A7_V2 expanded
     class ORCH2,SH2,LLM2,HUGO2,DB2,OPT,DECIDE shared
 ```
 
 ### What changes in the future state
 
-**New surfaces (orange):**
+**New agents (orange) — designed in PRD v7 but not yet implemented:**
 
-- **Agent 0 — Market Scanner.** Today Agent 0.5 starts from a ZIP list the operator uploaded. The future state pulls candidate cities and suburbs directly from Census ACS + CBSA, filters by homeownership, income, growth, and single-family density, then layers NOAA temperature / precipitation, HUD TIP zones, and USDA hardiness zones to compute a **pest pressure score** before Agent 0.5 even runs. That is the "standalone-city + suburb" two-pipeline playbook described in `agent1playbookplan.md`.
-- **Franchise & competition intelligence.** Automated scans of Orkin / Terminix / Aptive location finders, Google Places, Moz DA, PageSpeed, and SERP features, feeding the deterministic competition score in Agent 0.5 and the CPC / monetization viability check in Agent 1.
-- **Payout intelligence.** Hooks for pay-per-call network data so scoring can become expected-value-aware instead of flat-payout-aware.
+- **Agent 0 — Network Intelligence (PRD v7 §3).** The missing upstream layer. Monitors pay-per-call networks (MarketCall as primary, Ringba as secondary) for active offers, payout rates, and geographic availability. The core insight: payouts are dynamic, not fixed, and vary 3–5× between ZIP codes for the same vertical. Agent 0 captures **ZIP-level bid maps** and feeds them into Agent 1's market scoring and Agent 9's bid strategy. Implementation involves MarketCall postbacks (primary data channel), Playwright-based authenticated scraping of the offer catalog (fallback), Ringba REST API + BrightCall discovery for secondary inventory. Feeds the `offer_catalog` and `bid_maps` tables.
+- **Agent 4 — Social Media Content Engine (PRD v7 §7).** A COPE (Create Once, Publish Everywhere) engine that transforms each Agent 5 blog post into 5–6 platform-native social posts across Facebook Pages, Instagram, X/Twitter, TikTok, YouTube, and LinkedIn. Generates images via Puppeteer and videos via FFmpeg; publishes on $0/month using Late's free tier + direct platform APIs.
+- **Agent 5 — Blog Content Engine (PRD v7 §8).** SEO-optimized blog publishing. Generates each article **section by section** (not monolithic) with persona rotation (Jake Morrison, Maria Chen, Carlos Reyes), temperature ≥ 0.85, explicit AI-detector defenses (banned phrase list, burstiness enforcement, contrarian opinions), and local data injection. Publishes Git → Netlify, same deploy path as Agent 3.
+- **Agent 6 — Social Media Engagement Responder (PRD v7 §9).** Tiered responder for comments, mentions, DMs: **Tier 1 auto-reply** for generic comments, **Tier 2 template + personalize** for service inquiries, **Tier 3 human escalation** for complaints / emergencies / negative reviews, **Tier 4 never engage** for trolls / politics. Hard rules: never promise pricing, never claim to be a pest control company, never engage hostility publicly.
+- **Agent 8 — Backlink & Citation Builder (PRD v7 §11).** NAP consistency + white-hat link acquisition: free aggregator submissions (Express Update, Foursquare, GBP), major directory claims (Yelp, Bing Places, Apple Business Connect, Angi, Thumbtack, Manta, Hotfrog), industry directories (NPMA, state pest associations), HARO responses, guest posts. Target: 25–30 quality citations per city at $0 cost within 2–3 weeks of deployment.
+- **Agent 9 — Google Ads Manager (PRD v7 §12, Phase 2).** Paid acquisition running in parallel with organic. Call-Only Ads, ZIP-level geo-targeting matched to MarketCall's payout zones, bid targets set to `payout × 0.4` for 60% margin, dayparting 7am–7pm local, negative keyword management to exclude DIY/jobs/informational intent. Organic is slow (3–6 months to rank), so Agent 9 provides immediate call volume while Agent 3 + Agent 8 build authority.
+
+**New platform pieces (orange) — not tied to a single agent:**
+
 - **Opportunity Queue.** Replaces the hardcoded `CANDIDATE_CITIES` array in `src/index.ts` with a DB-backed queue that interleaves `2 suburbs : 1 standalone city` for faster cash flow.
-- **Release Control.** Today Agent 3's weekly new-city cap is disabled because it was gating *creation*, not *publication*. The future state enforces creation as uncapped and gates a separate release layer — scheduled windows, staged content, explicit "launch" action. This matches the "Content Creation Must Not Be Capped" rule in `designdecisions.md`.
-- **Vertical / Offer Dashboard UI.** Today vertical and offer profiles are authored via CLI only. The future state adds a dashboard UI for the same flows, including banned-service enumeration.
-- **Agent 8 — Link / Authority.** The PRD rebalancing tree references backlink acquisition as a distinct remediation path; that is not implemented yet.
+- **Release Control.** Agent 3's weekly new-city cap is currently disabled because it was gating *creation*, not *publication*. The future state keeps creation uncapped and gates a separate release layer — scheduled windows, staged content, explicit launch action (per `designdecisions.md`).
+- **Vertical / Offer Dashboard UI.** Today profiles are authored via CLI only; the UI adds the same flows plus banned-service enumeration.
 - **Revenue & Portfolio Reporting.** Monthly rollups with explicit maintain / optimize / sunset decisions per site.
+- **Market Scanner + Franchise Detection.** Automated scans of Census ACS + CBSA, NOAA climate, HUD TIP zones, Frostline USDA, Moz DA, Places API, Orkin / Terminix / Aptive location finders — all feeding Agent 0.5's deterministic scoring.
 
 **Expanded agents (blue):**
 
@@ -291,6 +342,15 @@ The future state expands the decision tree (indexing → ranking → CTR → con
 ---
 
 ## Agents in detail
+
+### Agent 0 — Network Intelligence _(designed, not implemented)_
+`PRD v7 §3`
+
+Programmatic monitor of pay-per-call networks. Sole job: keep the system aware of which offers exist, what they pay **today**, which ZIPs have active buyers, and when payouts change.
+
+- **MarketCall (primary).** Cookie-session login at `/auth/login`, postbacks configured at `/affiliate/postbacks/create` as the **primary data channel** (macros: `{call_id}`, `{earn}`, `{state}`, `{subid}`...`{subid6}`, `{date}`, `{fbclid}`), call status codes (`Approved`, `HOLD`, `Refused by Merchant`, `Tarificated`, `Parsed`, `Non-qualified`), DNI setup at `/v2/affiliate/call-tracking/sites`. Offer catalog lives only in the authenticated dashboard, so Agent 0 uses Playwright with persistent context + XHR interception (not DOM scraping) as a secondary channel, respecting 3–8s random delays and twice-daily max frequency.
+- **Ringba (secondary / infrastructure).** REST API for campaign + call management. Used when operating as a Ringba-first infrastructure layer that resells into MarketCall or direct advertisers.
+- **Output.** `offer_catalog` and `bid_maps` tables keyed by (network, offer, ZIP), consumed by Agent 1 (monetization viability scoring) and Agent 9 (bid targets).
 
 ### Agent 0.5 — Geo Opportunity Scanner
 `src/agents/agent-0.5-geo-scanner/`
@@ -321,10 +381,66 @@ Core production agent. Stages:
 7. **Cross-page diversity guard** — similarity history is seeded from existing Hugo content at startup, so new pages don't repeat language from previous runs.
 8. **Hugo build + Netlify deploy.**
 
+### Agent 4 — Social Media Content Engine _(designed, not implemented)_
+`PRD v7 §7`
+
+COPE engine that converts every Agent 5 blog post into 5–6 platform-native derivatives.
+
+- **Platforms.** Facebook Pages + Instagram (Meta Graph API v22.0, free — permissions: `pages_manage_posts`, `pages_read_engagement`, `instagram_basic`, `instagram_content_publish`), X/Twitter (1,500 free posts/mo), TikTok Content Posting API (requires audit), YouTube Data API v3 (10,000 quota units/day), LinkedIn.
+- **Asset generation.** Puppeteer renders quote cards / stat cards / blog-cover images to PNG. FFmpeg stitches stills + Kokoro TTS voiceovers into short-form Reels / TikToks / YouTube Shorts.
+- **Scheduling & cost.** Late free tier (20 posts/mo) for unified scheduling across accounts; $19/mo on Build plan when scaling.
+- **Output.** `social_posts` table linking Hugo slugs to each platform post ID for downstream attribution in Agent 7.
+
+### Agent 5 — Blog Content Engine _(designed, not implemented)_
+`PRD v7 §8`
+
+Publishes SEO-optimized long-form blog posts through the same Git → Netlify pipeline Agent 3 uses.
+
+- **Section-by-section generation.** Every article is decomposed into intro + H2 sections + conclusion, each a separate Claude Code CLI call with different persona instructions and temperature settings. This is the "burstiness" that defeats AI-detectors — statistical uniformity is what AI classifiers flag.
+- **Persona rotation.** Three canonical personas (Jake Morrison — Southeast termite specialist; Maria Chen — Pacific Northwest IPM expert; Carlos Reyes — Southwest veteran). Temperature 0.85–1.0, `top_p` 0.9, explicit style directives (contractions, em-dashes, mixed sentence length, contrarian opinions, named product recommendations).
+- **Banned phrase auto-reject.** `"it is important to note"`, `"it is worth mentioning"`, `"in conclusion"`, `"when it comes to"`, `"at the end of the day"`, `"navigating the world of"`, `"a testament to"`, `"dive into"`, `"in today's fast-paced world"`, `"furthermore"`, `"moreover"`, `"in summary"` — regenerated on detection.
+- **Local data injection.** 8–12 unique local data points per article (climate, pest DB, Census).
+- **Output.** Markdown committed to the same `hugo-site/` repo; Netlify auto-deploys.
+
+### Agent 6 — Social Media Engagement Responder _(designed, not implemented)_
+`PRD v7 §9`
+
+Tiered responder for comments, mentions, and DMs.
+
+| Tier | Trigger | Response | Escalation |
+|---|---|---|---|
+| 1 — Auto | Generic comments, simple FAQ, emoji reactions | Automated reply within 1 hour | None |
+| 2 — Template + personalize | "How much does X cost?", location questions | Templated reply personalized to their city/pest | None |
+| 3 — Human escalation | Complaints, negative reviews, pest emergencies | Flag for human review with draft | Queue for operator |
+| 4 — Do not respond | Trolls, spam, competitor provocation, political | Ignore or hide | None |
+
+- **Hard rules.** Never promise specific pricing / availability / service quality. Never claim to be a pest control company — position as "a service that connects homeowners with trusted local professionals." Never engage hostility publicly. All auto-responses vary phrasing to feel human. Latency target: <2h for Tier 1–2, <24h for Tier 3 after review.
+
 ### Agent 7 — Performance Monitor
 `src/agents/agent-7-monitor/`
 
 Pulls metrics via a `DataProvider` interface (Mock, DatabaseBacked, or SearchConsole). Writes `performance_snapshots` and `ranking_snapshots`, computes a portfolio health score, evaluates thresholds, inserts `alerts`, writes `optimization_actions`, and — the V9 closed-loop change — inserts deduplicated follow-up rows into `agent_tasks` so the orchestrator can dispatch remediation (`content_refresh`, `cta_optimization`, `keyword_refinement`).
+
+### Agent 8 — Backlink & Citation Builder _(designed, not implemented)_
+`PRD v7 §11`
+
+White-hat authority building. Because `extermanation.com` uses subdirectory architecture (`/city/`, `/city/service/`), every backlink strengthens the root domain — but a single penalty would deindex every city page simultaneously, so only white-hat tactics are acceptable.
+
+- **Citation pipeline (bootstrap tier, $0).** NAP consistency across every listing (one canonical name / address / phone matching website footer + schema markup). Free aggregator submissions: Express Update (feeds Yellow Pages, Superpages, CitySearch, 100+ directories), Foursquare Business (feeds Apple Maps, Uber), Google Business Profile. Free major directory claims: Yelp, Bing Places, Apple Business Connect, Facebook Business, Nextdoor, LinkedIn, Angi, Thumbtack, Manta, Hotfrog, MapQuest.
+- **Industry directories (pest).** NPMA Find-A-Pro (PestWorld.org, requires membership + QualityPro cert), state pest control associations (CPCA, AzPPO, etc.).
+- **Targets.** 25–30 quality citations per city at $0 cost, completed within 2–3 weeks of city deployment. 2–4 operator hours per city for manual submissions.
+- **Link building (next tier).** HARO responses, guest post pitches, broken-link outreach, resource page placement — all white-hat, all deduped against a `link_targets` table to avoid re-pitching the same domain.
+
+### Agent 9 — Google Ads Manager _(designed, Phase 2, not implemented)_
+`PRD v7 §12`
+
+Paid acquisition that runs in parallel with organic. Organic takes 3–6 months to materialize; Agent 9 delivers calls immediately while the portfolio ramps.
+
+- **Campaign shape.** Call-Only Ads + call extensions (bypasses landing page entirely for maximum call conversion). Search campaigns driving to dedicated PPC landing pages (Archetype 4: Minimalist PPC Machine).
+- **Bid strategy.** Target CPA = `payout × 0.4` to maintain 60% margin. Bids sourced directly from Agent 0's `bid_maps`.
+- **Controls.** Negative keyword lists to exclude DIY / jobs / informational intent. Dayparting: concentrate budget 7am–7pm local. Geo-targeting at ZIP level to match MarketCall's payout zones.
+- **Budget.** Start $10–20/day per city. Scale on positive-ROI markets. Pause when CPA > 50% of avg payout. Seasonal reallocation (termite in spring, rodents in fall).
+- **Feedback to organic.** Paid is a proving ground: if a city converts on paid, Agent 1 upweights it for organic. PPC conversion data directly informs A/B tests on organic pages in Agent 3.
 
 ### Agent Watchdog
 `src/agents/agent-watchdog/`
@@ -393,22 +509,32 @@ At runtime, `mergeOfferConstraints` produces the authoritative constraint set ev
 
 ## Roadmap
 
-Directly from `CallForge PRD v9.md § 25.8`, `designdecisions.md`, and the gap plans:
+Consolidated from `CallForge PRD v7.docx` (original 10-agent design), V9 `§ 25.8` (remaining gaps after V9), `designdecisions.md`, and the gap plans.
 
-- [ ] Agent 0 — full Census/CBSA/NOAA/HUD market scanner feeding Agent 0.5
-- [ ] Database-backed opportunity queue (replace hardcoded `CANDIDATE_CITIES`)
-- [ ] Two-pipeline (`standalone_city` + `suburb`) scoring + ranking
+**Unbuilt agents (designed in PRD v7, tracked here in priority order):**
+
+- [ ] **Agent 0 — Network Intelligence.** MarketCall postback receiver + auth'd Playwright catalog scraper + Ringba REST client. Unlocks payout-aware scoring across the whole portfolio.
+- [ ] **Agent 8 — Backlink & Citation Builder.** NAP pipeline + free aggregator submissions + industry directories. Without backlinks, pages will not rank.
+- [ ] **Agent 5 — Blog Content Engine.** Section-by-section persona-rotated blog generation with AI-detector defenses.
+- [ ] **Agent 4 — Social Media Content Engine.** COPE engine across 6 platforms (downstream of Agent 5).
+- [ ] **Agent 6 — Social Media Engagement Responder.** Tiered responder with hard guardrails.
+- [ ] **Agent 9 — Google Ads Manager (Phase 2).** Call-Only Ads with bids sourced from Agent 0.
+
+**Platform upgrades (V9 §25.8 + gap plans + designdecisions.md):**
+
+- [ ] Market Scanner — full Census/CBSA/NOAA/HUD/Frostline/Moz feed into Agent 0.5
+- [ ] Database-backed opportunity queue (replaces hardcoded `CANDIDATE_CITIES`)
+- [ ] Two-pipeline (`standalone_city` + `suburb`) scoring + ranking in Agent 0.5
 - [ ] Release layer separated from content creation (scheduled publication windows)
-- [ ] Payout-aware scoring from network intelligence
-- [ ] Cache source versioning (estimated vs. Google Ads API)
+- [ ] Payout-aware expected-value scoring across Agents 0.5 + 1 (requires Agent 0)
+- [ ] Cache source versioning (estimated vs. Google Ads API) in Agent 1
 - [ ] Real Agent 7 data providers (GSC + GA4 + MarketCall) replacing mocks
 - [ ] Indexation kill switch driven by Search Console / URL Inspection
 - [ ] Stronger uniqueness gate using structured local facts + similarity scoring
-- [ ] Full pest-control playbook compliance in Agent 3 (40 gap-plan items)
+- [ ] Full pest-control playbook compliance in Agent 3 (all 40 gap-plan items)
 - [ ] Per-vertical prompt stacks for HVAC and roofing (today they fall back to default)
 - [ ] Dashboard UI for authoring vertical / offer profiles
 - [ ] Compliance QA that hard-fails on exact banned service tokens
-- [ ] Agent 8 — link / authority acquisition
 - [ ] Revenue & portfolio reporting with maintain / optimize / sunset decisions
 
 ---
